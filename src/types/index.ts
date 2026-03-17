@@ -1,9 +1,7 @@
 export const UserRole = {
-  ADMIN_SYSTEM: 'admin_system',
-  ADMIN_NUCLEO: 'admin_nucleo',
   MEDICO: 'medico',
-  MEDICO_COMPARTIDO: 'medico_compartido',
   ASISTENTE: 'asistente',
+  PACIENTE: 'paciente',
 } as const;
 
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];

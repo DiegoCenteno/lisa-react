@@ -25,11 +25,9 @@ interface NavbarProps {
 }
 
 const roleLabels: Record<string, string> = {
-  admin_system: 'Administrador del Sistema',
-  admin_nucleo: 'Administrador de Núcleo',
-  medico: 'Médico Especialista',
-  medico_compartido: 'Médico (Consultorio Compartido)',
+  medico: 'Médico',
   asistente: 'Asistente Médico',
+  paciente: 'Paciente',
 };
 
 export default function Navbar({ onMenuClick }: NavbarProps) {

@@ -43,10 +43,7 @@ const menuItems: MenuItem[] = [
     icon: <DashboardIcon />,
     path: '/dashboard',
     roles: [
-      UserRole.ADMIN_SYSTEM,
-      UserRole.ADMIN_NUCLEO,
       UserRole.MEDICO,
-      UserRole.MEDICO_COMPARTIDO,
       UserRole.ASISTENTE,
     ],
   },
@@ -55,10 +52,7 @@ const menuItems: MenuItem[] = [
     icon: <CalendarIcon />,
     path: '/agenda',
     roles: [
-      UserRole.ADMIN_SYSTEM,
-      UserRole.ADMIN_NUCLEO,
       UserRole.MEDICO,
-      UserRole.MEDICO_COMPARTIDO,
       UserRole.ASISTENTE,
     ],
   },
@@ -67,10 +61,7 @@ const menuItems: MenuItem[] = [
     icon: <PeopleIcon />,
     path: '/pacientes',
     roles: [
-      UserRole.ADMIN_SYSTEM,
-      UserRole.ADMIN_NUCLEO,
       UserRole.MEDICO,
-      UserRole.MEDICO_COMPARTIDO,
     ],
   },
   {
@@ -78,9 +69,7 @@ const menuItems: MenuItem[] = [
     icon: <PrescriptionIcon />,
     path: '/recetas',
     roles: [
-      UserRole.ADMIN_SYSTEM,
       UserRole.MEDICO,
-      UserRole.MEDICO_COMPARTIDO,
     ],
   },
   {
@@ -88,10 +77,7 @@ const menuItems: MenuItem[] = [
     icon: <SettingsIcon />,
     path: '/configuracion',
     roles: [
-      UserRole.ADMIN_SYSTEM,
-      UserRole.ADMIN_NUCLEO,
       UserRole.MEDICO,
-      UserRole.MEDICO_COMPARTIDO,
     ],
   },
 ];
