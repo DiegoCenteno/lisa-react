@@ -25,10 +25,9 @@ import dayjs from 'dayjs';
 const statusColors: Record<number, string> = {
   0: '#2196f3',   // Pendiente - azul
   1: '#4caf50',   // Confirmada - verde
-  2: '#ff9800',   // En consulta - naranja
-  3: '#9e9e9e',   // Completada - gris
-  4: '#f44336',   // Cancelada - rojo
-  5: '#f44336',   // No asistió - rojo
+  2: '#f44336',   // No asistió - rojo
+  3: '#9e9e9e',   // Cancelada - gris
+  4: '#ff9800',   // Reprogramada - naranja
 };
 
 function appointmentToEvent(apt: Appointment): EventInput {

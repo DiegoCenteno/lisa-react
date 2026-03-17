@@ -62,10 +62,9 @@ export interface Appointment {
 export const AppointmentStatusMap: Record<number, string> = {
   0: 'Pendiente',
   1: 'Confirmada',
-  2: 'En consulta',
-  3: 'Completada',
-  4: 'Cancelada',
-  5: 'No asistió',
+  2: 'No asistió',
+  3: 'Cancelada',
+  4: 'Reprogramada',
 };
 
 export interface Office {
