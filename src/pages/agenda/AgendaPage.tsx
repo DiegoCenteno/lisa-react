@@ -9,7 +9,6 @@ import {
   DialogActions,
   TextField,
   Grid,
-  Skeleton,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -53,7 +52,7 @@ function appointmentToEvent(apt: Appointment): EventInput {
 
 export default function AgendaPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventClickArg | null>(null);
   const [newAppointment, setNewAppointment] = useState({
@@ -162,13 +161,13 @@ export default function AgendaPage() {
         </Button>
       </Box>
 
-      {loading ? (
-        <Box>
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} height={80} sx={{ mb: 1 }} />
-          ))}
-        </Box>
-      ) : (
+      <Box
+        sx={{
+          position: 'relative',
+          opacity: loading ? 0.5 : 1,
+          transition: 'opacity 0.3s',
+        }}
+      >
         <Box
           sx={{
             '& .fc': {
@@ -258,7 +257,7 @@ export default function AgendaPage() {
             firstDay={1}
           />
         </Box>
-      )}
+      </Box>
 
       {/* Dialog: Detalle de cita */}
       <Dialog
