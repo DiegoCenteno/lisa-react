@@ -1,90 +1,72 @@
-import type { AuthResponse, User } from '../types';
+import type { AuthResponse, User, UserRole } from '../types';
 import apiClient from './client';
 
-const MOCK_USERS: (User & { password: string })[] = [
-  {
-    id: 1,
-    name: 'Dr. Carlos Mendoza',
-    email: 'medico@lisamedic.com',
-    role: 'medico' as User['role'],
-    specialty: 'Ginecología',
-    phone: '3312345678',
-    password: 'demo123',
-  },
-  {
-    id: 2,
-    name: 'Ana García',
-    email: 'asistente@lisamedic.com',
-    role: 'asistente' as User['role'],
-    phone: '3312345679',
-    password: 'demo123',
-  },
-  {
-    id: 3,
-    name: 'Admin Sistema',
-    email: 'admin@lisamedic.com',
-    role: 'admin_system' as User['role'],
-    password: 'demo123',
-  },
-  {
-    id: 4,
-    name: 'Dr. Roberto Núcleo',
-    email: 'nucleo@lisamedic.com',
-    role: 'admin_nucleo' as User['role'],
-    password: 'demo123',
-  },
-  {
-    id: 5,
-    name: 'Dr. Laura Pérez',
-    email: 'compartido@lisamedic.com',
-    role: 'medico_compartido' as User['role'],
-    specialty: 'Medicina General',
-    consultorio_id: 1,
-    password: 'demo123',
-  },
-];
+const ROL_ID_MAP: Record<number, UserRole> = {
+  1: 'admin_system',
+  2: 'admin_nucleo',
+  3: 'medico',
+  4: 'medico_compartido',
+  5: 'asistente',
+};
 
-const USE_MOCK = true;
+interface PassportLoginResponse {
+  status: string;
+  data: {
+    user: {
+      id: number;
+      name: string;
+      last_name: string;
+      email: string;
+      phone: string;
+      rol_id: number;
+      specialty_id: number | null;
+    };
+    access: {
+      access_token: string;
+      refresh_token: string;
+      expires_in: number;
+    };
+  };
+}
 
 export const authService = {
-  async login(email: string, password: string): Promise<AuthResponse> {
-    if (USE_MOCK) {
-      const user = MOCK_USERS.find(
-        (u) => u.email === email && u.password === password
-      );
-      if (!user) {
-        throw new Error('Credenciales inválidas');
-      }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { password: _password, ...userData } = user;
-      return {
-        user: userData,
-        token: 'mock-token-' + user.id,
-      };
-    }
-    const response = await apiClient.post<AuthResponse>('/auth/login', {
-      email,
+  async login(emailOrPhone: string, password: string): Promise<AuthResponse> {
+    const response = await apiClient.post<PassportLoginResponse>('/login', {
+      emailOrPhone,
       password,
     });
-    return response.data;
+
+    const apiUser = response.data.data.user;
+    const access = response.data.data.access;
+
+    const user: User = {
+      id: apiUser.id,
+      name: `${apiUser.name} ${apiUser.last_name}`.trim(),
+      email: apiUser.email,
+      role: ROL_ID_MAP[apiUser.rol_id] ?? 'medico',
+      phone: apiUser.phone,
+    };
+
+    return {
+      user,
+      token: access.access_token,
+      refresh_token: access.refresh_token,
+    };
   },
 
   async logout(): Promise<void> {
-    if (USE_MOCK) {
-      return;
+    try {
+      await apiClient.post('/sign-out');
+    } catch {
+      // Ignore errors on logout - token may already be invalid
     }
-    await apiClient.post('/auth/logout');
   },
 
   async getProfile(): Promise<User> {
-    if (USE_MOCK) {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        return JSON.parse(userStr) as User;
-      }
-      throw new Error('No autenticado');
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      return JSON.parse(userStr) as User;
     }
-    const response = await apiClient.get<User>('/auth/profile');
-    return response.data;
+    throw new Error('No autenticado');
   },
 };

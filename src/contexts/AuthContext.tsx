@@ -29,6 +29,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(response.token);
     localStorage.setItem('token', response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
+    if (response.refresh_token) {
+      localStorage.setItem('refresh_token', response.refresh_token);
+    }
   }, []);
 
   const logout = useCallback(() => {
@@ -37,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('refresh_token');
   }, []);
 
   const hasRole = useCallback(

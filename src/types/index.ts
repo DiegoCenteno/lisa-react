@@ -23,6 +23,7 @@ export interface User {
 export interface AuthResponse {
   user: User;
   token: string;
+  refresh_token?: string;
 }
 
 export interface Patient {
@@ -41,29 +42,42 @@ export interface Patient {
 export interface Appointment {
   id: number;
   patient_id: number;
-  medico_id: number;
-  consultorio_id?: number;
-  date: string;
-  start_time: string;
-  end_time: string;
-  status: AppointmentStatus;
+  office_id?: number;
+  datestart: string;
+  dateend: string;
+  status: number;
   reason?: string;
-  notes?: string;
-  patient?: Patient;
-  medico?: User;
+  confirmed?: boolean;
+  patient?: {
+    id: number;
+    name: string;
+    last_name: string;
+    phone?: string;
+    email?: string;
+  };
+  office?: {
+    id: number;
+    title: string;
+  };
 }
 
-export const AppointmentStatus = {
-  SCHEDULED: 'scheduled',
-  CONFIRMED: 'confirmed',
-  IN_PROGRESS: 'in_progress',
-  COMPLETED: 'completed',
-  CANCELLED: 'cancelled',
-  RESCHEDULED: 'rescheduled',
-  NO_SHOW: 'no_show',
-} as const;
+export const AppointmentStatusMap: Record<number, string> = {
+  0: 'Pendiente',
+  1: 'Confirmada',
+  2: 'En consulta',
+  3: 'Completada',
+  4: 'Cancelada',
+  5: 'No asistió',
+};
 
-export type AppointmentStatus = (typeof AppointmentStatus)[keyof typeof AppointmentStatus];
+export interface Office {
+  id: number;
+  title: string;
+  address?: string;
+  suburb?: string;
+  phone?: string;
+  role: 'owner' | 'assistant';
+}
 
 export interface ClinicalHistory {
   id: number;

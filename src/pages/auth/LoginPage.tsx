@@ -22,7 +22,7 @@ import { useAuth } from '../../hooks/useAuth';
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isAuthenticated } = useAuth();
-  const [email, setEmail] = useState('');
+  const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
@@ -39,10 +39,10 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(email, password);
+      await login(emailOrPhone, password);
       navigate('/dashboard', { replace: true });
     } catch {
-      setError('Credenciales inválidas. Por favor, verifica tu email y contraseña.');
+      setError('Credenciales inválidas. Verifica tu email/teléfono y contraseña.');
     } finally {
       setLoading(false);
     }
@@ -82,10 +82,9 @@ export default function LoginPage() {
           <Box component="form" onSubmit={handleSubmit}>
             <TextField
               fullWidth
-              label="Correo electrónico"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              label="Correo electrónico o teléfono"
+              value={emailOrPhone}
+              onChange={(e) => setEmailOrPhone(e.target.value)}
               margin="normal"
               required
               autoFocus
@@ -134,16 +133,7 @@ export default function LoginPage() {
 
           <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
             <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-              Cuentas de demostración:
-            </Typography>
-            <Typography variant="caption" component="div" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              medico@lisamedic.com / demo123
-            </Typography>
-            <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
-              asistente@lisamedic.com / demo123
-            </Typography>
-            <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
-              admin@lisamedic.com / demo123
+              Ingresa con tu correo electrónico o número de teléfono
             </Typography>
           </Box>
         </CardContent>

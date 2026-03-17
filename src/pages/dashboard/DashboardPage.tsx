@@ -27,14 +27,13 @@ import { dashboardService } from '../../api/dashboardService';
 import { appointmentService } from '../../api/appointmentService';
 import type { DashboardStats, Appointment } from '../../types';
 
-const statusConfig: Record<string, { label: string; color: 'success' | 'warning' | 'info' | 'error' | 'default' }> = {
-  confirmed: { label: 'Confirmada', color: 'success' },
-  scheduled: { label: 'Programada', color: 'info' },
-  in_progress: { label: 'En curso', color: 'warning' },
-  completed: { label: 'Completada', color: 'default' },
-  cancelled: { label: 'Cancelada', color: 'error' },
-  rescheduled: { label: 'Reprogramada', color: 'warning' },
-  no_show: { label: 'No asistió', color: 'error' },
+const statusConfig: Record<number, { label: string; color: 'success' | 'warning' | 'info' | 'error' | 'default' }> = {
+  0: { label: 'Pendiente', color: 'info' },
+  1: { label: 'Confirmada', color: 'success' },
+  2: { label: 'En consulta', color: 'warning' },
+  3: { label: 'Completada', color: 'default' },
+  4: { label: 'Cancelada', color: 'error' },
+  5: { label: 'No asistió', color: 'error' },
 };
 
 export default function DashboardPage() {
@@ -47,11 +46,10 @@ export default function DashboardPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        const today = new Date().toISOString().split('T')[0];
         const [statsData, appointmentsData] = await Promise.all([
           dashboardService.getStats(),
-          appointmentService.getAppointments(
-            new Date().toISOString().split('T')[0]
-          ),
+          appointmentService.getAppointmentsByRange(today, today),
         ]);
         setStats(statsData);
         setTodayAppointments(appointmentsData);
@@ -171,7 +169,7 @@ export default function DashboardPage() {
                       </ListItemAvatar>
                       <ListItemText
                         primary={`${appointment.patient?.name} ${appointment.patient?.last_name}`}
-                        secondary={`${appointment.start_time} - ${appointment.end_time} | ${appointment.reason ?? ''}`}
+                        secondary={`${appointment.datestart ? new Date(appointment.datestart).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''} - ${appointment.dateend ? new Date(appointment.dateend).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''} | ${appointment.reason ?? ''}`}
                       />
                       <Chip
                         label={

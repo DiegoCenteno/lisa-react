@@ -17,19 +17,18 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { EventInput, EventClickArg, DateSelectArg } from '@fullcalendar/core';
+import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
 import type { Appointment } from '../../types';
 import dayjs from 'dayjs';
 
-const statusColors: Record<string, string> = {
-  confirmed: '#4caf50',
-  scheduled: '#2196f3',
-  in_progress: '#ff9800',
-  completed: '#9e9e9e',
-  cancelled: '#f44336',
-  rescheduled: '#ff9800',
-  no_show: '#f44336',
+const statusColors: Record<number, string> = {
+  0: '#2196f3',   // Pendiente - azul
+  1: '#4caf50',   // Confirmada - verde
+  2: '#ff9800',   // En consulta - naranja
+  3: '#9e9e9e',   // Completada - gris
+  4: '#f44336',   // Cancelada - rojo
+  5: '#f44336',   // No asistió - rojo
 };
 
 function appointmentToEvent(apt: Appointment): EventInput {
@@ -40,14 +39,15 @@ function appointmentToEvent(apt: Appointment): EventInput {
   return {
     id: String(apt.id),
     title: patientName,
-    start: `${apt.date}T${apt.start_time}`,
-    end: `${apt.date}T${apt.end_time}`,
+    start: apt.datestart,
+    end: apt.dateend,
     backgroundColor: statusColors[apt.status] ?? '#2196f3',
     borderColor: statusColors[apt.status] ?? '#2196f3',
     extendedProps: {
       reason: apt.reason,
       status: apt.status,
       phone: apt.patient?.phone,
+      office: apt.office?.title,
     },
   };
 }
@@ -65,10 +65,12 @@ export default function AgendaPage() {
     reason: '',
   });
 
-  const loadAppointments = useCallback(async () => {
+  const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+
+  const loadAppointments = useCallback(async (startDate: string, endDate: string) => {
     setLoading(true);
     try {
-      const data = await appointmentService.getAppointments();
+      const data = await appointmentService.getAppointmentsByRange(startDate, endDate);
       setAppointments(data);
     } catch (err) {
       console.error('Error cargando citas:', err);
@@ -78,8 +80,16 @@ export default function AgendaPage() {
   }, []);
 
   useEffect(() => {
-    loadAppointments();
-  }, [loadAppointments]);
+    if (dateRange) {
+      loadAppointments(dateRange.start, dateRange.end);
+    }
+  }, [dateRange, loadAppointments]);
+
+  const handleDatesSet = useCallback((arg: DatesSetArg) => {
+    const start = dayjs(arg.start).format('YYYY-MM-DD');
+    const end = dayjs(arg.end).format('YYYY-MM-DD');
+    setDateRange({ start, end });
+  }, []);
 
   const events = useMemo(
     () => appointments.map(appointmentToEvent),
@@ -106,12 +116,13 @@ export default function AgendaPage() {
 
   const handleCreateAppointment = async () => {
     try {
+      const datestart = `${newAppointment.date} ${newAppointment.start_time}:00`;
+      const dateend = `${newAppointment.date} ${newAppointment.end_time}:00`;
       await appointmentService.createAppointment({
-        patient_id: 0,
-        medico_id: 1,
-        date: newAppointment.date,
-        start_time: newAppointment.start_time,
-        end_time: newAppointment.end_time,
+        office_id: 0, // TODO: select office from user's offices
+        patient_id: 0, // TODO: search and select patient
+        datestart,
+        dateend,
         reason: newAppointment.reason,
       });
       setDialogOpen(false);
@@ -122,7 +133,9 @@ export default function AgendaPage() {
         end_time: '09:30',
         reason: '',
       });
-      loadAppointments();
+      if (dateRange) {
+        loadAppointments(dateRange.start, dateRange.end);
+      }
     } catch (err) {
       console.error('Error creando cita:', err);
     }
@@ -238,6 +251,7 @@ export default function AgendaPage() {
               minute: '2-digit',
               hour12: false,
             }}
+            datesSet={handleDatesSet}
             nowIndicator={true}
             dayMaxEvents={3}
             moreLinkText={(n) => `+${n} más`}
