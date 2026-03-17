@@ -9,7 +9,6 @@ import {
   DialogActions,
   TextField,
   Grid,
-  Skeleton,
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -25,10 +24,9 @@ import dayjs from 'dayjs';
 const statusColors: Record<number, string> = {
   0: '#2196f3',   // Pendiente - azul
   1: '#4caf50',   // Confirmada - verde
-  2: '#ff9800',   // En consulta - naranja
-  3: '#9e9e9e',   // Completada - gris
-  4: '#f44336',   // Cancelada - rojo
-  5: '#f44336',   // No asistió - rojo
+  2: '#f44336',   // No asistió - rojo
+  3: '#9e9e9e',   // Cancelada - gris
+  4: '#ff9800',   // Reprogramada - naranja
 };
 
 function appointmentToEvent(apt: Appointment): EventInput {
@@ -54,7 +52,7 @@ function appointmentToEvent(apt: Appointment): EventInput {
 
 export default function AgendaPage() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventClickArg | null>(null);
   const [newAppointment, setNewAppointment] = useState({
@@ -163,13 +161,13 @@ export default function AgendaPage() {
         </Button>
       </Box>
 
-      {loading ? (
-        <Box>
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} height={80} sx={{ mb: 1 }} />
-          ))}
-        </Box>
-      ) : (
+      <Box
+        sx={{
+          position: 'relative',
+          opacity: loading ? 0.5 : 1,
+          transition: 'opacity 0.3s',
+        }}
+      >
         <Box
           sx={{
             '& .fc': {
@@ -259,7 +257,7 @@ export default function AgendaPage() {
             firstDay={1}
           />
         </Box>
-      )}
+      </Box>
 
       {/* Dialog: Detalle de cita */}
       <Dialog

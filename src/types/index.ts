@@ -1,9 +1,7 @@
 export const UserRole = {
-  ADMIN_SYSTEM: 'admin_system',
-  ADMIN_NUCLEO: 'admin_nucleo',
   MEDICO: 'medico',
-  MEDICO_COMPARTIDO: 'medico_compartido',
   ASISTENTE: 'asistente',
+  PACIENTE: 'paciente',
 } as const;
 
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
@@ -64,10 +62,9 @@ export interface Appointment {
 export const AppointmentStatusMap: Record<number, string> = {
   0: 'Pendiente',
   1: 'Confirmada',
-  2: 'En consulta',
-  3: 'Completada',
-  4: 'Cancelada',
-  5: 'No asistió',
+  2: 'No asistió',
+  3: 'Cancelada',
+  4: 'Reprogramada',
 };
 
 export interface Office {

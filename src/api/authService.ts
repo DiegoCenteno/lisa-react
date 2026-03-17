@@ -2,11 +2,8 @@ import type { AuthResponse, User, UserRole } from '../types';
 import apiClient from './client';
 
 const ROL_ID_MAP: Record<number, UserRole> = {
-  1: 'admin_system',
-  2: 'admin_nucleo',
-  3: 'medico',
-  4: 'medico_compartido',
-  5: 'asistente',
+  1: 'medico',
+  2: 'asistente',
 };
 
 interface PassportLoginResponse {
@@ -18,7 +15,7 @@ interface PassportLoginResponse {
       last_name: string;
       email: string;
       phone: string;
-      rol_id: number;
+      rol_id: number | null;
       specialty_id: number | null;
     };
     tokens: {
@@ -45,7 +42,7 @@ export const authService = {
       id: apiUser.id,
       name: `${apiUser.name} ${apiUser.last_name}`.trim(),
       email: apiUser.email,
-      role: ROL_ID_MAP[apiUser.rol_id] ?? 'medico',
+      role: (apiUser.rol_id !== null && ROL_ID_MAP[apiUser.rol_id]) ? ROL_ID_MAP[apiUser.rol_id] : 'paciente',
       phone: apiUser.phone,
     };
 

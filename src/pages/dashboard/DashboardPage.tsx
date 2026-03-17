@@ -30,10 +30,9 @@ import type { DashboardStats, Appointment } from '../../types';
 const statusConfig: Record<number, { label: string; color: 'success' | 'warning' | 'info' | 'error' | 'default' }> = {
   0: { label: 'Pendiente', color: 'info' },
   1: { label: 'Confirmada', color: 'success' },
-  2: { label: 'En consulta', color: 'warning' },
-  3: { label: 'Completada', color: 'default' },
-  4: { label: 'Cancelada', color: 'error' },
-  5: { label: 'No asistió', color: 'error' },
+  2: { label: 'No asistió', color: 'error' },
+  3: { label: 'Cancelada', color: 'default' },
+  4: { label: 'Reprogramada', color: 'warning' },
 };
 
 export default function DashboardPage() {
