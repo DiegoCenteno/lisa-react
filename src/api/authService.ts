@@ -21,10 +21,12 @@ interface PassportLoginResponse {
       rol_id: number;
       specialty_id: number | null;
     };
-    access: {
-      access_token: string;
-      refresh_token: string;
-      expires_in: number;
+    tokens: {
+      auth: {
+        access_token: string;
+        refresh_token: string;
+        expires_in: number;
+      };
     };
   };
 }
@@ -37,7 +39,7 @@ export const authService = {
     });
 
     const apiUser = response.data.data.user;
-    const access = response.data.data.access;
+    const access = response.data.data.tokens.auth;
 
     const user: User = {
       id: apiUser.id,
