@@ -65,22 +65,27 @@ function appointmentToEvent(apt: Appointment): EventInput {
 function renderEventContent(arg: EventContentArg) {
   const { confirmed, smsstatus, phone } = arg.event.extendedProps;
   const isListView = arg.view.type.startsWith('list');
+  const bgColor = arg.event.backgroundColor;
+
+  // In list view, pick icon color that contrasts with row background
+  const confirmedColor = isListView && bgColor === '#00aeff' ? '#ffffff' : '#00aeff';
+  const smsColor = isListView && bgColor === '#9e9e9e' ? '#ffffff' : '#04d84e';
 
   const checkEl = confirmed ? (
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
-      <CheckIcon sx={{ color: '#00aeff', fontSize: 'medium' }} />
-      <CheckIcon sx={{ color: '#00aeff', fontSize: 'medium', marginLeft: '-9px' }} />
+      <CheckIcon sx={{ color: confirmedColor, fontSize: 'medium' }} />
+      <CheckIcon sx={{ color: confirmedColor, fontSize: 'medium', marginLeft: '-9px' }} />
     </span>
   ) : smsstatus === 1 ? (
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
-      <CheckIcon sx={{ color: '#04d84e', fontSize: 'medium' }} />
+      <CheckIcon sx={{ color: smsColor, fontSize: 'medium' }} />
     </span>
   ) : null;
 
   if (isListView) {
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-        <span>
+        <span style={{ display: 'inline-flex', alignItems: 'center' }}>
           {checkEl}
           <b>{arg.event.title}</b>
         </span>
