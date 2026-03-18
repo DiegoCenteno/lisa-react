@@ -10,7 +10,7 @@ import {
   TextField,
   Grid,
 } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Add as AddIcon, Check as CheckIcon } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -67,13 +67,13 @@ function renderEventContent(arg: EventContentArg) {
   const isListView = arg.view.type.startsWith('list');
 
   const checkEl = confirmed ? (
-    <span style={{ color: '#00aeff', fontWeight: 'bold', marginRight: 6, fontSize: '0.95em' }}>
-      <span>{'\u2713'}</span>
-      <span style={{ marginLeft: -5 }}>{'\u2713'}</span>
+    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+      <CheckIcon sx={{ color: '#00aeff', fontSize: 'medium' }} />
+      <CheckIcon sx={{ color: '#00aeff', fontSize: 'medium', marginLeft: '-9px' }} />
     </span>
   ) : smsstatus === 1 ? (
-    <span style={{ color: '#04d84e', fontWeight: 'bold', marginRight: 6, fontSize: '0.95em' }}>
-      {'\u2713'}
+    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+      <CheckIcon sx={{ color: '#04d84e', fontSize: 'medium' }} />
     </span>
   ) : null;
 
