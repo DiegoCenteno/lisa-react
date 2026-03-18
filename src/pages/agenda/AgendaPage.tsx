@@ -16,38 +16,107 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg } from '@fullcalendar/core';
+import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
 import type { Appointment } from '../../types';
 import dayjs from 'dayjs';
 
-const statusColors: Record<number, string> = {
-  0: '#2196f3',   // Pendiente - azul
-  1: '#4caf50',   // Confirmada - verde
-  2: '#f44336',   // No asistió - rojo
-  3: '#9e9e9e',   // Cancelada - gris
-  4: '#ff9800',   // Reprogramada - naranja
-};
+function getEventColors(apt: Appointment): { bg: string; text: string } {
+  const now = dayjs();
+  const end = dayjs(apt.dateend);
+
+  if (end.isBefore(now)) {
+    return { bg: '#9e9e9e', text: '#ffffff' };
+  }
+  if (apt.is_first_time) {
+    return { bg: '#00aeff', text: '#ffffff' };
+  }
+  return { bg: '#A8FBBD', text: '#333333' };
+}
 
 function appointmentToEvent(apt: Appointment): EventInput {
   const patientName = apt.patient
     ? `${apt.patient.name} ${apt.patient.last_name}`
     : `Paciente #${apt.patient_id}`;
 
+  const colors = getEventColors(apt);
+
   return {
     id: String(apt.id),
     title: patientName,
     start: apt.datestart,
     end: apt.dateend,
-    backgroundColor: statusColors[apt.status] ?? '#2196f3',
-    borderColor: statusColors[apt.status] ?? '#2196f3',
+    backgroundColor: colors.bg,
+    borderColor: colors.bg,
+    textColor: colors.text,
     extendedProps: {
       reason: apt.reason,
       status: apt.status,
+      confirmed: apt.confirmed,
+      smsstatus: apt.smsstatus,
+      is_first_time: apt.is_first_time,
       phone: apt.patient?.phone,
       office: apt.office?.title,
+      rowTextColor: colors.text,
     },
   };
+}
+
+function renderEventContent(arg: EventContentArg) {
+  const { confirmed, smsstatus, phone } = arg.event.extendedProps;
+  const isListView = arg.view.type.startsWith('list');
+
+  const checkEl = confirmed ? (
+    <span style={{ color: '#00aeff', fontWeight: 'bold', marginRight: 6, fontSize: '0.95em' }}>
+      <span>{'\u2713'}</span>
+      <span style={{ marginLeft: -5 }}>{'\u2713'}</span>
+    </span>
+  ) : smsstatus === 1 ? (
+    <span style={{ color: '#04d84e', fontWeight: 'bold', marginRight: 6, fontSize: '0.95em' }}>
+      {'\u2713'}
+    </span>
+  ) : null;
+
+  if (isListView) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <span>
+          {checkEl}
+          <b>{arg.event.title}</b>
+        </span>
+        {phone && (
+          <span style={{
+            fontSize: '0.85em',
+            whiteSpace: 'nowrap',
+            marginLeft: 16,
+            opacity: 0.8,
+          }}>
+            {String(phone)}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  if (arg.view.type.startsWith('timeGrid')) {
+    return (
+      <>
+        <div className="fc-event-time">{arg.timeText}</div>
+        <div className="fc-event-title">
+          {checkEl}
+          {arg.event.title}
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {arg.timeText && <span className="fc-event-time">{arg.timeText} </span>}
+      {checkEl}
+      <span className="fc-event-title">{arg.event.title}</span>
+    </>
+  );
 }
 
 export default function AgendaPage() {
@@ -84,9 +153,27 @@ export default function AgendaPage() {
   }, [dateRange, loadAppointments]);
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
-    const start = dayjs(arg.start).format('YYYY-MM-DD');
-    const end = dayjs(arg.end).format('YYYY-MM-DD');
-    setDateRange({ start, end });
+    const viewType = arg.view.type;
+    const viewStart = dayjs(arg.start);
+    const viewEnd = dayjs(arg.end);
+    const today = dayjs().startOf('day');
+
+    if (viewType.startsWith('list')) {
+      const effectiveStart = viewStart.isBefore(today) ? today : viewStart;
+      if (effectiveStart.valueOf() >= viewEnd.valueOf()) {
+        setAppointments([]);
+        return;
+      }
+      setDateRange({
+        start: effectiveStart.format('YYYY-MM-DD'),
+        end: viewEnd.format('YYYY-MM-DD'),
+      });
+    } else {
+      setDateRange({
+        start: viewStart.format('YYYY-MM-DD'),
+        end: viewEnd.format('YYYY-MM-DD'),
+      });
+    }
   }, []);
 
   const events = useMemo(
@@ -138,6 +225,26 @@ export default function AgendaPage() {
       console.error('Error creando cita:', err);
     }
   };
+
+  const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
+    if (info.view.type.startsWith('list')) {
+      const row = info.el.tagName === 'TR'
+        ? info.el
+        : info.el.closest('tr');
+      if (row && row instanceof HTMLElement) {
+        const bgColor = info.event.backgroundColor;
+        const textColor = (info.event.extendedProps.rowTextColor as string) || info.event.textColor || '#333';
+        row.style.backgroundColor = bgColor;
+        row.querySelectorAll('td').forEach((cell) => {
+          (cell as HTMLElement).style.color = textColor;
+        });
+        const dot = row.querySelector('.fc-list-event-dot') as HTMLElement | null;
+        if (dot) {
+          dot.style.display = 'none';
+        }
+      }
+    }
+  }, []);
 
   return (
     <Box>
@@ -208,18 +315,21 @@ export default function AgendaPage() {
               backgroundColor: 'rgba(0, 137, 123, 0.05) !important',
             },
             '& .fc-list-event:hover td': {
-              backgroundColor: 'rgba(0, 137, 123, 0.08)',
+              filter: 'brightness(0.95)',
+            },
+            '& .fc-list-event td': {
+              transition: 'filter 0.2s',
             },
           }}
         >
           <FullCalendar
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-            initialView="listWeek"
+            initialView="listMonth"
             locale="es"
             headerToolbar={{
               left: 'prev,next today',
               center: 'title',
-              right: 'listWeek,timeGridDay,timeGridWeek,dayGridMonth',
+              right: 'listMonth,timeGridDay,timeGridWeek,dayGridMonth',
             }}
             buttonText={{
               today: 'Hoy',
@@ -229,6 +339,8 @@ export default function AgendaPage() {
               list: 'Lista',
             }}
             events={events}
+            eventContent={renderEventContent}
+            eventDidMount={handleEventDidMount}
             selectable={true}
             selectMirror={true}
             select={handleDateSelect}
@@ -292,6 +404,16 @@ export default function AgendaPage() {
               {selectedEvent.event.extendedProps.phone && (
                 <Typography>
                   <strong>Teléfono:</strong> {selectedEvent.event.extendedProps.phone}
+                </Typography>
+              )}
+              {selectedEvent.event.extendedProps.confirmed && (
+                <Typography sx={{ color: '#00aeff' }}>
+                  <strong>Cita confirmada</strong>
+                </Typography>
+              )}
+              {selectedEvent.event.extendedProps.is_first_time && (
+                <Typography sx={{ color: '#00aeff' }}>
+                  <strong>Paciente de primera vez</strong>
                 </Typography>
               )}
             </Box>
