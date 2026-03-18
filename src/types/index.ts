@@ -46,6 +46,8 @@ export interface Appointment {
   status: number;
   reason?: string;
   confirmed?: boolean;
+  smsstatus?: number;
+  is_first_time?: boolean;
   patient?: {
     id: number;
     name: string;
