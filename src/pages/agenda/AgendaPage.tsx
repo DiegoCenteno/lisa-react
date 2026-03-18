@@ -63,15 +63,16 @@ function appointmentToEvent(apt: Appointment): EventInput {
 }
 
 function renderEventContent(arg: EventContentArg) {
-  const { confirmed, smsstatus, phone } = arg.event.extendedProps;
+  const { confirmed, smsstatus, phone, status } = arg.event.extendedProps;
   const isListView = arg.view.type.startsWith('list');
   const bgColor = arg.event.backgroundColor;
+  const isConfirmed = confirmed || status === 1;
 
   // In list view, pick icon color that contrasts with row background
   const confirmedColor = isListView && bgColor === '#00aeff' ? '#ffffff' : '#00aeff';
   const smsColor = isListView && bgColor === '#9e9e9e' ? '#ffffff' : '#04d84e';
 
-  const checkEl = confirmed ? (
+  const checkEl = isConfirmed ? (
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <CheckIcon sx={{ color: confirmedColor, fontSize: 'medium' }} />
       <CheckIcon sx={{ color: confirmedColor, fontSize: 'medium', marginLeft: '-9px' }} />
