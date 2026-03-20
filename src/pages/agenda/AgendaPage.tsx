@@ -7,6 +7,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import { Add as AddIcon, Check as CheckIcon } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -125,6 +127,8 @@ function renderEventContent(arg: EventContentArg) {
 }
 
 export default function AgendaPage() {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -300,7 +304,11 @@ export default function AgendaPage() {
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             initialView="listMonth"
             locale="es"
-            headerToolbar={{
+            headerToolbar={isMobile ? {
+              left: 'prev,next',
+              center: 'title',
+              right: '',
+            } : {
               left: 'prev,next today',
               center: 'title',
               right: 'listMonth,timeGridDay,timeGridWeek,dayGridMonth',
