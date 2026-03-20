@@ -296,9 +296,9 @@ export default function NewAppointmentDialog({
     const q = patientSearch.toLowerCase();
     return patients.filter(
       (p) =>
-        p.full_name.toLowerCase().includes(q) ||
-        p.phone.includes(q) ||
-        p.full_phone.includes(q)
+        (p.full_name ?? '').toLowerCase().includes(q) ||
+        (p.phone ?? '').includes(q) ||
+        (p.full_phone ?? '').includes(q)
     );
   }, [patients, patientSearch]);
 
@@ -614,10 +614,10 @@ export default function NewAppointmentDialog({
                     }}
                   >
                     <Typography sx={{ fontSize: '0.9rem' }}>
-                      {patient.full_name}
+                      {patient.full_name ?? ''}
                     </Typography>
                     <Typography sx={{ fontSize: '0.9rem', color: '#555', whiteSpace: 'nowrap', ml: 2 }}>
-                      {patient.phone}
+                      {patient.phone ?? ''}
                     </Typography>
                   </Box>
                 ))

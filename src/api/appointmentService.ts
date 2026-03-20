@@ -112,7 +112,12 @@ export const appointmentService = {
       '/v2/patients',
       { params: { office_id: officeId, simple: 1 } }
     );
-    return response.data.data.data;
+    // Handle both paginated { data: { data: [...] } } and direct { data: [...] } formats
+    const outer = response.data.data;
+    if (Array.isArray(outer)) {
+      return outer as unknown as PatientSimple[];
+    }
+    return outer.data ?? [];
   },
 
   async getOffices(): Promise<Office[]> {
