@@ -21,10 +21,9 @@ import {
   ContentCopy as CopyIcon,
   Close as CloseIcon,
   ArrowBack as BackIcon,
-  KeyboardArrowUp as ArrowUpIcon,
-  KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
-import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import type { AvailableSlot, PatientSimple, NewPatientData } from '../../types';
@@ -99,12 +98,8 @@ export default function NewAppointmentDialog({
 
   // ── Manual appointment mode ──
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualDate, setManualDate] = useState<Dayjs>(dayjs());
-  const [manualHour, setManualHour] = useState(9);
-  const [manualMinute, setManualMinute] = useState(0);
-  const [manualAmPm, setManualAmPm] = useState<'AM' | 'PM'>('AM');
-  const [durationHours, setDurationHours] = useState(0);
-  const [durationMinutes, setDurationMinutes] = useState(50);
+  const [manualDateTime, setManualDateTime] = useState<Dayjs>(dayjs().hour(9).minute(0).second(0));
+  const [manualDuration, setManualDuration] = useState<Dayjs>(dayjs().hour(0).minute(50).second(0));
 
   // ── Step 3: summary ──
   const [reason, setReason] = useState('');
@@ -136,12 +131,8 @@ export default function NewAppointmentDialog({
       });
       setNewPatientErrors({});
       setShowManualForm(false);
-      setManualDate(dayjs());
-      setManualHour(9);
-      setManualMinute(0);
-      setManualAmPm('AM');
-      setDurationHours(0);
-      setDurationMinutes(50);
+      setManualDateTime(dayjs().hour(9).minute(0).second(0));
+      setManualDuration(dayjs().hour(0).minute(50).second(0));
       setReason('');
       setNotifyPatient(true);
       setSaving(false);
@@ -336,15 +327,8 @@ export default function NewAppointmentDialog({
 
   // ── Handle manual appointment continue ──
   const handleManualContinue = () => {
-    let hour24 = manualHour;
-    if (manualAmPm === 'PM' && hour24 !== 12) hour24 += 12;
-    if (manualAmPm === 'AM' && hour24 === 12) hour24 = 0;
-
-    const start = manualDate
-      .hour(hour24)
-      .minute(manualMinute)
-      .second(0);
-    const totalDurationMinutes = durationHours * 60 + durationMinutes;
+    const start = manualDateTime.second(0);
+    const totalDurationMinutes = manualDuration.hour() * 60 + manualDuration.minute();
     const end = start.add(totalDurationMinutes, 'minute');
 
     setSelectedSlot({
@@ -365,98 +349,30 @@ export default function NewAppointmentDialog({
   //  RENDER: Manual date/time/duration form
   // ═══════════════════════════════════════════════
   const renderManualForm = () => (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      {/* Date picker */}
-      <Box>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#333', mb: 0.5 }}>
-          *Fecha de la cita:
-        </Typography>
-        <Typography sx={{ fontSize: '0.9rem', color: '#555', mb: 1 }}>
-          {manualDate.format('DD/MM/YYYY')}
-        </Typography>
-        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
-          <DateCalendar
-            value={manualDate}
-            onChange={(newDate: Dayjs | null) => { if (newDate) setManualDate(newDate); }}
-            views={['day']}
-            disablePast
-            sx={{
-              width: '100%',
-              '& .MuiPickersCalendarHeader-root': { mt: 0, px: 1 },
-              '& .MuiDayCalendar-header, & .MuiDayCalendar-weekContainer': { justifyContent: 'space-around' },
-            }}
-          />
-        </LocalizationProvider>
+    <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
+        <DateTimePicker
+          label="Fecha y hora de la cita"
+          value={manualDateTime}
+          onChange={(val: Dayjs | null) => { if (val) setManualDateTime(val); }}
+          disablePast
+          minutesStep={5}
+          format="DD/MM/YYYY hh:mm a"
+          views={['day', 'hours', 'minutes']}
+          slotProps={{ textField: { size: 'small', fullWidth: true } }}
+        />
+        <TimePicker
+          label="Duración de la cita"
+          value={manualDuration}
+          onChange={(val: Dayjs | null) => { if (val) setManualDuration(val); }}
+          minutesStep={5}
+          ampm={false}
+          format="HH:mm"
+          views={['hours', 'minutes']}
+          slotProps={{ textField: { size: 'small', fullWidth: true } }}
+        />
       </Box>
-
-      {/* Time picker spinner */}
-      <Box>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#333', mb: 0.5 }}>
-          *Horario de la cita:
-        </Typography>
-        <Typography sx={{ fontSize: '0.9rem', color: '#555', mb: 1 }}>
-          {String(manualHour).padStart(2, '0')}:{String(manualMinute).padStart(2, '0')} {manualAmPm.toLowerCase()}
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, border: '1px solid #e0e0e0', borderRadius: 2, py: 1.5, px: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <IconButton size="small" onClick={() => setManualHour(manualHour >= 12 ? 1 : manualHour + 1)} sx={{ color: '#1976d2' }}>
-              <ArrowUpIcon />
-            </IconButton>
-            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(manualHour).padStart(2, '0')}</Typography>
-            <IconButton size="small" onClick={() => setManualHour(manualHour <= 1 ? 12 : manualHour - 1)} sx={{ color: '#1976d2' }}>
-              <ArrowDownIcon />
-            </IconButton>
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <IconButton size="small" onClick={() => setManualMinute((manualMinute + 5) % 60)} sx={{ color: '#1976d2' }}>
-              <ArrowUpIcon />
-            </IconButton>
-            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(manualMinute).padStart(2, '0')}</Typography>
-            <IconButton size="small" onClick={() => setManualMinute(manualMinute <= 0 ? 55 : manualMinute - 5)} sx={{ color: '#1976d2' }}>
-              <ArrowDownIcon />
-            </IconButton>
-          </Box>
-          <Button
-            variant={manualAmPm === 'AM' ? 'contained' : 'outlined'}
-            size="small"
-            onClick={() => setManualAmPm(manualAmPm === 'AM' ? 'PM' : 'AM')}
-            sx={{ minWidth: 50, fontWeight: 600 }}
-          >
-            {manualAmPm}
-          </Button>
-        </Box>
-      </Box>
-
-      {/* Duration picker spinner */}
-      <Box>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#333', mb: 0.5 }}>
-          *Duración de la cita:
-        </Typography>
-        <Typography sx={{ fontSize: '0.9rem', color: '#555', mb: 1 }}>
-          {String(durationHours).padStart(2, '0')}:{String(durationMinutes).padStart(2, '0')}
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, border: '1px solid #e0e0e0', borderRadius: 2, py: 1.5, px: 2 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <IconButton size="small" onClick={() => setDurationHours(Math.min(durationHours + 1, 8))} sx={{ color: '#1976d2' }}>
-              <ArrowUpIcon />
-            </IconButton>
-            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(durationHours).padStart(2, '0')}</Typography>
-            <IconButton size="small" onClick={() => setDurationHours(Math.max(durationHours - 1, 0))} sx={{ color: '#1976d2' }}>
-              <ArrowDownIcon />
-            </IconButton>
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <IconButton size="small" onClick={() => setDurationMinutes((durationMinutes + 5) % 60)} sx={{ color: '#1976d2' }}>
-              <ArrowUpIcon />
-            </IconButton>
-            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(durationMinutes).padStart(2, '0')}</Typography>
-            <IconButton size="small" onClick={() => setDurationMinutes(durationMinutes <= 0 ? 55 : durationMinutes - 5)} sx={{ color: '#1976d2' }}>
-              <ArrowDownIcon />
-            </IconButton>
-          </Box>
-        </Box>
-      </Box>
-    </Box>
+    </LocalizationProvider>
   );
 
   // ═══════════════════════════════════════════════
