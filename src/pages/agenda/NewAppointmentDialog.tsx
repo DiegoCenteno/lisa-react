@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   Box,
   Typography,
   TextField,
@@ -456,7 +457,7 @@ export default function NewAppointmentDialog({
   //  RENDER: Step 2 – Patient Selection
   // ═══════════════════════════════════════════════
   const renderPatientStep = () => (
-    <Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {showNewPatientForm ? (
         // ── New Patient Form ──
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -551,99 +552,58 @@ export default function NewAppointmentDialog({
             helperText={newPatientErrors.birth_date}
             slotProps={{ inputLabel: { shrink: true } }}
           />
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={() => setShowNewPatientForm(false)}
-              sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
-            >
-              Volver a lista
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleNewPatientConfirm}
-              sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
-            >
-              Continuar
-            </Button>
-          </Box>
         </Box>
       ) : (
         // ── Patient List ──
-        <Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <TextField
             placeholder="Buscar paciente por nombre o teléfono..."
             size="small"
             fullWidth
             value={patientSearch}
             onChange={(e) => setPatientSearch(e.target.value)}
-            sx={{ mb: 2 }}
+            sx={{ mb: 2, flexShrink: 0 }}
           />
 
-          {patientsLoading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : (
-            <Box sx={{ borderTop: '2px solid', borderColor: TEAL }}>
-              {filteredPatients.length === 0 ? (
-                <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>
-                  No se encontraron pacientes
-                </Typography>
-              ) : (
-                filteredPatients.map((patient) => (
-                  <Box
-                    key={patient.id}
-                    onClick={() => handlePatientSelect(patient)}
-                    sx={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      py: 1.2,
-                      px: 2,
-                      cursor: 'pointer',
-                      backgroundColor: ROW_LIGHT,
-                      borderBottom: '1px solid #cfd8dc',
-                      '&:hover': { backgroundColor: '#b2ebf2' },
-                    }}
-                  >
-                    <Typography sx={{ fontSize: '0.9rem' }}>
-                      {patient.full_name ?? ''}
-                    </Typography>
-                    <Typography sx={{ fontSize: '0.9rem', color: '#555', whiteSpace: 'nowrap', ml: 2 }}>
-                      {patient.phone ?? ''}
-                    </Typography>
-                  </Box>
-                ))
-              )}
-            </Box>
-          )}
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={onClose}
-              sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
-            >
-              Cerrar
-            </Button>
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={() => setShowNewPatientForm(true)}
-              sx={{
-                borderColor: '#999',
-                color: '#333',
-                textTransform: 'uppercase',
-                '&:hover': { borderColor: '#666' },
-              }}
-            >
-              Nuevo paciente
-            </Button>
+          <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+            {patientsLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress size={32} />
+              </Box>
+            ) : (
+              <Box sx={{ borderTop: '2px solid', borderColor: TEAL }}>
+                {filteredPatients.length === 0 ? (
+                  <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>
+                    No se encontraron pacientes
+                  </Typography>
+                ) : (
+                  filteredPatients.map((patient) => (
+                    <Box
+                      key={patient.id}
+                      onClick={() => handlePatientSelect(patient)}
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        py: 1.2,
+                        px: 2,
+                        cursor: 'pointer',
+                        backgroundColor: ROW_LIGHT,
+                        borderBottom: '1px solid #cfd8dc',
+                        '&:hover': { backgroundColor: '#b2ebf2' },
+                      }}
+                    >
+                      <Typography sx={{ fontSize: '0.9rem' }}>
+                        {patient.full_name ?? ''}
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.9rem', color: '#555', whiteSpace: 'nowrap', ml: 2 }}>
+                        {patient.phone ?? ''}
+                      </Typography>
+                    </Box>
+                  ))
+                )}
+              </Box>
+            )}
           </Box>
         </Box>
       )}
@@ -717,7 +677,42 @@ export default function NewAppointmentDialog({
           </Typography>
         )}
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+      </Box>
+    );
+  };
+
+  // ── Step label ──
+  const stepNumber = step === 'dates' ? 1 : step === 'patient' ? 2 : 3;
+
+  // ── Footer buttons per step ──
+  const renderFooter = () => {
+    if (step === 'dates') return null;
+
+    if (step === 'patient') {
+      if (showNewPatientForm) {
+        return (
+          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => setShowNewPatientForm(false)}
+              sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
+            >
+              Volver a lista
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleNewPatientConfirm}
+              sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
+            >
+              Continuar
+            </Button>
+          </DialogActions>
+        );
+      }
+      return (
+        <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
           <Button
             variant="contained"
             size="small"
@@ -727,16 +722,43 @@ export default function NewAppointmentDialog({
             Cerrar
           </Button>
           <Button
-            variant="contained"
+            variant="outlined"
             size="small"
-            onClick={handleSave}
-            disabled={saving}
-            sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
+            onClick={() => setShowNewPatientForm(true)}
+            sx={{
+              borderColor: '#999',
+              color: '#333',
+              textTransform: 'uppercase',
+              '&:hover': { borderColor: '#666' },
+            }}
           >
-            {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Guardar cita'}
+            Nuevo paciente
           </Button>
-        </Box>
-      </Box>
+        </DialogActions>
+      );
+    }
+
+    // step === 'summary'
+    return (
+      <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+        <Button
+          variant="contained"
+          size="small"
+          onClick={onClose}
+          sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
+        >
+          Cerrar
+        </Button>
+        <Button
+          variant="contained"
+          size="small"
+          onClick={handleSave}
+          disabled={saving}
+          sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
+        >
+          {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Guardar cita'}
+        </Button>
+      </DialogActions>
     );
   };
 
@@ -747,7 +769,7 @@ export default function NewAppointmentDialog({
       maxWidth="xs"
       fullWidth
       PaperProps={{
-        sx: { borderRadius: 2, height: 520, display: 'flex', flexDirection: 'column' },
+        sx: { borderRadius: 2, height: 450, display: 'flex', flexDirection: 'column' },
       }}
     >
       <DialogTitle
@@ -775,12 +797,16 @@ export default function NewAppointmentDialog({
         >
           <CloseIcon />
         </IconButton>
+        <Typography sx={{ fontSize: '0.75rem', color: '#999', mt: 0.5 }}>
+          Paso {stepNumber} de 3
+        </Typography>
       </DialogTitle>
-      <DialogContent sx={{ pt: 2, flex: 1, overflow: 'auto' }}>
+      <DialogContent sx={{ pt: 2, flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {step === 'dates' && renderDatesStep()}
         {step === 'patient' && renderPatientStep()}
         {step === 'summary' && renderSummaryStep()}
       </DialogContent>
+      {renderFooter()}
     </Dialog>
   );
 }
