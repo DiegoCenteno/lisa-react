@@ -30,7 +30,6 @@ dayjs.locale('es');
 
 // ── Color constants matching Diego's original design ──
 const ROW_LIGHT = '#e0f7fa';
-const ROW_WHITE = '#ffffff';
 const SLOT_AVAILABLE = '#f0fff0';
 const SLOT_OCCUPIED = '#f5f5f5';
 const SLOT_BREAK = '#fffde7';
@@ -86,7 +85,7 @@ export default function NewAppointmentDialog({
     phone: '',
     name: '',
     last_name: '',
-    gender: 'M',
+    gender: '',
     birth_date: '',
   });
   const [newPatientErrors, setNewPatientErrors] = useState<Record<string, string>>({});
@@ -116,7 +115,7 @@ export default function NewAppointmentDialog({
         phone: '',
         name: '',
         last_name: '',
-        gender: 'M',
+        gender: '',
         birth_date: '',
       });
       setNewPatientErrors({});
@@ -204,11 +203,8 @@ export default function NewAppointmentDialog({
   // ── Validate new patient form ──
   const validateNewPatient = (): boolean => {
     const errors: Record<string, string> = {};
-    if (!newPatient.phone || newPatient.phone.length !== 10) {
-      errors.phone = 'El celular debe tener 10 dígitos';
-    }
-    if (!/^\d{10}$/.test(newPatient.phone)) {
-      errors.phone = 'Solo se permiten números (10 dígitos)';
+    if (newPatient.phone && !/^\d{10}$/.test(newPatient.phone)) {
+      errors.phone = 'El celular debe tener 10 dígitos numéricos';
     }
     if (!newPatient.name.trim()) {
       errors.name = 'El nombre es requerido';
@@ -221,9 +217,6 @@ export default function NewAppointmentDialog({
     }
     if (newPatient.last_name.length > 80) {
       errors.last_name = 'Máximo 80 caracteres';
-    }
-    if (!newPatient.birth_date) {
-      errors.birth_date = 'La fecha de nacimiento es requerida';
     }
     setNewPatientErrors(errors);
     return Object.keys(errors).length === 0;
@@ -276,8 +269,8 @@ export default function NewAppointmentDialog({
           last_name: newPatient.last_name,
           phone: newPatient.phone,
           phone_code: newPatient.phone_code,
-          gender: newPatient.gender,
-          birth_date: newPatient.birth_date,
+          gender: newPatient.gender || undefined,
+          birth_date: newPatient.birth_date || undefined,
         });
       }
       onAppointmentCreated();
@@ -351,7 +344,7 @@ export default function NewAppointmentDialog({
         </Typography>
       ) : (
         <Box>
-          {datesToShow.map((date, idx) => {
+          {datesToShow.map((date) => {
             const isExpanded = expandedDate === date;
             return (
               <Box key={date}>
@@ -363,8 +356,8 @@ export default function NewAppointmentDialog({
                     px: 2,
                     textAlign: 'center',
                     cursor: 'pointer',
-                    backgroundColor: idx % 2 === 0 ? ROW_LIGHT : ROW_WHITE,
-                    borderLeft: `4px solid ${ROW_LIGHT}`,
+                    backgroundColor: ROW_LIGHT,
+                    borderBottom: '1px solid #cfd8dc',
                     fontWeight: isExpanded ? 600 : 400,
                     color: '#00897B',
                     fontSize: '0.95rem',
@@ -531,13 +524,15 @@ export default function NewAppointmentDialog({
             <Select
               value={newPatient.gender}
               label="Género"
+              displayEmpty
               onChange={(e) =>
                 setNewPatient({
                   ...newPatient,
-                  gender: e.target.value as 'M' | 'F',
+                  gender: e.target.value as 'M' | 'F' | '',
                 })
               }
             >
+              <MenuItem value="">Ninguno</MenuItem>
               <MenuItem value="M">Masculino</MenuItem>
               <MenuItem value="F">Femenino</MenuItem>
             </Select>
@@ -599,7 +594,7 @@ export default function NewAppointmentDialog({
                   No se encontraron pacientes
                 </Typography>
               ) : (
-                filteredPatients.map((patient, idx) => (
+                filteredPatients.map((patient) => (
                   <Box
                     key={patient.id}
                     onClick={() => handlePatientSelect(patient)}
@@ -610,7 +605,8 @@ export default function NewAppointmentDialog({
                       py: 1.2,
                       px: 2,
                       cursor: 'pointer',
-                      backgroundColor: idx % 2 === 0 ? ROW_LIGHT : ROW_WHITE,
+                      backgroundColor: ROW_LIGHT,
+                      borderBottom: '1px solid #cfd8dc',
                       '&:hover': { backgroundColor: '#b2ebf2' },
                     }}
                   >
@@ -751,7 +747,7 @@ export default function NewAppointmentDialog({
       maxWidth="xs"
       fullWidth
       PaperProps={{
-        sx: { borderRadius: 2 },
+        sx: { borderRadius: 2, height: 520, display: 'flex', flexDirection: 'column' },
       }}
     >
       <DialogTitle
@@ -780,7 +776,7 @@ export default function NewAppointmentDialog({
           <CloseIcon />
         </IconButton>
       </DialogTitle>
-      <DialogContent sx={{ pt: 2 }}>
+      <DialogContent sx={{ pt: 2, flex: 1, overflow: 'auto' }}>
         {step === 'dates' && renderDatesStep()}
         {step === 'patient' && renderPatientStep()}
         {step === 'summary' && renderSummaryStep()}
