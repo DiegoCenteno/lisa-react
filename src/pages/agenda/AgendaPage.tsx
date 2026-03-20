@@ -7,8 +7,6 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  Grid,
 } from '@mui/material';
 import { Add as AddIcon, Check as CheckIcon } from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
@@ -16,10 +14,11 @@ import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
-import type { EventInput, EventClickArg, DateSelectArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
+import type { EventInput, EventClickArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
 import type { Appointment } from '../../types';
 import dayjs from 'dayjs';
+import NewAppointmentDialog from './NewAppointmentDialog';
 
 function getEventColors(apt: Appointment): { bg: string; text: string } {
   const now = dayjs();
@@ -130,15 +129,18 @@ export default function AgendaPage() {
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventClickArg | null>(null);
-  const [newAppointment, setNewAppointment] = useState({
-    patient_name: '',
-    date: dayjs().format('YYYY-MM-DD'),
-    start_time: '09:00',
-    end_time: '09:30',
-    reason: '',
-  });
+  const [officeId, setOfficeId] = useState<number>(0);
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+
+  // Load office_id on mount
+  useEffect(() => {
+    appointmentService.getOffices().then((offices) => {
+      if (offices.length > 0) {
+        setOfficeId(offices[0].id);
+      }
+    }).catch((err) => console.error('Error loading offices:', err));
+  }, []);
 
   const loadAppointments = useCallback(async (startDate: string, endDate: string) => {
     setLoading(true);
@@ -187,50 +189,16 @@ export default function AgendaPage() {
     [appointments]
   );
 
-  const handleDateSelect = (selectInfo: DateSelectArg) => {
-    const startDate = dayjs(selectInfo.start);
-    setNewAppointment({
-      patient_name: '',
-      date: startDate.format('YYYY-MM-DD'),
-      start_time: startDate.format('HH:mm'),
-      end_time: selectInfo.end
-        ? dayjs(selectInfo.end).format('HH:mm')
-        : startDate.add(30, 'minute').format('HH:mm'),
-      reason: '',
-    });
-    setDialogOpen(true);
-  };
 
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
   };
 
-  const handleCreateAppointment = async () => {
-    try {
-      const datestart = `${newAppointment.date} ${newAppointment.start_time}:00`;
-      const dateend = `${newAppointment.date} ${newAppointment.end_time}:00`;
-      await appointmentService.createAppointment({
-        office_id: 0, // TODO: select office from user's offices
-        patient_id: 0, // TODO: search and select patient
-        datestart,
-        dateend,
-        reason: newAppointment.reason,
-      });
-      setDialogOpen(false);
-      setNewAppointment({
-        patient_name: '',
-        date: dayjs().format('YYYY-MM-DD'),
-        start_time: '09:00',
-        end_time: '09:30',
-        reason: '',
-      });
-      if (dateRange) {
-        loadAppointments(dateRange.start, dateRange.end);
-      }
-    } catch (err) {
-      console.error('Error creando cita:', err);
+  const handleAppointmentCreated = useCallback(() => {
+    if (dateRange) {
+      loadAppointments(dateRange.start, dateRange.end);
     }
-  };
+  }, [dateRange, loadAppointments]);
 
   const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
@@ -347,9 +315,7 @@ export default function AgendaPage() {
             events={events}
             eventContent={renderEventContent}
             eventDidMount={handleEventDidMount}
-            selectable={true}
-            selectMirror={true}
-            select={handleDateSelect}
+            selectable={false}
             eventClick={handleEventClick}
             editable={false}
             height="auto"
@@ -430,79 +396,13 @@ export default function AgendaPage() {
         </DialogActions>
       </Dialog>
 
-      {/* Dialog: Nueva cita */}
-      <Dialog
+      {/* Dialog: Nueva cita (wizard) */}
+      <NewAppointmentDialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Nueva Cita</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              label="Nombre del Paciente"
-              fullWidth
-              value={newAppointment.patient_name}
-              onChange={(e) =>
-                setNewAppointment({ ...newAppointment, patient_name: e.target.value })
-              }
-            />
-            <TextField
-              label="Fecha"
-              type="date"
-              fullWidth
-              value={newAppointment.date}
-              onChange={(e) =>
-                setNewAppointment({ ...newAppointment, date: e.target.value })
-              }
-              slotProps={{ inputLabel: { shrink: true } }}
-            />
-            <Grid container spacing={2}>
-              <Grid size={6}>
-                <TextField
-                  label="Hora Inicio"
-                  type="time"
-                  fullWidth
-                  value={newAppointment.start_time}
-                  onChange={(e) =>
-                    setNewAppointment({ ...newAppointment, start_time: e.target.value })
-                  }
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-              </Grid>
-              <Grid size={6}>
-                <TextField
-                  label="Hora Fin"
-                  type="time"
-                  fullWidth
-                  value={newAppointment.end_time}
-                  onChange={(e) =>
-                    setNewAppointment({ ...newAppointment, end_time: e.target.value })
-                  }
-                  slotProps={{ inputLabel: { shrink: true } }}
-                />
-              </Grid>
-            </Grid>
-            <TextField
-              label="Motivo de la consulta"
-              fullWidth
-              multiline
-              rows={2}
-              value={newAppointment.reason}
-              onChange={(e) =>
-                setNewAppointment({ ...newAppointment, reason: e.target.value })
-              }
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleCreateAppointment}>
-            Crear Cita
-          </Button>
-        </DialogActions>
-      </Dialog>
+        officeId={officeId}
+        onAppointmentCreated={handleAppointmentCreated}
+      />
     </Box>
   );
 }
