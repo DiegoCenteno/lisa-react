@@ -209,6 +209,39 @@ export interface DashboardStats {
   cancelled_appointments: number;
 }
 
+export interface AvailableDatesResponse {
+  txt: string;
+  dates: string[];
+}
+
+export interface AvailableSlot {
+  datestart: string;
+  dateend: string;
+  timeshow: string;
+  estatus: number; // 0=occupied, 1=available, 2=break/lunch
+  minutes: string | number;
+  dateesp: string;
+  is_past: boolean;
+  is_past_4hours: boolean;
+}
+
+export interface PatientSimple {
+  id: number;
+  full_name: string;
+  phone: string;
+  phone_code: string;
+  full_phone: string;
+}
+
+export interface NewPatientData {
+  phone_code: string;
+  phone: string;
+  name: string;
+  last_name: string;
+  gender: 'M' | 'F';
+  birth_date: string;
+}
+
 export interface Consultorio {
   id: number;
   name: string;
