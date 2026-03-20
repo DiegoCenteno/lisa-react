@@ -21,10 +21,16 @@ import {
   ContentCopy as CopyIcon,
   Close as CloseIcon,
   ArrowBack as BackIcon,
+  KeyboardArrowUp as ArrowUpIcon,
+  KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
+import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import type { AvailableSlot, PatientSimple, NewPatientData } from '../../types';
 import { appointmentService } from '../../api/appointmentService';
 import dayjs from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import 'dayjs/locale/es';
 
 dayjs.locale('es');
@@ -91,6 +97,15 @@ export default function NewAppointmentDialog({
   });
   const [newPatientErrors, setNewPatientErrors] = useState<Record<string, string>>({});
 
+  // ── Manual appointment mode ──
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualDate, setManualDate] = useState<Dayjs>(dayjs());
+  const [manualHour, setManualHour] = useState(9);
+  const [manualMinute, setManualMinute] = useState(0);
+  const [manualAmPm, setManualAmPm] = useState<'AM' | 'PM'>('AM');
+  const [durationHours, setDurationHours] = useState(0);
+  const [durationMinutes, setDurationMinutes] = useState(50);
+
   // ── Step 3: summary ──
   const [reason, setReason] = useState('');
   const [notifyPatient, setNotifyPatient] = useState(true);
@@ -120,6 +135,13 @@ export default function NewAppointmentDialog({
         birth_date: '',
       });
       setNewPatientErrors({});
+      setShowManualForm(false);
+      setManualDate(dayjs());
+      setManualHour(9);
+      setManualMinute(0);
+      setManualAmPm('AM');
+      setDurationHours(0);
+      setDurationMinutes(50);
       setReason('');
       setNotifyPatient(true);
       setSaving(false);
@@ -302,7 +324,9 @@ export default function NewAppointmentDialog({
 
   // ── Handle back navigation ──
   const handleBack = () => {
-    if (step === 'patient') {
+    if (step === 'dates' && showManualForm) {
+      setShowManualForm(false);
+    } else if (step === 'patient') {
       setStep('dates');
       setSelectedSlot(null);
     } else if (step === 'summary') {
@@ -310,13 +334,138 @@ export default function NewAppointmentDialog({
     }
   };
 
+  // ── Handle manual appointment continue ──
+  const handleManualContinue = () => {
+    let hour24 = manualHour;
+    if (manualAmPm === 'PM' && hour24 !== 12) hour24 += 12;
+    if (manualAmPm === 'AM' && hour24 === 12) hour24 = 0;
+
+    const start = manualDate
+      .hour(hour24)
+      .minute(manualMinute)
+      .second(0);
+    const totalDurationMinutes = durationHours * 60 + durationMinutes;
+    const end = start.add(totalDurationMinutes, 'minute');
+
+    setSelectedSlot({
+      datestart: start.format('YYYY-MM-DD HH:mm:ss'),
+      dateend: end.format('YYYY-MM-DD HH:mm:ss'),
+      timeshow: start.format('hh:mm a'),
+      estatus: 1,
+      minutes: totalDurationMinutes,
+      dateesp: '',
+      is_past: false,
+      is_past_4hours: false,
+    });
+    setStep('patient');
+    loadPatients();
+  };
+
+  // ═══════════════════════════════════════════════
+  //  RENDER: Manual date/time/duration form
+  // ═══════════════════════════════════════════════
+  const renderManualForm = () => (
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* Date picker */}
+      <Box>
+        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#333', mb: 0.5 }}>
+          *Fecha de la cita:
+        </Typography>
+        <Typography sx={{ fontSize: '0.9rem', color: '#555', mb: 1 }}>
+          {manualDate.format('DD/MM/YYYY')}
+        </Typography>
+        <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
+          <DateCalendar
+            value={manualDate}
+            onChange={(newDate: Dayjs | null) => { if (newDate) setManualDate(newDate); }}
+            views={['day']}
+            disablePast
+            sx={{
+              width: '100%',
+              '& .MuiPickersCalendarHeader-root': { mt: 0, px: 1 },
+              '& .MuiDayCalendar-header, & .MuiDayCalendar-weekContainer': { justifyContent: 'space-around' },
+            }}
+          />
+        </LocalizationProvider>
+      </Box>
+
+      {/* Time picker spinner */}
+      <Box>
+        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#333', mb: 0.5 }}>
+          *Horario de la cita:
+        </Typography>
+        <Typography sx={{ fontSize: '0.9rem', color: '#555', mb: 1 }}>
+          {String(manualHour).padStart(2, '0')}:{String(manualMinute).padStart(2, '0')} {manualAmPm.toLowerCase()}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, border: '1px solid #e0e0e0', borderRadius: 2, py: 1.5, px: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <IconButton size="small" onClick={() => setManualHour(manualHour >= 12 ? 1 : manualHour + 1)} sx={{ color: '#1976d2' }}>
+              <ArrowUpIcon />
+            </IconButton>
+            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(manualHour).padStart(2, '0')}</Typography>
+            <IconButton size="small" onClick={() => setManualHour(manualHour <= 1 ? 12 : manualHour - 1)} sx={{ color: '#1976d2' }}>
+              <ArrowDownIcon />
+            </IconButton>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <IconButton size="small" onClick={() => setManualMinute((manualMinute + 5) % 60)} sx={{ color: '#1976d2' }}>
+              <ArrowUpIcon />
+            </IconButton>
+            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(manualMinute).padStart(2, '0')}</Typography>
+            <IconButton size="small" onClick={() => setManualMinute(manualMinute <= 0 ? 55 : manualMinute - 5)} sx={{ color: '#1976d2' }}>
+              <ArrowDownIcon />
+            </IconButton>
+          </Box>
+          <Button
+            variant={manualAmPm === 'AM' ? 'contained' : 'outlined'}
+            size="small"
+            onClick={() => setManualAmPm(manualAmPm === 'AM' ? 'PM' : 'AM')}
+            sx={{ minWidth: 50, fontWeight: 600 }}
+          >
+            {manualAmPm}
+          </Button>
+        </Box>
+      </Box>
+
+      {/* Duration picker spinner */}
+      <Box>
+        <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#333', mb: 0.5 }}>
+          *Duración de la cita:
+        </Typography>
+        <Typography sx={{ fontSize: '0.9rem', color: '#555', mb: 1 }}>
+          {String(durationHours).padStart(2, '0')}:{String(durationMinutes).padStart(2, '0')}
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, border: '1px solid #e0e0e0', borderRadius: 2, py: 1.5, px: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <IconButton size="small" onClick={() => setDurationHours(Math.min(durationHours + 1, 8))} sx={{ color: '#1976d2' }}>
+              <ArrowUpIcon />
+            </IconButton>
+            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(durationHours).padStart(2, '0')}</Typography>
+            <IconButton size="small" onClick={() => setDurationHours(Math.max(durationHours - 1, 0))} sx={{ color: '#1976d2' }}>
+              <ArrowDownIcon />
+            </IconButton>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <IconButton size="small" onClick={() => setDurationMinutes((durationMinutes + 5) % 60)} sx={{ color: '#1976d2' }}>
+              <ArrowUpIcon />
+            </IconButton>
+            <Typography sx={{ fontSize: '1.2rem', fontWeight: 500, my: 0.5 }}>{String(durationMinutes).padStart(2, '0')}</Typography>
+            <IconButton size="small" onClick={() => setDurationMinutes(durationMinutes <= 0 ? 55 : durationMinutes - 5)} sx={{ color: '#1976d2' }}>
+              <ArrowDownIcon />
+            </IconButton>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
+  );
+
   // ═══════════════════════════════════════════════
   //  RENDER: Step 1 – Available Dates + Slots
   // ═══════════════════════════════════════════════
-  const renderDatesStep = () => (
+  const renderDatesStep = () => showManualForm ? renderManualForm() : (
     <Box>
       {/* Copy button */}
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
         <Button
           variant="outlined"
           size="small"
@@ -401,6 +550,7 @@ export default function NewAppointmentDialog({
                               cursor: isOccupied ? 'default' : 'pointer',
                               backgroundColor: bgColor,
                               borderLeft: `4px solid ${bgColor}`,
+                              borderBottom: '1px solid #cfd8dc',
                               fontSize: '0.9rem',
                               color: isOccupied ? '#999' : '#333',
                               '&:hover': isOccupied
@@ -525,7 +675,6 @@ export default function NewAppointmentDialog({
             <Select
               value={newPatient.gender}
               label="Género"
-              displayEmpty
               onChange={(e) =>
                 setNewPatient({
                   ...newPatient,
@@ -686,7 +835,48 @@ export default function NewAppointmentDialog({
 
   // ── Footer buttons per step ──
   const renderFooter = () => {
-    if (step === 'dates') return null;
+    if (step === 'dates') {
+      if (showManualForm) {
+        return (
+          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={() => setShowManualForm(false)}
+              sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
+            >
+              Volver
+            </Button>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={handleManualContinue}
+              sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
+            >
+              Continuar
+            </Button>
+          </DialogActions>
+        );
+      }
+      return (
+        <DialogActions sx={{ justifyContent: 'flex-end', px: 3, pb: 2 }}>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => setShowManualForm(true)}
+            sx={{
+              borderColor: TEAL,
+              color: TEAL,
+              textTransform: 'none',
+              fontWeight: 500,
+              '&:hover': { borderColor: '#00796b', backgroundColor: 'rgba(0,137,123,0.04)' },
+            }}
+          >
+            Día y hora específica
+          </Button>
+        </DialogActions>
+      );
+    }
 
     if (step === 'patient') {
       if (showNewPatientForm) {
@@ -780,7 +970,7 @@ export default function NewAppointmentDialog({
           position: 'relative',
         }}
       >
-        {step !== 'dates' && (
+        {(step !== 'dates' || showManualForm) && (
           <IconButton
             onClick={handleBack}
             sx={{ position: 'absolute', left: 8, top: 8 }}
