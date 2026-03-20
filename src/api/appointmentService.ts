@@ -77,8 +77,8 @@ export const appointmentService = {
     last_name: string;
     phone: string;
     phone_code: string;
-    gender: string;
-    birth_date: string;
+    gender?: string;
+    birth_date?: string;
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',

@@ -238,7 +238,7 @@ export interface NewPatientData {
   phone: string;
   name: string;
   last_name: string;
-  gender: 'M' | 'F';
+  gender: 'M' | 'F' | '';
   birth_date: string;
 }
 
