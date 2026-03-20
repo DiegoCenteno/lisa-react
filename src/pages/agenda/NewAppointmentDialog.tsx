@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -290,17 +290,18 @@ export default function NewAppointmentDialog({
     }
   };
 
-  // ── Filtered patients (client-side search) ──
+  // ── Filtered patients (client-side search with deferred value for instant typing) ──
+  const deferredSearch = useDeferredValue(patientSearch);
   const filteredPatients = useMemo(() => {
-    if (!patientSearch.trim()) return patients.slice(0, 5);
-    const q = patientSearch.toLowerCase();
+    if (!deferredSearch.trim()) return patients.slice(0, 5);
+    const q = deferredSearch.toLowerCase();
     return patients.filter(
       (p) =>
         (p.full_name ?? '').toLowerCase().includes(q) ||
         (p.phone ?? '').includes(q) ||
         (p.full_phone ?? '').includes(q)
     );
-  }, [patients, patientSearch]);
+  }, [patients, deferredSearch]);
 
   // ── Dates to display ──
   const datesToShow = showAllDates ? availableDates : availableDates.slice(0, 6);
