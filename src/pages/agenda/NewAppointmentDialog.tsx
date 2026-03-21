@@ -34,6 +34,9 @@ dayjs.locale('es');
 const ROW_LIGHT = '#e0f7fa';
 const TEAL = '#00897B';
 const MAGENTA = '#e91e63';
+const DURATION_BG = '#fff8e1';
+const DURATION_COLOR = '#f57f17';
+const DURATION_HOVER = '#ffecb3';
 
 function formatDateEs(dateStr: string): string {
   const d = dayjs(dateStr);
@@ -48,6 +51,14 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// Format duration total minutes to display string
+function formatDuration(totalMin: number): string {
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return totalMin + ' minutos';
+  return h + 'h ' + String(m).padStart(2, '0') + 'm';
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -56,7 +67,7 @@ interface Props {
 }
 
 type WizardStep = 'dates' | 'patient' | 'summary';
-type ManualStep = 'month' | 'day' | 'hour' | 'minute' | 'ampm' | 'duration_hour' | 'duration_minute';
+type ManualStep = 'month' | 'day' | 'hour' | 'ampm' | 'duration';
 
 export default function NewAppointmentDialog({
   open,
@@ -109,8 +120,8 @@ export default function NewAppointmentDialog({
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [selectedMinute, setSelectedMinute] = useState<number | null>(null);
   const [selectedAmPm, setSelectedAmPm] = useState<'AM' | 'PM' | null>(null);
-  const [manualDurationHours, setManualDurationHours] = useState<number | null>(null);
-  const [manualDurationMinutes, setManualDurationMinutes] = useState<number | null>(null);
+  const [expandedManualHour, setExpandedManualHour] = useState<number | null>(null);
+  const [manualDurationTotal, setManualDurationTotal] = useState<number | null>(null);
 
   // ── Step 3: summary ──
   const [reason, setReason] = useState('');
@@ -152,8 +163,8 @@ export default function NewAppointmentDialog({
       setSelectedHour(null);
       setSelectedMinute(null);
       setSelectedAmPm(null);
-      setManualDurationHours(null);
-      setManualDurationMinutes(null);
+      setExpandedManualHour(null);
+      setManualDurationTotal(null);
       setReason('');
       setNotifyPatient(true);
       setSaving(false);
@@ -391,29 +402,19 @@ export default function NewAppointmentDialog({
   // ── Dates to display ──
   const datesToShow = showAllDates ? availableDates : availableDates.slice(0, 6);
 
+  // ── Back button: in manual form goes all the way back to dates screen ──
   const handleBack = () => {
     if (step === 'dates' && showManualForm) {
-      if (manualStep === 'month') {
-        setShowManualForm(false);
-      } else if (manualStep === 'day') {
-        setManualStep('month');
-        setSelectedMonth(null);
-      } else if (manualStep === 'hour') {
-        setManualStep('day');
-        setSelectedDay(null);
-      } else if (manualStep === 'minute') {
-        setManualStep('hour');
-        setSelectedHour(null);
-      } else if (manualStep === 'ampm') {
-        setManualStep('minute');
-        setSelectedMinute(null);
-      } else if (manualStep === 'duration_hour') {
-        setManualStep('ampm');
-        setSelectedAmPm(null);
-      } else if (manualStep === 'duration_minute') {
-        setManualStep('duration_hour');
-        setManualDurationHours(null);
-      }
+      setShowManualForm(false);
+      setManualStep('month');
+      setShowAllMonths(false);
+      setSelectedMonth(null);
+      setSelectedDay(null);
+      setSelectedHour(null);
+      setSelectedMinute(null);
+      setSelectedAmPm(null);
+      setExpandedManualHour(null);
+      setManualDurationTotal(null);
     } else if (step === 'patient') {
       setStep('dates');
       setSelectedSlot(null);
@@ -422,20 +423,20 @@ export default function NewAppointmentDialog({
     }
   };
 
-  const handleManualContinueAfterDuration = useCallback((durH: number, durM: number) => {
+  const handleManualDurationSelect = useCallback((totalMinutes: number) => {
     if (selectedDay === null || selectedHour === null || selectedMinute === null || selectedAmPm === null) return;
+    setManualDurationTotal(totalMinutes);
     let hour24 = selectedHour;
     if (selectedAmPm === 'PM' && hour24 !== 12) hour24 += 12;
     if (selectedAmPm === 'AM' && hour24 === 12) hour24 = 0;
     const start = selectedDay.hour(hour24).minute(selectedMinute).second(0);
-    const totalDurationMinutes = durH * 60 + durM;
-    const end = start.add(totalDurationMinutes, 'minute');
+    const end = start.add(totalMinutes, 'minute');
     setSelectedSlot({
       datestart: start.format('YYYY-MM-DD HH:mm:ss'),
       dateend: end.format('YYYY-MM-DD HH:mm:ss'),
       timeshow: start.format('hh:mm a'),
       estatus: 1,
-      minutes: totalDurationMinutes,
+      minutes: totalMinutes,
       dateesp: '',
       is_past: false,
       is_past_4hours: false,
@@ -477,6 +478,15 @@ export default function NewAppointmentDialog({
     return days;
   }, [selectedMonth]);
 
+  // Generate duration list (5 min to 6h, step 5)
+  const durationList = useMemo(() => {
+    const items: { totalMin: number; label: string }[] = [];
+    for (let min = 5; min <= 360; min += 5) {
+      items.push({ totalMin: min, label: formatDuration(min) });
+    }
+    return items;
+  }, []);
+
   // Build manual selection summary for header display
   const manualSummaryParts = useMemo(() => {
     const parts: string[] = [];
@@ -489,20 +499,40 @@ export default function NewAppointmentDialog({
       parts.push(dayName + ' ' + selectedDay.format('D'));
     }
     if (selectedHour !== null) {
-      parts.push(selectedHour + ':00');
-    }
-    if (selectedMinute !== null && selectedHour !== null) {
-      parts[parts.length - 1] = selectedHour + ':' + String(selectedMinute).padStart(2, '0');
+      const hourStr = String(selectedHour).padStart(2, '0');
+      if (selectedMinute !== null) {
+        parts.push(hourStr + ':' + String(selectedMinute).padStart(2, '0'));
+      } else {
+        parts.push(hourStr + ':00');
+      }
     }
     if (selectedAmPm) {
       parts[parts.length - 1] = parts[parts.length - 1] + ' ' + selectedAmPm;
     }
-    if (manualDurationHours !== null) {
-      const durMin = manualDurationMinutes ?? 0;
-      parts.push('Duraci\u00f3n: ' + manualDurationHours + 'h ' + String(durMin).padStart(2, '0') + 'm');
+    if (manualDurationTotal !== null) {
+      const h = Math.floor(manualDurationTotal / 60);
+      const m = manualDurationTotal % 60;
+      if (h > 0) {
+        parts.push('Duraci\u00f3n: ' + h + 'h ' + String(m).padStart(2, '0') + 'm');
+      } else {
+        parts.push('Duraci\u00f3n: ' + manualDurationTotal + ' min');
+      }
     }
     return parts;
-  }, [selectedMonth, selectedDay, selectedHour, selectedMinute, selectedAmPm, manualDurationHours, manualDurationMinutes, monthsList]);
+  }, [selectedMonth, selectedDay, selectedHour, selectedMinute, selectedAmPm, manualDurationTotal, monthsList]);
+
+  // Sticky title style for manual form step titles
+  const stickyTitleSx = {
+    textAlign: 'center' as const,
+    fontWeight: 600,
+    mb: 0,
+    py: 1,
+    fontSize: '0.9rem',
+    position: 'sticky' as const,
+    top: 0,
+    zIndex: 1,
+    backgroundColor: '#fff',
+  };
 
   // RENDER: Manual date/time/duration form (list-based)
   const renderManualForm = () => {
@@ -513,19 +543,19 @@ export default function NewAppointmentDialog({
       '&:hover': { backgroundColor: '#b2ebf2' },
     };
 
-    // Header with selected values
-    const header = manualSummaryParts.length > 0 ? (
-      <Typography sx={{ textAlign: 'center', fontSize: '0.8rem', color: TEAL, fontWeight: 600, mb: 1, pb: 1, borderBottom: '1px solid #eee' }}>
-        {manualSummaryParts.join(' - ')}
-      </Typography>
-    ) : null;
+    // Duration row style (different color)
+    const durationRowSx = {
+      py: 1.5, px: 2, textAlign: 'center' as const, cursor: 'pointer',
+      backgroundColor: DURATION_BG, borderBottom: '1px solid #ffe0b2',
+      color: DURATION_COLOR, fontSize: '0.95rem',
+      '&:hover': { backgroundColor: DURATION_HOVER },
+    };
 
     if (manualStep === 'month') {
       const items = showAllMonths ? monthsList : monthsList.slice(0, 5);
       return (
         <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona el mes</Typography>
+          <Typography sx={stickyTitleSx}>Selecciona el mes</Typography>
           {items.map((m, i) => (
             <Box key={i} sx={rowSx} onClick={() => { setSelectedMonth({ year: m.year, month: m.month }); setManualStep('day'); }}>
               {m.label}
@@ -534,7 +564,7 @@ export default function NewAppointmentDialog({
           {!showAllMonths && monthsList.length > 5 && (
             <Box sx={{ textAlign: 'center', py: 1.5 }}>
               <Typography component="span" onClick={() => setShowAllMonths(true)} sx={{ cursor: 'pointer', color: '#333', textDecoration: 'underline', fontSize: '0.9rem', '&:hover': { color: TEAL } }}>
-                Mostrar m\u00e1s
+                Mostrar más
               </Typography>
             </Box>
           )}
@@ -545,10 +575,9 @@ export default function NewAppointmentDialog({
     if (manualStep === 'day') {
       return (
         <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona el d\u00eda</Typography>
+          <Typography sx={stickyTitleSx}>Selecciona el día</Typography>
           {daysList.length === 0 ? (
-            <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>No hay d\u00edas disponibles en este mes</Typography>
+            <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>No hay días disponibles en este mes</Typography>
           ) : (
             daysList.map((d, i) => (
               <Box key={i} sx={rowSx} onClick={() => { setSelectedDay(d.date); setManualStep('hour'); }}>
@@ -561,30 +590,57 @@ export default function NewAppointmentDialog({
     }
 
     if (manualStep === 'hour') {
+      // Expandable hour list: click hour to show minutes below
+      const hours = Array.from({ length: 12 }, (_, i) => i + 1);
       return (
         <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona la hora</Typography>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-            <Box key={h} sx={rowSx} onClick={() => { setSelectedHour(h); setManualStep('minute'); }}>
-              {h}
-            </Box>
-          ))}
-        </Box>
-      );
-    }
-
-    if (manualStep === 'minute') {
-      const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
-      return (
-        <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona los minutos</Typography>
-          {minutes.map((m) => (
-            <Box key={m} sx={rowSx} onClick={() => { setSelectedMinute(m); setManualStep('ampm'); }}>
-              {selectedHour}:{String(m).padStart(2, '0')}
-            </Box>
-          ))}
+          <Typography sx={stickyTitleSx}>Selecciona la hora</Typography>
+          {hours.map((h) => {
+            const isExpanded = expandedManualHour === h;
+            const hourLabel = String(h).padStart(2, '0') + ':00';
+            return (
+              <Box key={h}>
+                <Box
+                  sx={{
+                    ...rowSx,
+                    fontWeight: isExpanded ? 600 : 400,
+                  }}
+                  onClick={() => {
+                    if (isExpanded) {
+                      setExpandedManualHour(null);
+                    } else {
+                      setExpandedManualHour(h);
+                      setSelectedHour(h);
+                    }
+                  }}
+                >
+                  {hourLabel}
+                </Box>
+                {isExpanded && (
+                  <Box>
+                    {Array.from({ length: 12 }, (_, mi) => mi * 5).map((minute) => (
+                      <Box
+                        key={minute}
+                        sx={{
+                          py: 1, px: 4, textAlign: 'center' as const, cursor: 'pointer',
+                          backgroundColor: '#e8f5e9', borderBottom: '1px solid #c8e6c9',
+                          color: '#2e7d32', fontSize: '0.9rem',
+                          '&:hover': { backgroundColor: '#c8e6c9' },
+                        }}
+                        onClick={() => {
+                          setSelectedHour(h);
+                          setSelectedMinute(minute);
+                          setManualStep('ampm');
+                        }}
+                      >
+                        {String(h).padStart(2, '0')}:{String(minute).padStart(2, '0')}
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+              </Box>
+            );
+          })}
         </Box>
       );
     }
@@ -592,41 +648,20 @@ export default function NewAppointmentDialog({
     if (manualStep === 'ampm') {
       return (
         <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona AM o PM</Typography>
-          <Box sx={rowSx} onClick={() => { setSelectedAmPm('AM'); setManualStep('duration_hour'); }}>AM</Box>
-          <Box sx={rowSx} onClick={() => { setSelectedAmPm('PM'); setManualStep('duration_hour'); }}>PM</Box>
+          <Typography sx={stickyTitleSx}>Selecciona AM o PM</Typography>
+          <Box sx={rowSx} onClick={() => { setSelectedAmPm('AM'); setManualStep('duration'); }}>AM</Box>
+          <Box sx={rowSx} onClick={() => { setSelectedAmPm('PM'); setManualStep('duration'); }}>PM</Box>
         </Box>
       );
     }
 
-    if (manualStep === 'duration_hour') {
+    if (manualStep === 'duration') {
       return (
         <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Duraci\u00f3n: horas</Typography>
-          {Array.from({ length: 7 }, (_, i) => i).map((h) => (
-            <Box key={h} sx={rowSx} onClick={() => { setManualDurationHours(h); setManualStep('duration_minute'); }}>
-              {h} {h === 1 ? 'hora' : 'horas'}
-            </Box>
-          ))}
-        </Box>
-      );
-    }
-
-    if (manualStep === 'duration_minute') {
-      const durMinutes = Array.from({ length: 12 }, (_, i) => i * 5);
-      const filteredMinutes = manualDurationHours === 6 ? [0] : durMinutes;
-      return (
-        <Box>
-          {header}
-          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Duraci\u00f3n: minutos</Typography>
-          {filteredMinutes.map((m) => (
-            <Box key={m} sx={rowSx} onClick={() => {
-              setManualDurationMinutes(m);
-              handleManualContinueAfterDuration(manualDurationHours ?? 0, m);
-            }}>
-              {manualDurationHours}h {String(m).padStart(2, '0')}m
+          <Typography sx={{ ...stickyTitleSx, color: DURATION_COLOR }}>Duración de la cita</Typography>
+          {durationList.map((d) => (
+            <Box key={d.totalMin} sx={durationRowSx} onClick={() => handleManualDurationSelect(d.totalMin)}>
+              {d.label}
             </Box>
           ))}
         </Box>
@@ -641,26 +676,6 @@ export default function NewAppointmentDialog({
   // ═══════════════════════════════════════════════
   const renderDatesStep = () => showManualForm ? renderManualForm() : (
     <Box>
-      {/* Copy button */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-        <Button
-          variant="outlined"
-          size="small"
-          startIcon={<CopyIcon />}
-          onClick={handleCopy}
-          sx={{
-            borderColor: TEAL,
-            color: TEAL,
-            textTransform: 'uppercase',
-            fontWeight: 600,
-            fontSize: '0.75rem',
-            '&:hover': { borderColor: TEAL, backgroundColor: 'rgba(0,137,123,0.04)' },
-          }}
-        >
-          Copiar
-        </Button>
-      </Box>
-
       {datesLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={32} />
@@ -706,7 +721,7 @@ export default function NewAppointmentDialog({
                     ) : (
                       slots.map((slot, sIdx) => {
                         const isOccupied = slot.estatus === 0;
-                        const bgColor = isOccupied ? '#f5f5f5' : '#f0fff0';
+                        const bgColor = isOccupied ? '#cdcdcd' : '#d8ffd8';
                         const label = isOccupied ? 'no disponible' : 'disponible';
                         return (
                           <Box
@@ -1157,6 +1172,7 @@ export default function NewAppointmentDialog({
       onClose={onClose}
       maxWidth="xs"
       fullWidth
+      sx={{ '& .MuiDialog-container': { alignItems: 'flex-start', pt: '8vh' } }}
       PaperProps={{
         sx: { borderRadius: 2, height: 450, display: 'flex', flexDirection: 'column' },
       }}
@@ -1178,6 +1194,21 @@ export default function NewAppointmentDialog({
             <BackIcon />
           </IconButton>
         )}
+        {step === 'dates' && !showManualForm && (
+          <Button
+            size="small"
+            startIcon={<CopyIcon sx={{ fontSize: '0.85rem !important' }} />}
+            onClick={handleCopy}
+            sx={{
+              position: 'absolute', left: 8, top: 10,
+              textTransform: 'uppercase', fontSize: '0.7rem', color: TEAL, fontWeight: 600,
+              minWidth: 'auto', px: 1, py: 0.5,
+              '&:hover': { backgroundColor: 'rgba(0,137,123,0.08)' },
+            }}
+          >
+            Copiar
+          </Button>
+        )}
         Nueva cita
         <IconButton
           onClick={onClose}
@@ -1195,7 +1226,7 @@ export default function NewAppointmentDialog({
           </Typography>
         )}
       </DialogTitle>
-      <DialogContent sx={{ pt: 2, flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <DialogContent sx={{ p: '20px 10px', flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {step === 'dates' && renderDatesStep()}
         {step === 'patient' && renderPatientStep()}
         {step === 'summary' && renderSummaryStep()}
