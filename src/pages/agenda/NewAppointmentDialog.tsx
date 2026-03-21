@@ -155,6 +155,8 @@ export default function NewAppointmentDialog({
       setDuplicatePatients([]);
       setDuplicateSource(null);
       setSelectedExistingPatient(null);
+      phoneSearchRef.current = '';
+      nameSearchRef.current = '';
       setShowManualForm(false);
       setManualStep('month');
       setShowAllMonths(false);
@@ -193,17 +195,18 @@ export default function NewAppointmentDialog({
     }
   }, [newPatient.phone, showNewPatientForm, selectedExistingPatient, duplicateSource]);
 
-  // Name duplicate detection: search when both name and last_name have content
-  useEffect(() => {
+  // Name duplicate detection: triggered on blur (not while typing)
+  const handleNameBlurSearch = useCallback(() => {
     if (!showNewPatientForm || selectedExistingPatient) return;
+    if (duplicateSource === 'phone') return; // phone match takes priority
     const name = newPatient.name.trim();
     const lastName = newPatient.last_name.trim();
     if (name && lastName) {
-      const searchKey = name + '|' + lastName;
+      const searchKey = name + ' ' + lastName;
       if (searchKey !== nameSearchRef.current) {
         nameSearchRef.current = searchKey;
-        appointmentService.searchPatientsByName(lastName).then((results) => {
-          if (results.length > 0 && duplicateSource !== 'phone') {
+        appointmentService.searchPatientsByName(searchKey).then((results) => {
+          if (results.length > 0) {
             setDuplicatePatients(results);
             setDuplicateSource('name');
           }
@@ -330,7 +333,18 @@ export default function NewAppointmentDialog({
 
   const handleSelectExistingPatient = (patient: PatientSearchResult) => {
     setSelectedExistingPatient(patient);
-    setNewPatient({ ...newPatient, phone: patient.phone, name: patient.name, last_name: patient.last_name });
+    // Clear form fields and auto-advance to step 3
+    setNewPatient({ phone_code: '+52', phone: '', name: '', last_name: '', gender: '', birth_date: '' });
+    setSelectedPatient({
+      id: patient.id,
+      full_name: patient.full_name,
+      phone: patient.phone,
+      phone_code: patient.phone_code ?? '',
+      full_phone: patient.full_phone,
+      name: patient.name,
+      last_name: patient.last_name,
+    });
+    setStep('summary');
   };
 
   // ── Copy available dates text ──
@@ -419,6 +433,16 @@ export default function NewAppointmentDialog({
       setStep('dates');
       setSelectedSlot(null);
     } else if (step === 'summary') {
+      // If came from selecting an existing duplicate patient, go back to step 2 patient list
+      if (selectedExistingPatient) {
+        setSelectedExistingPatient(null);
+        setSelectedPatient(null);
+        setShowNewPatientForm(false);
+        setDuplicatePatients([]);
+        setDuplicateSource(null);
+        phoneSearchRef.current = '';
+        nameSearchRef.current = '';
+      }
       setStep('patient');
     }
   };
@@ -875,6 +899,7 @@ export default function NewAppointmentDialog({
             onChange={(e) =>
               setNewPatient({ ...newPatient, name: e.target.value.slice(0, 80) })
             }
+            onBlur={handleNameBlurSearch}
             error={!!newPatientErrors.name}
             helperText={newPatientErrors.name}
             inputProps={{ maxLength: 80 }}
@@ -889,6 +914,7 @@ export default function NewAppointmentDialog({
             onChange={(e) =>
               setNewPatient({ ...newPatient, last_name: e.target.value.slice(0, 80) })
             }
+            onBlur={handleNameBlurSearch}
             error={!!newPatientErrors.last_name}
             helperText={newPatientErrors.last_name}
             inputProps={{ maxLength: 80 }}
