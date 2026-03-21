@@ -227,10 +227,24 @@ export interface AvailableSlot {
 
 export interface PatientSimple {
   id: number;
+  name?: string;
+  last_name?: string;
   full_name: string;
   phone: string;
   phone_code: string;
   full_phone: string;
+  gender?: string;
+}
+
+export interface PatientSearchResult {
+  id: number;
+  name: string;
+  last_name: string;
+  full_name: string;
+  phone: string;
+  phone_code: string | null;
+  full_phone: string;
+  gender: string;
 }
 
 export interface NewPatientData {

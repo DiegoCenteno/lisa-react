@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react';
+import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -16,35 +16,25 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Popover,
+  Alert,
 } from '@mui/material';
 import {
   ContentCopy as CopyIcon,
   Close as CloseIcon,
   ArrowBack as BackIcon,
-  KeyboardArrowUp as ArrowUpIcon,
-  KeyboardArrowDown as ArrowDownIcon,
 } from '@mui/icons-material';
-import { DateCalendar } from '@mui/x-date-pickers/DateCalendar';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
-import type { AvailableSlot, PatientSimple, NewPatientData } from '../../types';
+import type { AvailableSlot, PatientSimple, NewPatientData, PatientSearchResult } from '../../types';
 import { appointmentService } from '../../api/appointmentService';
 import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
 import 'dayjs/locale/es';
 
 dayjs.locale('es');
 
-// ── Color constants matching Diego's original design ──
+// Color constants
 const ROW_LIGHT = '#e0f7fa';
-const SLOT_AVAILABLE = '#f0fff0';
-const SLOT_OCCUPIED = '#f5f5f5';
-const SLOT_BREAK = '#fffde7';
 const TEAL = '#00897B';
 const MAGENTA = '#e91e63';
 
-// ── Helper: format a date string "2026-03-21" → "Sábado, 21 Marzo 2026" ──
 function formatDateEs(dateStr: string): string {
   const d = dayjs(dateStr);
   const day = d.format('dddd');
@@ -52,6 +42,10 @@ function formatDateEs(dateStr: string): string {
   const monthRaw = d.format('MMMM');
   const capitalMonth = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
   return `${capitalDay}, ${d.format('D')} ${capitalMonth} ${d.format('YYYY')}`;
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 interface Props {
@@ -62,6 +56,7 @@ interface Props {
 }
 
 type WizardStep = 'dates' | 'patient' | 'summary';
+type ManualStep = 'month' | 'day' | 'hour' | 'minute' | 'ampm' | 'duration_hour' | 'duration_minute';
 
 export default function NewAppointmentDialog({
   open,
@@ -98,17 +93,24 @@ export default function NewAppointmentDialog({
   });
   const [newPatientErrors, setNewPatientErrors] = useState<Record<string, string>>({});
 
-  // ── Manual appointment mode ──
+  // Patient duplicate detection
+  const [duplicatePatients, setDuplicatePatients] = useState<PatientSearchResult[]>([]);
+  const [duplicateSource, setDuplicateSource] = useState<'phone' | 'name' | null>(null);
+  const [selectedExistingPatient, setSelectedExistingPatient] = useState<PatientSearchResult | null>(null);
+  const phoneSearchRef = useRef<string>('');
+  const nameSearchRef = useRef<string>('');
+
+  // Manual appointment mode (list-based)
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualDate, setManualDate] = useState<Dayjs>(dayjs());
-  const [manualHour, setManualHour] = useState(9);
-  const [manualMinute, setManualMinute] = useState(0);
-  const [manualAmPm, setManualAmPm] = useState<'AM' | 'PM'>('AM');
-  const [durationHours, setDurationHours] = useState(0);
-  const [durationMinutes, setDurationMinutes] = useState(50);
-  const [dateTimeAnchor, setDateTimeAnchor] = useState<HTMLElement | null>(null);
-  const [dateTimeView, setDateTimeView] = useState<'date' | 'time'>('date');
-  const [durationAnchor, setDurationAnchor] = useState<HTMLElement | null>(null);
+  const [manualStep, setManualStep] = useState<ManualStep>('month');
+  const [showAllMonths, setShowAllMonths] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number } | null>(null);
+  const [selectedDay, setSelectedDay] = useState<dayjs.Dayjs | null>(null);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [selectedMinute, setSelectedMinute] = useState<number | null>(null);
+  const [selectedAmPm, setSelectedAmPm] = useState<'AM' | 'PM' | null>(null);
+  const [manualDurationHours, setManualDurationHours] = useState<number | null>(null);
+  const [manualDurationMinutes, setManualDurationMinutes] = useState<number | null>(null);
 
   // ── Step 3: summary ──
   const [reason, setReason] = useState('');
@@ -139,16 +141,19 @@ export default function NewAppointmentDialog({
         birth_date: '',
       });
       setNewPatientErrors({});
+      setDuplicatePatients([]);
+      setDuplicateSource(null);
+      setSelectedExistingPatient(null);
       setShowManualForm(false);
-      setManualDate(dayjs());
-      setManualHour(9);
-      setManualMinute(0);
-      setManualAmPm('AM');
-      setDurationHours(0);
-      setDurationMinutes(50);
-      setDateTimeAnchor(null);
-      setDateTimeView('date');
-      setDurationAnchor(null);
+      setManualStep('month');
+      setShowAllMonths(false);
+      setSelectedMonth(null);
+      setSelectedDay(null);
+      setSelectedHour(null);
+      setSelectedMinute(null);
+      setSelectedAmPm(null);
+      setManualDurationHours(null);
+      setManualDurationMinutes(null);
       setReason('');
       setNotifyPatient(true);
       setSaving(false);
@@ -158,7 +163,49 @@ export default function NewAppointmentDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // ── Load available dates ──
+  // Phone duplicate detection: search when 10 digits
+  useEffect(() => {
+    if (!showNewPatientForm || selectedExistingPatient) return;
+    const phone = newPatient.phone;
+    if (phone.length === 10 && phone !== phoneSearchRef.current) {
+      phoneSearchRef.current = phone;
+      appointmentService.searchPatientsByPhone(phone).then((results) => {
+        if (results.length > 0) {
+          setDuplicatePatients(results);
+          setDuplicateSource('phone');
+        }
+      }).catch(() => { /* ignore */ });
+    } else if (phone.length < 10 && duplicateSource === 'phone') {
+      setDuplicatePatients([]);
+      setDuplicateSource(null);
+      phoneSearchRef.current = '';
+    }
+  }, [newPatient.phone, showNewPatientForm, selectedExistingPatient, duplicateSource]);
+
+  // Name duplicate detection: search when both name and last_name have content
+  useEffect(() => {
+    if (!showNewPatientForm || selectedExistingPatient) return;
+    const name = newPatient.name.trim();
+    const lastName = newPatient.last_name.trim();
+    if (name && lastName) {
+      const searchKey = name + '|' + lastName;
+      if (searchKey !== nameSearchRef.current) {
+        nameSearchRef.current = searchKey;
+        appointmentService.searchPatientsByName(lastName).then((results) => {
+          if (results.length > 0 && duplicateSource !== 'phone') {
+            setDuplicatePatients(results);
+            setDuplicateSource('name');
+          }
+        }).catch(() => { /* ignore */ });
+      }
+    } else if (duplicateSource === 'name') {
+      setDuplicatePatients([]);
+      setDuplicateSource(null);
+      nameSearchRef.current = '';
+    }
+  }, [newPatient.name, newPatient.last_name, showNewPatientForm, selectedExistingPatient, duplicateSource]);
+
+  // Load available dates
   const loadAvailableDates = useCallback(async () => {
     if (!officeId) return;
     setDatesLoading(true);
@@ -173,14 +220,14 @@ export default function NewAppointmentDialog({
     }
   }, [officeId]);
 
-  // ── Load slots for a date ──
+  // Load slots for a date (filter out break/descanso slots with estatus === 2)
   const loadSlots = useCallback(
     async (date: string) => {
       if (!officeId) return;
       setSlotsLoading(true);
       try {
         const data = await appointmentService.getAvailableSlots(officeId, date, 50);
-        setSlots(data.filter((s) => !s.is_past));
+        setSlots(data.filter((s) => !s.is_past && s.estatus !== 2));
       } catch (err) {
         console.error('Error loading slots:', err);
       } finally {
@@ -252,12 +299,27 @@ export default function NewAppointmentDialog({
     return Object.keys(errors).length === 0;
   };
 
-  // ── Handle new patient confirm → go to summary ──
   const handleNewPatientConfirm = () => {
-    if (validateNewPatient()) {
+    if (selectedExistingPatient) {
+      setSelectedPatient({
+        id: selectedExistingPatient.id,
+        full_name: selectedExistingPatient.full_name,
+        phone: selectedExistingPatient.phone,
+        phone_code: selectedExistingPatient.phone_code ?? '',
+        full_phone: selectedExistingPatient.full_phone,
+        name: selectedExistingPatient.name,
+        last_name: selectedExistingPatient.last_name,
+      });
+      setStep('summary');
+    } else if (validateNewPatient()) {
       setSelectedPatient(null);
       setStep('summary');
     }
+  };
+
+  const handleSelectExistingPatient = (patient: PatientSearchResult) => {
+    setSelectedExistingPatient(patient);
+    setNewPatient({ ...newPatient, phone: patient.phone, name: patient.name, last_name: patient.last_name });
   };
 
   // ── Copy available dates text ──
@@ -329,10 +391,29 @@ export default function NewAppointmentDialog({
   // ── Dates to display ──
   const datesToShow = showAllDates ? availableDates : availableDates.slice(0, 6);
 
-  // ── Handle back navigation ──
   const handleBack = () => {
     if (step === 'dates' && showManualForm) {
-      setShowManualForm(false);
+      if (manualStep === 'month') {
+        setShowManualForm(false);
+      } else if (manualStep === 'day') {
+        setManualStep('month');
+        setSelectedMonth(null);
+      } else if (manualStep === 'hour') {
+        setManualStep('day');
+        setSelectedDay(null);
+      } else if (manualStep === 'minute') {
+        setManualStep('hour');
+        setSelectedHour(null);
+      } else if (manualStep === 'ampm') {
+        setManualStep('minute');
+        setSelectedMinute(null);
+      } else if (manualStep === 'duration_hour') {
+        setManualStep('ampm');
+        setSelectedAmPm(null);
+      } else if (manualStep === 'duration_minute') {
+        setManualStep('duration_hour');
+        setManualDurationHours(null);
+      }
     } else if (step === 'patient') {
       setStep('dates');
       setSelectedSlot(null);
@@ -341,15 +422,14 @@ export default function NewAppointmentDialog({
     }
   };
 
-  // ── Handle manual appointment continue ──
-  const handleManualContinue = () => {
-    let hour24 = manualHour;
-    if (manualAmPm === 'PM' && hour24 !== 12) hour24 += 12;
-    if (manualAmPm === 'AM' && hour24 === 12) hour24 = 0;
-    const start = manualDate.hour(hour24).minute(manualMinute).second(0);
-    const totalDurationMinutes = durationHours * 60 + durationMinutes;
+  const handleManualContinueAfterDuration = useCallback((durH: number, durM: number) => {
+    if (selectedDay === null || selectedHour === null || selectedMinute === null || selectedAmPm === null) return;
+    let hour24 = selectedHour;
+    if (selectedAmPm === 'PM' && hour24 !== 12) hour24 += 12;
+    if (selectedAmPm === 'AM' && hour24 === 12) hour24 = 0;
+    const start = selectedDay.hour(hour24).minute(selectedMinute).second(0);
+    const totalDurationMinutes = durH * 60 + durM;
     const end = start.add(totalDurationMinutes, 'minute');
-
     setSelectedSlot({
       datestart: start.format('YYYY-MM-DD HH:mm:ss'),
       dateend: end.format('YYYY-MM-DD HH:mm:ss'),
@@ -362,139 +442,198 @@ export default function NewAppointmentDialog({
     });
     setStep('patient');
     loadPatients();
-  };
+  }, [selectedDay, selectedHour, selectedMinute, selectedAmPm, loadPatients]);
 
-  // ═══════════════════════════════════════════════
-  //  RENDER: Manual date/time/duration form
-  // ═══════════════════════════════════════════════
+  // Generate months list (3 years from today)
+  const monthsList = useMemo(() => {
+    const today = dayjs();
+    const maxDate = today.add(3, 'year');
+    const months: { year: number; month: number; label: string }[] = [];
+    let current = today.startOf('month');
+    while (current.isBefore(maxDate)) {
+      const monthName = capitalize(current.format('MMMM'));
+      months.push({ year: current.year(), month: current.month(), label: monthName + ' ' + current.year() });
+      current = current.add(1, 'month');
+    }
+    return months;
+  }, []);
+
+  // Generate days list for selected month
+  const daysList = useMemo(() => {
+    if (!selectedMonth) return [];
+    const today = dayjs();
+    const start = dayjs().year(selectedMonth.year).month(selectedMonth.month).startOf('month');
+    const end = start.endOf('month');
+    const days: { date: dayjs.Dayjs; label: string }[] = [];
+    let current = start;
+    while (current.isBefore(end) || current.isSame(end, 'day')) {
+      if (current.isSame(today, 'day') || current.isAfter(today, 'day')) {
+        const dayName = capitalize(current.format('dddd'));
+        const monthName = capitalize(current.format('MMMM'));
+        days.push({ date: current, label: dayName + ', ' + current.format('D') + ' ' + monthName + ' ' + current.format('YYYY') });
+      }
+      current = current.add(1, 'day');
+    }
+    return days;
+  }, [selectedMonth]);
+
+  // Build manual selection summary for header display
+  const manualSummaryParts = useMemo(() => {
+    const parts: string[] = [];
+    if (selectedMonth) {
+      const found = monthsList.find((m) => m.year === selectedMonth.year && m.month === selectedMonth.month);
+      if (found) parts.push(found.label);
+    }
+    if (selectedDay) {
+      const dayName = capitalize(selectedDay.format('dddd'));
+      parts.push(dayName + ' ' + selectedDay.format('D'));
+    }
+    if (selectedHour !== null) {
+      parts.push(selectedHour + ':00');
+    }
+    if (selectedMinute !== null && selectedHour !== null) {
+      parts[parts.length - 1] = selectedHour + ':' + String(selectedMinute).padStart(2, '0');
+    }
+    if (selectedAmPm) {
+      parts[parts.length - 1] = parts[parts.length - 1] + ' ' + selectedAmPm;
+    }
+    if (manualDurationHours !== null) {
+      const durMin = manualDurationMinutes ?? 0;
+      parts.push('Duraci\u00f3n: ' + manualDurationHours + 'h ' + String(durMin).padStart(2, '0') + 'm');
+    }
+    return parts;
+  }, [selectedMonth, selectedDay, selectedHour, selectedMinute, selectedAmPm, manualDurationHours, manualDurationMinutes, monthsList]);
+
+  // RENDER: Manual date/time/duration form (list-based)
   const renderManualForm = () => {
-    const fmtDateTime = `${manualDate.format('DD/MM/YYYY')} ${String(manualHour).padStart(2, '0')}:${String(manualMinute).padStart(2, '0')} ${manualAmPm}`;
-    const fmtDuration = `${String(durationHours).padStart(2, '0')}:${String(durationMinutes).padStart(2, '0')}`;
+    const rowSx = {
+      py: 1.5, px: 2, textAlign: 'center' as const, cursor: 'pointer',
+      backgroundColor: ROW_LIGHT, borderBottom: '1px solid #cfd8dc',
+      color: TEAL, fontSize: '0.95rem',
+      '&:hover': { backgroundColor: '#b2ebf2' },
+    };
 
-    return (
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, pt: 1 }}>
-        {/* Date + Time field */}
-        <TextField
-          label="Fecha y hora de la cita"
-          value={fmtDateTime}
-          size="small"
-          fullWidth
-          slotProps={{ input: { readOnly: true } }}
-          onClick={(e) => { setDateTimeAnchor(e.currentTarget as HTMLElement); setDateTimeView('date'); }}
-          sx={{ cursor: 'pointer', '& input': { cursor: 'pointer' } }}
-        />
-        <Popover
-          open={Boolean(dateTimeAnchor)}
-          anchorEl={dateTimeAnchor}
-          onClose={() => setDateTimeAnchor(null)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        >
-          {dateTimeView === 'date' ? (
-            <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="es">
-              <DateCalendar
-                value={manualDate}
-                onChange={(newDate: Dayjs | null) => {
-                  if (newDate) {
-                    setManualDate(newDate);
-                    setDateTimeView('time');
-                  }
-                }}
-                views={['day']}
-                disablePast
-              />
-              <Box sx={{ textAlign: 'center', pb: 1 }}>
-                <Button size="small" onClick={() => setDateTimeAnchor(null)}>Salir</Button>
-              </Box>
-            </LocalizationProvider>
-          ) : (
-            <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <IconButton size="small" onClick={() => setManualHour(manualHour >= 12 ? 1 : manualHour + 1)} sx={{ color: '#1976d2' }}>
-                    <ArrowUpIcon />
-                  </IconButton>
-                  <Typography sx={{ fontSize: '1.5rem', fontWeight: 500, my: 0.5 }}>{String(manualHour).padStart(2, '0')}</Typography>
-                  <IconButton size="small" onClick={() => setManualHour(manualHour <= 1 ? 12 : manualHour - 1)} sx={{ color: '#1976d2' }}>
-                    <ArrowDownIcon />
-                  </IconButton>
-                </Box>
-                <Typography sx={{ fontSize: '1.5rem', fontWeight: 500 }}>:</Typography>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <IconButton size="small" onClick={() => setManualMinute((manualMinute + 5) % 60)} sx={{ color: '#1976d2' }}>
-                    <ArrowUpIcon />
-                  </IconButton>
-                  <Typography sx={{ fontSize: '1.5rem', fontWeight: 500, my: 0.5 }}>{String(manualMinute).padStart(2, '0')}</Typography>
-                  <IconButton size="small" onClick={() => setManualMinute(manualMinute <= 0 ? 55 : manualMinute - 5)} sx={{ color: '#1976d2' }}>
-                    <ArrowDownIcon />
-                  </IconButton>
-                </Box>
-                <Button
-                  variant={manualAmPm === 'AM' ? 'contained' : 'outlined'}
-                  size="small"
-                  onClick={() => setManualAmPm(manualAmPm === 'AM' ? 'PM' : 'AM')}
-                  sx={{ minWidth: 50, fontWeight: 600 }}
-                >
-                  {manualAmPm}
-                </Button>
-              </Box>
-              <Button size="small" onClick={() => setDateTimeAnchor(null)}>Salir</Button>
+    // Header with selected values
+    const header = manualSummaryParts.length > 0 ? (
+      <Typography sx={{ textAlign: 'center', fontSize: '0.8rem', color: TEAL, fontWeight: 600, mb: 1, pb: 1, borderBottom: '1px solid #eee' }}>
+        {manualSummaryParts.join(' - ')}
+      </Typography>
+    ) : null;
+
+    if (manualStep === 'month') {
+      const items = showAllMonths ? monthsList : monthsList.slice(0, 5);
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona el mes</Typography>
+          {items.map((m, i) => (
+            <Box key={i} sx={rowSx} onClick={() => { setSelectedMonth({ year: m.year, month: m.month }); setManualStep('day'); }}>
+              {m.label}
+            </Box>
+          ))}
+          {!showAllMonths && monthsList.length > 5 && (
+            <Box sx={{ textAlign: 'center', py: 1.5 }}>
+              <Typography component="span" onClick={() => setShowAllMonths(true)} sx={{ cursor: 'pointer', color: '#333', textDecoration: 'underline', fontSize: '0.9rem', '&:hover': { color: TEAL } }}>
+                Mostrar m\u00e1s
+              </Typography>
             </Box>
           )}
-        </Popover>
+        </Box>
+      );
+    }
 
-        {/* Duration field */}
-        <TextField
-          label="Duración de la cita"
-          value={fmtDuration}
-          size="small"
-          fullWidth
-          slotProps={{ input: { readOnly: true } }}
-          onClick={(e) => setDurationAnchor(e.currentTarget as HTMLElement)}
-          sx={{ cursor: 'pointer', '& input': { cursor: 'pointer' } }}
-        />
-        <Popover
-          open={Boolean(durationAnchor)}
-          anchorEl={durationAnchor}
-          onClose={() => setDurationAnchor(null)}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
-        >
-          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <IconButton size="small" onClick={() => {
-                  const newH = Math.min(durationHours + 1, 6);
-                  setDurationHours(newH);
-                  if (newH === 6) setDurationMinutes(0);
-                }} sx={{ color: '#1976d2' }}>
-                  <ArrowUpIcon />
-                </IconButton>
-                <Typography sx={{ fontSize: '1.5rem', fontWeight: 500, my: 0.5 }}>{String(durationHours).padStart(2, '0')}</Typography>
-                <IconButton size="small" onClick={() => setDurationHours(Math.max(durationHours - 1, 0))} sx={{ color: '#1976d2' }}>
-                  <ArrowDownIcon />
-                </IconButton>
+    if (manualStep === 'day') {
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona el d\u00eda</Typography>
+          {daysList.length === 0 ? (
+            <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>No hay d\u00edas disponibles en este mes</Typography>
+          ) : (
+            daysList.map((d, i) => (
+              <Box key={i} sx={rowSx} onClick={() => { setSelectedDay(d.date); setManualStep('hour'); }}>
+                {d.label}
               </Box>
-              <Typography sx={{ fontSize: '1.5rem', fontWeight: 500 }}>:</Typography>
-              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <IconButton size="small" onClick={() => {
-                  if (durationHours >= 6) return;
-                  setDurationMinutes((durationMinutes + 5) % 60);
-                }} sx={{ color: '#1976d2' }}>
-                  <ArrowUpIcon />
-                </IconButton>
-                <Typography sx={{ fontSize: '1.5rem', fontWeight: 500, my: 0.5 }}>{String(durationMinutes).padStart(2, '0')}</Typography>
-                <IconButton size="small" onClick={() => {
-                  if (durationHours >= 6) return;
-                  setDurationMinutes(durationMinutes <= 0 ? 55 : durationMinutes - 5);
-                }} sx={{ color: '#1976d2' }}>
-                  <ArrowDownIcon />
-                </IconButton>
-              </Box>
+            ))
+          )}
+        </Box>
+      );
+    }
+
+    if (manualStep === 'hour') {
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona la hora</Typography>
+          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+            <Box key={h} sx={rowSx} onClick={() => { setSelectedHour(h); setManualStep('minute'); }}>
+              {h}
             </Box>
-            <Button size="small" onClick={() => setDurationAnchor(null)}>Salir</Button>
-          </Box>
-        </Popover>
-      </Box>
-    );
+          ))}
+        </Box>
+      );
+    }
+
+    if (manualStep === 'minute') {
+      const minutes = Array.from({ length: 12 }, (_, i) => i * 5);
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona los minutos</Typography>
+          {minutes.map((m) => (
+            <Box key={m} sx={rowSx} onClick={() => { setSelectedMinute(m); setManualStep('ampm'); }}>
+              {selectedHour}:{String(m).padStart(2, '0')}
+            </Box>
+          ))}
+        </Box>
+      );
+    }
+
+    if (manualStep === 'ampm') {
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Selecciona AM o PM</Typography>
+          <Box sx={rowSx} onClick={() => { setSelectedAmPm('AM'); setManualStep('duration_hour'); }}>AM</Box>
+          <Box sx={rowSx} onClick={() => { setSelectedAmPm('PM'); setManualStep('duration_hour'); }}>PM</Box>
+        </Box>
+      );
+    }
+
+    if (manualStep === 'duration_hour') {
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Duraci\u00f3n: horas</Typography>
+          {Array.from({ length: 7 }, (_, i) => i).map((h) => (
+            <Box key={h} sx={rowSx} onClick={() => { setManualDurationHours(h); setManualStep('duration_minute'); }}>
+              {h} {h === 1 ? 'hora' : 'horas'}
+            </Box>
+          ))}
+        </Box>
+      );
+    }
+
+    if (manualStep === 'duration_minute') {
+      const durMinutes = Array.from({ length: 12 }, (_, i) => i * 5);
+      const filteredMinutes = manualDurationHours === 6 ? [0] : durMinutes;
+      return (
+        <Box>
+          {header}
+          <Typography sx={{ textAlign: 'center', fontWeight: 600, mb: 1, fontSize: '0.9rem' }}>Duraci\u00f3n: minutos</Typography>
+          {filteredMinutes.map((m) => (
+            <Box key={m} sx={rowSx} onClick={() => {
+              setManualDurationMinutes(m);
+              handleManualContinueAfterDuration(manualDurationHours ?? 0, m);
+            }}>
+              {manualDurationHours}h {String(m).padStart(2, '0')}m
+            </Box>
+          ))}
+        </Box>
+      );
+    }
+
+    return null;
   };
 
   // ═══════════════════════════════════════════════
@@ -566,17 +705,9 @@ export default function NewAppointmentDialog({
                       </Box>
                     ) : (
                       slots.map((slot, sIdx) => {
-                        const isBreak = slot.estatus === 2;
                         const isOccupied = slot.estatus === 0;
-                        let bgColor = SLOT_AVAILABLE;
-                        let label = 'disponible';
-                        if (isOccupied) {
-                          bgColor = SLOT_OCCUPIED;
-                          label = 'no disponible';
-                        } else if (isBreak) {
-                          bgColor = SLOT_BREAK;
-                          label = 'descanso';
-                        }
+                        const bgColor = isOccupied ? '#f5f5f5' : '#f0fff0';
+                        const label = isOccupied ? 'no disponible' : 'disponible';
                         return (
                           <Box
                             key={sIdx}
@@ -647,14 +778,52 @@ export default function NewAppointmentDialog({
   const renderPatientStep = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {showNewPatientForm ? (
-        // ── New Patient Form ──
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-            Nuevo paciente
+            {selectedExistingPatient ? 'Paciente existente seleccionado' : 'Nuevo paciente'}
           </Typography>
 
+          {/* Duplicate patient warning */}
+          {duplicatePatients.length > 0 && !selectedExistingPatient && (
+            <Alert severity="warning" sx={{ fontSize: '0.85rem' }}>
+              {duplicateSource === 'phone'
+                ? 'Se encontraron pacientes con este número de teléfono:'
+                : 'Se encontraron pacientes con nombre similar:'}
+              {duplicatePatients.map((dp) => (
+                <Box
+                  key={dp.id}
+                  onClick={() => handleSelectExistingPatient(dp)}
+                  sx={{
+                    mt: 0.5, py: 0.5, px: 1, cursor: 'pointer',
+                    backgroundColor: ROW_LIGHT, borderRadius: 1,
+                    '&:hover': { backgroundColor: '#b2ebf2' },
+                  }}
+                >
+                  <Typography sx={{ fontSize: '0.85rem', fontWeight: 500 }}>
+                    {dp.full_name} - {dp.full_phone}
+                  </Typography>
+                </Box>
+              ))}
+            </Alert>
+          )}
+
+          {selectedExistingPatient && (
+            <Alert severity="info" sx={{ fontSize: '0.85rem' }}>
+              Paciente seleccionado: {selectedExistingPatient.full_name}
+              <Button size="small" onClick={() => {
+                setSelectedExistingPatient(null);
+                setDuplicatePatients([]);
+                setDuplicateSource(null);
+                phoneSearchRef.current = '';
+                nameSearchRef.current = '';
+              }} sx={{ ml: 1 }}>
+                Cambiar
+              </Button>
+            </Alert>
+          )}
+
           <Box sx={{ display: 'flex', gap: 2 }}>
-            <FormControl sx={{ minWidth: 160 }} size="small">
+            <FormControl sx={{ minWidth: 160 }} size="small" disabled={!!selectedExistingPatient}>
               <InputLabel>Código de país</InputLabel>
               <Select
                 value={newPatient.phone_code}
@@ -679,6 +848,7 @@ export default function NewAppointmentDialog({
               error={!!newPatientErrors.phone}
               helperText={newPatientErrors.phone}
               inputProps={{ maxLength: 10, inputMode: 'numeric' }}
+              disabled={!!selectedExistingPatient}
             />
           </Box>
 
@@ -693,6 +863,7 @@ export default function NewAppointmentDialog({
             error={!!newPatientErrors.name}
             helperText={newPatientErrors.name}
             inputProps={{ maxLength: 80 }}
+            disabled={!!selectedExistingPatient}
           />
 
           <TextField
@@ -706,9 +877,10 @@ export default function NewAppointmentDialog({
             error={!!newPatientErrors.last_name}
             helperText={newPatientErrors.last_name}
             inputProps={{ maxLength: 80 }}
+            disabled={!!selectedExistingPatient}
           />
 
-          <FormControl size="small" fullWidth>
+          <FormControl size="small" fullWidth disabled={!!selectedExistingPatient}>
             <InputLabel>Género</InputLabel>
             <Select
               value={newPatient.gender}
@@ -738,6 +910,7 @@ export default function NewAppointmentDialog({
             error={!!newPatientErrors.birth_date}
             helperText={newPatientErrors.birth_date}
             slotProps={{ inputLabel: { shrink: true } }}
+            disabled={!!selectedExistingPatient}
           />
         </Box>
       ) : (
@@ -875,26 +1048,7 @@ export default function NewAppointmentDialog({
   const renderFooter = () => {
     if (step === 'dates') {
       if (showManualForm) {
-        return (
-          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={() => setShowManualForm(false)}
-              sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
-            >
-              Volver
-            </Button>
-            <Button
-              variant="contained"
-              size="small"
-              onClick={handleManualContinue}
-              sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
-            >
-              Continuar
-            </Button>
-          </DialogActions>
-        );
+        return null;
       }
       return (
         <DialogActions sx={{ justifyContent: 'flex-end', px: 3, pb: 2 }}>
@@ -923,7 +1077,14 @@ export default function NewAppointmentDialog({
             <Button
               variant="contained"
               size="small"
-              onClick={() => setShowNewPatientForm(false)}
+              onClick={() => {
+                setShowNewPatientForm(false);
+                setDuplicatePatients([]);
+                setDuplicateSource(null);
+                setSelectedExistingPatient(null);
+                phoneSearchRef.current = '';
+                nameSearchRef.current = '';
+              }}
               sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
             >
               Volver a lista
@@ -1028,6 +1189,11 @@ export default function NewAppointmentDialog({
         <Typography sx={{ fontSize: '0.75rem', color: '#999', mt: 0.5 }}>
           Paso {stepNumber} de 3
         </Typography>
+        {showManualForm && manualSummaryParts.length > 0 && (
+          <Typography sx={{ fontSize: '0.7rem', color: TEAL, fontWeight: 500, mt: 0.5 }}>
+            {manualSummaryParts.join(' - ')}
+          </Typography>
+        )}
       </DialogTitle>
       <DialogContent sx={{ pt: 2, flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
         {step === 'dates' && renderDatesStep()}
