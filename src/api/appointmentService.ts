@@ -1,4 +1,4 @@
-import type { Appointment, Office, AvailableDatesResponse, AvailableSlot, PatientSimple } from '../types';
+import type { Appointment, Office, AvailableDatesResponse, AvailableSlot, PatientSimple, PatientSearchResult } from '../types';
 import apiClient from './client';
 
 interface ApiListResponse {
@@ -118,6 +118,22 @@ export const appointmentService = {
       return outer as unknown as PatientSimple[];
     }
     return outer.data ?? [];
+  },
+
+  async searchPatientsByPhone(phone: string): Promise<PatientSearchResult[]> {
+    const response = await apiClient.get<{ status: string; data: PatientSearchResult[] }>(
+      '/v2/patients/search',
+      { params: { phone } }
+    );
+    return response.data.data ?? [];
+  },
+
+  async searchPatientsByName(search: string): Promise<PatientSearchResult[]> {
+    const response = await apiClient.get<{ status: string; data: PatientSearchResult[] }>(
+      '/v2/patients/search',
+      { params: { search } }
+    );
+    return response.data.data ?? [];
   },
 
   async getOffices(): Promise<Office[]> {
