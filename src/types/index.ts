@@ -28,13 +28,17 @@ export interface Patient {
   id: number;
   name: string;
   last_name: string;
+  full_name?: string;
   email?: string;
   phone?: string;
   birth_date?: string;
   gender?: string;
   blood_type?: string;
-  created_at: string;
-  updated_at: string;
+  age?: number | string;
+  allergy?: string;
+  datahc?: unknown;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Appointment {
@@ -223,6 +227,31 @@ export interface AvailableSlot {
   dateesp: string;
   is_past: boolean;
   is_past_4hours: boolean;
+}
+
+export interface LastConsultationSummary {
+  patient: {
+    id: number;
+    full_name: string;
+    age_text: string;
+  };
+  last_consultation: {
+    id: number;
+    created_at: string;
+    notes?: string;
+    diagnostic_text: string;
+    medicament_text: string;
+  } | null;
+}
+
+export interface ConsultationListItem {
+  consultation_id: number;
+  patient_id: number;
+  patient_name: string;
+  phone?: string;
+  birth_date?: string;
+  last_consultation_at: string;
+  brief_summary: string;
 }
 
 export interface PatientSimple {

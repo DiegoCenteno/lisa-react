@@ -38,6 +38,7 @@ import {
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
 import type { Patient, ClinicalHistory, SOAPNote, PatientFile } from '../../types';
+import { formatDisplayDate, formatDisplayDateTime } from '../../utils/date';
 
 interface TabPanelProps {
   children: React.ReactNode;
@@ -217,7 +218,14 @@ export default function PatientDetailPage() {
                 <InfoRow label="Email" value={patient.email} />
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                <InfoRow label="Fecha de Nacimiento" value={patient.birth_date} />
+                <InfoRow
+                  label="Fecha de Nacimiento"
+                  value={
+                    patient.birth_date
+                      ? `${formatDisplayDate(patient.birth_date)}${patient.age ? ` (${patient.age} años)` : ''}`
+                      : undefined
+                  }
+                />
               </Grid>
               <Grid size={{ xs: 12, sm: 6, md: 4 }}>
                 <InfoRow label="Género" value={patient.gender} />
@@ -338,13 +346,7 @@ export default function PatientDetailPage() {
               <CardContent>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
                   <Typography variant="subtitle2" color="text.secondary">
-                    {new Date(note.created_at).toLocaleDateString('es-MX', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatDisplayDateTime(note.created_at)}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
                     {note.labels.map((label) => (
@@ -491,7 +493,7 @@ export default function PatientDetailPage() {
                     </ListItemIcon>
                     <ListItemText
                       primary={file.name}
-                      secondary={`${(file.size / 1024).toFixed(0)} KB | Subido: ${file.uploaded_at}`}
+                      secondary={`${(file.size / 1024).toFixed(0)} KB | Subido: ${formatDisplayDate(file.uploaded_at)}`}
                     />
                     <Button size="small">Descargar</Button>
                   </ListItem>
@@ -521,7 +523,7 @@ export default function PatientDetailPage() {
                       <HistoryIcon color="primary" />
                     </ListItemIcon>
                     <ListItemText
-                      primary={`Consulta - ${new Date(note.created_at).toLocaleDateString('es-MX')}`}
+                      primary={`Consulta - ${formatDisplayDate(note.created_at)}`}
                       secondary={`Diagnóstico: ${note.assessment} | Plan: ${note.plan}`}
                     />
                   </ListItem>

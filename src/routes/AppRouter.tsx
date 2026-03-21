@@ -6,7 +6,7 @@ import DashboardPage from '../pages/dashboard/DashboardPage';
 import AgendaPage from '../pages/agenda/AgendaPage';
 import PatientsPage from '../pages/patients/PatientsPage';
 import PatientDetailPage from '../pages/patients/PatientDetailPage';
-import PrescriptionsPage from '../pages/prescriptions/PrescriptionsPage';
+import ConsultationsPage from '../pages/consultations/ConsultationsPage';
 import SettingsPage from '../pages/settings/SettingsPage';
 import PublicAppointmentPage from '../pages/public/PublicAppointmentPage';
 import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
@@ -32,7 +32,7 @@ export default function AppRouter() {
           <Route path="/agenda" element={<AgendaPage />} />
           <Route path="/pacientes" element={<PatientsPage />} />
           <Route path="/pacientes/:id" element={<PatientDetailPage />} />
-          <Route path="/recetas" element={<PrescriptionsPage />} />
+          <Route path="/consultas" element={<ConsultationsPage />} />
           <Route path="/configuracion" element={<SettingsPage />} />
         </Route>
 

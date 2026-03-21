@@ -16,7 +16,7 @@ import {
   Dashboard as DashboardIcon,
   CalendarMonth as CalendarIcon,
   People as PeopleIcon,
-  Description as PrescriptionIcon,
+  Assignment as ConsultationIcon,
   Settings as SettingsIcon,
   LocalHospital as HospitalIcon,
 } from '@mui/icons-material';
@@ -65,9 +65,9 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
-    text: 'Recetas',
-    icon: <PrescriptionIcon />,
-    path: '/recetas',
+    text: 'Consultas',
+    icon: <ConsultationIcon />,
+    path: '/consultas',
     roles: [
       UserRole.MEDICO,
     ],

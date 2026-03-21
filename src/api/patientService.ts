@@ -1,68 +1,37 @@
 import type { Patient, ClinicalHistory, SOAPNote, PatientFile } from '../types';
 import apiClient from './client';
+import { appointmentService } from './appointmentService';
 
-const MOCK_PATIENTS: Patient[] = [
-  {
-    id: 1,
-    name: 'María',
-    last_name: 'López García',
-    email: 'maria@email.com',
-    phone: '3398765432',
-    birth_date: '1990-05-15',
-    gender: 'Femenino',
-    blood_type: 'O+',
-    created_at: '2024-01-15',
-    updated_at: '2024-06-20',
-  },
-  {
-    id: 2,
-    name: 'Josefina',
-    last_name: 'Martínez Ruiz',
-    email: 'josefina@email.com',
-    phone: '3387654321',
-    birth_date: '1985-08-22',
-    gender: 'Femenino',
-    blood_type: 'A+',
-    created_at: '2024-03-10',
-    updated_at: '2024-06-18',
-  },
-  {
-    id: 3,
-    name: 'Guadalupe',
-    last_name: 'Hernández Flores',
-    email: 'guadalupe@email.com',
-    phone: '3376543210',
-    birth_date: '1978-12-03',
-    gender: 'Femenino',
-    blood_type: 'B+',
-    created_at: '2023-11-05',
-    updated_at: '2024-05-30',
-  },
-  {
-    id: 4,
-    name: 'Rosa',
-    last_name: 'Sánchez Villa',
-    email: 'rosa@email.com',
-    phone: '3365432109',
-    birth_date: '1995-03-28',
-    gender: 'Femenino',
-    blood_type: 'AB+',
-    created_at: '2024-02-20',
-    updated_at: '2024-06-15',
-  },
-  {
-    id: 5,
-    name: 'Carmen',
-    last_name: 'Díaz Moreno',
-    email: 'carmen@email.com',
-    phone: '3354321098',
-    birth_date: '1992-07-11',
-    gender: 'Femenino',
-    blood_type: 'O-',
-    created_at: '2024-04-01',
-    updated_at: '2024-06-22',
-  },
-];
+type ApiPatientRecord = {
+  id: number;
+  name?: string;
+  last_name?: string;
+  full_name?: string;
+  phone?: string;
+  phone_code?: string;
+  full_phone?: string;
+  birth?: {
+    raw?: string;
+    formats?: {
+      iso?: string;
+    };
+  };
+  age?: number | string;
+  gender?: string;
+  allergy?: string | null;
+  datahc?: unknown;
+};
+
+type ApiPatientsPayload =
+  | ApiPatientRecord[]
+  | {
+      data?: ApiPatientRecord[];
+    };
+
+interface ApiPatientsResponse {
+  status: string;
+  data: ApiPatientsPayload;
+}
 
 const MOCK_CLINICAL_HISTORY: ClinicalHistory = {
   id: 1,
@@ -79,13 +48,13 @@ const MOCK_CLINICAL_HISTORY: ClinicalHistory = {
   },
   personal_non_pathological: {
     origin: 'Jalisco',
-    residence: 'Tívoli',
-    civil_status: 'Unión libre',
+    residence: 'Tivoli',
+    civil_status: 'Union libre',
     education: 'Secundaria',
     occupation: 'Ama de casa',
-    substance_use: 'Antes consumía con muy poca frecuencia, Marihuana',
+    substance_use: 'Antes consumia con muy poca frecuencia, Marihuana',
     medications: '',
-    smoking: 'Entre 1 y 2 cigarros a la semana, desde los 13 años',
+    smoking: 'Entre 1 y 2 cigarros a la semana, desde los 13 anos',
     alcohol: '',
     others: '',
   },
@@ -125,13 +94,13 @@ const MOCK_SOAP_NOTES: SOAPNote[] = [
     id: 1,
     appointment_id: 1,
     patient_id: 1,
-    subjective: 'Paciente refiere dolor abdominal leve desde hace 3 días.',
+    subjective: 'Paciente refiere dolor abdominal leve desde hace 3 dias.',
     objective: 'Signos vitales normales. Abdomen blando, depresible.',
     assessment: 'Probable gastritis.',
-    plan: 'Se indica omeprazol 20mg cada 24hrs por 14 días. Dieta blanda.',
+    plan: 'Se indica omeprazol 20mg cada 24hrs por 14 dias. Dieta blanda.',
     private_comments: 'Evaluar en siguiente consulta posible referencia a gastro.',
     labels: [
-      { id: 1, name: 'Estudio de Papanicolaou', status: 'Pendiente revisión por el médico', color: '#FB8C00' },
+      { id: 1, name: 'Estudio de Papanicolaou', status: 'Pendiente revision por el medico', color: '#FB8C00' },
     ],
     created_at: '2024-06-20T09:30:00',
     updated_at: '2024-06-20T09:45:00',
@@ -159,111 +128,141 @@ const MOCK_FILES: PatientFile[] = [
   },
 ];
 
-const USE_MOCK = true;
+function splitFullName(fullName?: string): { name: string; lastName: string } {
+  const safe = (fullName ?? '').trim();
+  if (!safe) return { name: '', lastName: '' };
+  const parts = safe.split(/\s+/);
+  if (parts.length === 1) return { name: parts[0], lastName: '' };
+  return {
+    name: parts[0],
+    lastName: parts.slice(1).join(' '),
+  };
+}
+
+function normalizePatient(record: ApiPatientRecord): Patient {
+  const derivedNames = (!record.name || !record.last_name)
+    ? splitFullName(record.full_name)
+    : null;
+
+  return {
+    id: record.id,
+    name: record.name ?? derivedNames?.name ?? '',
+    last_name: record.last_name ?? derivedNames?.lastName ?? '',
+    phone: record.phone ?? record.full_phone ?? '',
+    birth_date: record.birth?.formats?.iso ?? record.birth?.raw ?? '',
+    gender: record.gender ?? '',
+    created_at: '',
+    updated_at: '',
+    full_name: record.full_name,
+    age: record.age,
+    allergy: record.allergy ?? undefined,
+    datahc: record.datahc,
+  };
+}
+
+function extractPatients(payload: ApiPatientsPayload): ApiPatientRecord[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return payload.data ?? [];
+}
+
+async function resolveOfficeId(): Promise<number> {
+  const userRaw = localStorage.getItem('user');
+  if (userRaw) {
+    try {
+      const user = JSON.parse(userRaw) as { consultorio_id?: number };
+      if (user.consultorio_id) {
+        return user.consultorio_id;
+      }
+    } catch {
+      // Ignore malformed local storage and continue with API lookup.
+    }
+  }
+
+  const offices = await appointmentService.getOffices();
+  if (offices.length === 0) {
+    throw new Error('No se encontraron consultorios disponibles');
+  }
+  return offices[0].id;
+}
 
 export const patientService = {
   async getPatients(): Promise<Patient[]> {
-    if (USE_MOCK) return MOCK_PATIENTS;
-    const response = await apiClient.get<Patient[]>('/patients');
-    return response.data;
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.get<ApiPatientsResponse>('/v2/patients', {
+      params: {
+        office_id: officeId,
+        per_page: 10000,
+        order_by: 'users.name',
+        order_dir: 'asc',
+      },
+    });
+
+    return extractPatients(response.data.data).map(normalizePatient);
   },
 
   async getPatient(id: number): Promise<Patient> {
-    if (USE_MOCK) {
-      const patient = MOCK_PATIENTS.find((p) => p.id === id);
-      if (!patient) throw new Error('Paciente no encontrado');
-      return patient;
+    const patients = await this.getPatients();
+    const patient = patients.find((item) => item.id === id);
+    if (!patient) {
+      throw new Error('Paciente no encontrado');
     }
-    const response = await apiClient.get<Patient>(`/patients/${id}`);
-    return response.data;
+    return patient;
   },
 
   async getClinicalHistory(patientId: number): Promise<ClinicalHistory> {
-    if (USE_MOCK) {
-      return { ...MOCK_CLINICAL_HISTORY, patient_id: patientId };
-    }
-    const response = await apiClient.get<ClinicalHistory>(
-      `/patients/${patientId}/clinical-history`
-    );
-    return response.data;
+    return { ...MOCK_CLINICAL_HISTORY, patient_id: patientId };
   },
 
   async updateClinicalHistory(
     patientId: number,
     data: Partial<ClinicalHistory>
   ): Promise<ClinicalHistory> {
-    if (USE_MOCK) {
-      return { ...MOCK_CLINICAL_HISTORY, ...data, patient_id: patientId };
-    }
-    const response = await apiClient.put<ClinicalHistory>(
-      `/patients/${patientId}/clinical-history`,
-      data
-    );
-    return response.data;
+    return { ...MOCK_CLINICAL_HISTORY, ...data, patient_id: patientId };
   },
 
   async getSOAPNotes(patientId: number): Promise<SOAPNote[]> {
-    if (USE_MOCK) {
-      return MOCK_SOAP_NOTES.filter((n) => n.patient_id === patientId);
-    }
-    const response = await apiClient.get<SOAPNote[]>(
-      `/patients/${patientId}/soap-notes`
-    );
-    return response.data;
+    return MOCK_SOAP_NOTES.filter((n) => n.patient_id === patientId);
   },
 
   async createSOAPNote(
     patientId: number,
     data: Partial<SOAPNote>
   ): Promise<SOAPNote> {
-    if (USE_MOCK) {
-      const newNote: SOAPNote = {
-        id: MOCK_SOAP_NOTES.length + 1,
-        appointment_id: data.appointment_id ?? 0,
-        patient_id: patientId,
-        subjective: data.subjective ?? '',
-        objective: data.objective ?? '',
-        assessment: data.assessment ?? '',
-        plan: data.plan ?? '',
-        private_comments: data.private_comments,
-        labels: data.labels ?? [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      MOCK_SOAP_NOTES.push(newNote);
-      return newNote;
-    }
-    const response = await apiClient.post<SOAPNote>(
-      `/patients/${patientId}/soap-notes`,
-      data
-    );
-    return response.data;
+    const newNote: SOAPNote = {
+      id: MOCK_SOAP_NOTES.length + 1,
+      appointment_id: data.appointment_id ?? 0,
+      patient_id: patientId,
+      subjective: data.subjective ?? '',
+      objective: data.objective ?? '',
+      assessment: data.assessment ?? '',
+      plan: data.plan ?? '',
+      private_comments: data.private_comments,
+      labels: data.labels ?? [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    MOCK_SOAP_NOTES.push(newNote);
+    return newNote;
   },
 
   async getFiles(patientId: number): Promise<PatientFile[]> {
-    if (USE_MOCK) {
-      return MOCK_FILES.filter((f) => f.patient_id === patientId);
-    }
-    const response = await apiClient.get<PatientFile[]>(
-      `/patients/${patientId}/files`
-    );
-    return response.data;
+    return MOCK_FILES.filter((f) => f.patient_id === patientId);
   },
 
   async searchPatients(query: string): Promise<Patient[]> {
-    if (USE_MOCK) {
-      const q = query.toLowerCase();
-      return MOCK_PATIENTS.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.last_name.toLowerCase().includes(q) ||
-          p.email?.toLowerCase().includes(q) ||
-          p.phone?.includes(q)
-      );
-    }
-    const response = await apiClient.get<Patient[]>('/patients/search', {
-      params: { q: query },
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.get<ApiPatientsResponse>('/v2/patients', {
+      params: {
+        office_id: officeId,
+        search: query,
+        per_page: 1000,
+        order_by: 'users.name',
+        order_dir: 'asc',
+      },
     });
-    return response.data;
+
+    return extractPatients(response.data.data).map(normalizePatient);
   },
 };

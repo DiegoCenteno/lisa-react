@@ -27,6 +27,7 @@ import type { AvailableSlot, PatientSimple, NewPatientData, PatientSearchResult 
 import { appointmentService } from '../../api/appointmentService';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
+import { formatDisplayDate } from '../../utils/date';
 
 dayjs.locale('es');
 
@@ -40,11 +41,9 @@ const DURATION_HOVER = '#ffecb3';
 
 function formatDateEs(dateStr: string): string {
   const d = dayjs(dateStr);
-  const day = d.format('dddd');
-  const capitalDay = day.charAt(0).toUpperCase() + day.slice(1);
-  const monthRaw = d.format('MMMM');
-  const capitalMonth = monthRaw.charAt(0).toUpperCase() + monthRaw.slice(1);
-  return `${capitalDay}, ${d.format('D')} ${capitalMonth} ${d.format('YYYY')}`;
+  const dayName = d.format('dddd');
+  const capitalDay = dayName.charAt(0).toUpperCase() + dayName.slice(1);
+  return `${capitalDay} ${formatDisplayDate(dateStr)}`;
 }
 
 function capitalize(s: string): string {
@@ -64,6 +63,10 @@ interface Props {
   onClose: () => void;
   officeId: number;
   onAppointmentCreated: () => void;
+  mode?: 'create' | 'reschedule' | 'assign';
+  appointmentId?: number;
+  initialPatient?: PatientSimple | null;
+  initialReason?: string;
 }
 
 type WizardStep = 'dates' | 'patient' | 'summary';
@@ -74,6 +77,10 @@ export default function NewAppointmentDialog({
   onClose,
   officeId,
   onAppointmentCreated,
+  mode = 'create',
+  appointmentId,
+  initialPatient = null,
+  initialReason = '',
 }: Props) {
   // ── Wizard state ──
   const [step, setStep] = useState<WizardStep>('dates');
@@ -141,7 +148,7 @@ export default function NewAppointmentDialog({
       setSelectedSlot(null);
       setPatients([]);
       setPatientSearch('');
-      setSelectedPatient(null);
+      setSelectedPatient(initialPatient);
       setShowNewPatientForm(false);
       setNewPatient({
         phone_code: '+52',
@@ -167,7 +174,7 @@ export default function NewAppointmentDialog({
       setSelectedAmPm(null);
       setExpandedManualHour(null);
       setManualDurationTotal(null);
-      setReason('');
+      setReason(initialReason);
       setNotifyPatient(true);
       setSaving(false);
       setSaveError('');
@@ -280,6 +287,10 @@ export default function NewAppointmentDialog({
   const handleSlotSelect = (slot: AvailableSlot) => {
     if (slot.estatus === 0) return; // occupied
     setSelectedSlot(slot);
+    if (mode === 'reschedule') {
+      setStep('summary');
+      return;
+    }
     setStep('patient');
     loadPatients();
   };
@@ -368,7 +379,31 @@ export default function NewAppointmentDialog({
     setSaving(true);
     setSaveError('');
     try {
-      if (selectedPatient) {
+      if (mode === 'reschedule') {
+        if (!appointmentId) {
+          throw new Error('Appointment ID requerido para reprogramar');
+        }
+        const appointmentDate = dayjs(selectedSlot.datestart).startOf('day');
+        const recalculatedStatus = (
+          appointmentDate.isSame(dayjs(), 'day') ||
+          appointmentDate.isSame(dayjs().add(1, 'day'), 'day')
+        ) ? 1 : 0;
+
+        await appointmentService.updateAppointment(appointmentId, {
+          datestart: selectedSlot.datestart,
+          dateend: selectedSlot.dateend,
+          status: recalculatedStatus,
+          reason: reason || undefined,
+        });
+      } else if (mode === 'assign' && selectedPatient) {
+        await appointmentService.createAppointment({
+          office_id: officeId,
+          patient_id: selectedPatient.id,
+          datestart: selectedSlot.datestart,
+          dateend: selectedSlot.dateend,
+          reason: reason || undefined,
+        });
+      } else if (selectedPatient) {
         await appointmentService.createAppointment({
           office_id: officeId,
           patient_id: selectedPatient.id,
@@ -433,6 +468,11 @@ export default function NewAppointmentDialog({
       setStep('dates');
       setSelectedSlot(null);
     } else if (step === 'summary') {
+      if (mode === 'reschedule' || mode === 'assign') {
+        setStep('dates');
+        setSelectedSlot(null);
+        return;
+      }
       // If came from selecting an existing duplicate patient, go back to step 2 patient list
       if (selectedExistingPatient) {
         setSelectedExistingPatient(null);
@@ -465,9 +505,13 @@ export default function NewAppointmentDialog({
       is_past: false,
       is_past_4hours: false,
     });
+    if (mode === 'reschedule' || mode === 'assign') {
+      setStep('summary');
+      return;
+    }
     setStep('patient');
     loadPatients();
-  }, [selectedDay, selectedHour, selectedMinute, selectedAmPm, loadPatients]);
+  }, [selectedDay, selectedHour, selectedMinute, selectedAmPm, loadPatients, mode]);
 
   // Generate months list (3 years from today)
   const monthsList = useMemo(() => {
@@ -1048,7 +1092,7 @@ export default function NewAppointmentDialog({
 
         <Box sx={{ borderTop: '1px solid #eee', pt: 1 }}>
           <Typography sx={{ color: TEAL, fontSize: '0.85rem', textDecoration: 'underline', mb: 0.5 }}>
-            Motivo de la consulta:
+            {mode === 'reschedule' || mode === 'assign' ? 'Motivo de la cita:' : 'Motivo de la consulta:'}
           </Typography>
           <TextField
             size="small"
@@ -1112,6 +1156,9 @@ export default function NewAppointmentDialog({
     }
 
     if (step === 'patient') {
+      if (mode === 'reschedule') {
+        return null;
+      }
       if (showNewPatientForm) {
         return (
           <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
@@ -1186,7 +1233,7 @@ export default function NewAppointmentDialog({
           disabled={saving}
           sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
         >
-          {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Guardar cita'}
+          {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : mode === 'reschedule' ? 'Guardar cambio' : 'Guardar cita'}
         </Button>
       </DialogActions>
     );
@@ -1235,7 +1282,7 @@ export default function NewAppointmentDialog({
             Copiar
           </Button>
         )}
-        Nueva cita
+        {mode === 'reschedule' ? 'Reprogramar cita' : mode === 'assign' ? 'Asignar nueva cita' : 'Nueva cita'}
         <IconButton
           onClick={onClose}
           sx={{ position: 'absolute', right: 8, top: 8 }}

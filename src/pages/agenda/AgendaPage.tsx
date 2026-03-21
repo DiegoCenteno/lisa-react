@@ -1,16 +1,32 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
+  Alert,
   Box,
   Typography,
   Button,
+  Checkbox,
   Dialog,
-  DialogTitle,
   DialogContent,
-  DialogActions,
+  FormControlLabel,
+  IconButton,
+  CircularProgress,
+  Snackbar,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
-import { Add as AddIcon, Check as CheckIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Check as CheckIcon,
+  DoneAll as DoneAllIcon,
+  Close as CloseIcon,
+  ContentCopy as ContentCopyIcon,
+  Phone as PhoneIcon,
+  CheckCircle as CheckCircleIcon,
+  CancelOutlined as CancelOutlinedIcon,
+  CalendarMonth as CalendarMonthIcon,
+  EventBusy as EventBusyIcon,
+  PersonOff as PersonOffIcon,
+} from '@mui/icons-material';
 import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
@@ -18,9 +34,18 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventInput, EventClickArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
-import type { Appointment } from '../../types';
+import type { Appointment, PatientSimple, LastConsultationSummary } from '../../types';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
+
+const FIRST_TIME_BG = 'rgb(148 221 255)';
+const FIRST_TIME_HOVER_BG = 'rgb(126 212 252)';
+const FIRST_TIME_TEXT = 'rgb(51, 51, 51)';
+const FOLLOW_UP_BG = '#A8FBBD';
+const FOLLOW_UP_HOVER_BG = '#92f5ac';
+const FOLLOW_UP_TEXT = '#333333';
+
+type AppointmentAction = 'confirm' | 'cancel' | 'no_show';
 
 function getEventColors(apt: Appointment): { bg: string; text: string } {
   const now = dayjs();
@@ -30,9 +55,9 @@ function getEventColors(apt: Appointment): { bg: string; text: string } {
     return { bg: '#9e9e9e', text: '#ffffff' };
   }
   if (apt.is_first_time) {
-    return { bg: '#00aeff', text: '#ffffff' };
+    return { bg: FIRST_TIME_BG, text: FIRST_TIME_TEXT };
   }
-  return { bg: '#A8FBBD', text: '#333333' };
+  return { bg: FOLLOW_UP_BG, text: FOLLOW_UP_TEXT };
 }
 
 function appointmentToEvent(apt: Appointment): EventInput {
@@ -41,6 +66,8 @@ function appointmentToEvent(apt: Appointment): EventInput {
     : `Paciente #${apt.patient_id}`;
 
   const colors = getEventColors(apt);
+  const isPast = dayjs(apt.dateend).isBefore(dayjs());
+  const eventType = isPast ? 'past' : apt.is_first_time ? 'first-time' : 'follow-up';
 
   return {
     id: String(apt.id),
@@ -50,15 +77,18 @@ function appointmentToEvent(apt: Appointment): EventInput {
     backgroundColor: colors.bg,
     borderColor: colors.bg,
     textColor: colors.text,
+    classNames: [`appointment-event`, `appointment-event--${eventType}`],
     extendedProps: {
       reason: apt.reason,
       status: apt.status,
       confirmed: apt.confirmed,
       smsstatus: apt.smsstatus,
       is_first_time: apt.is_first_time,
+      patientId: apt.patient?.id ?? apt.patient_id,
       phone: apt.patient?.phone,
       office: apt.office?.title,
       rowTextColor: colors.text,
+      rowType: eventType,
     },
   };
 }
@@ -67,16 +97,28 @@ function renderEventContent(arg: EventContentArg) {
   const { confirmed, smsstatus, phone, status } = arg.event.extendedProps;
   const isListView = arg.view.type.startsWith('list');
   const bgColor = arg.event.backgroundColor;
-  const isConfirmed = confirmed || status === 1;
+  const normalizedStatus = Number(status);
+  const isNoShow = normalizedStatus === 2;
+  const isCancelled = normalizedStatus === 3;
+  const isConfirmed = !isNoShow && !isCancelled && (confirmed || normalizedStatus === 1);
 
   // In list view, pick icon color that contrasts with row background
-  const confirmedColor = isListView && bgColor === '#00aeff' ? '#ffffff' : '#00aeff';
+  const confirmedColor = isListView && bgColor === FIRST_TIME_BG ? FIRST_TIME_TEXT : '#00aeff';
   const smsColor = isListView && bgColor === '#9e9e9e' ? '#ffffff' : '#04d84e';
+  const missedColor = '#ff9800';
+  const cancelledColor = '#ff3b30';
 
-  const checkEl = isConfirmed ? (
+  const statusEl = isConfirmed ? (
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
-      <CheckIcon sx={{ color: confirmedColor, fontSize: 'medium' }} />
-      <CheckIcon sx={{ color: confirmedColor, fontSize: 'medium', marginLeft: '-9px' }} />
+      <DoneAllIcon sx={{ color: confirmedColor, fontSize: 22, fontWeight: 700 }} />
+    </span>
+  ) : isNoShow ? (
+    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+      <PersonOffIcon sx={{ color: missedColor, fontSize: 21 }} />
+    </span>
+  ) : isCancelled ? (
+    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+      <EventBusyIcon sx={{ color: cancelledColor, fontSize: 21 }} />
     </span>
   ) : smsstatus === 1 ? (
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
@@ -88,7 +130,7 @@ function renderEventContent(arg: EventContentArg) {
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-          {checkEl}
+          {statusEl}
           <b>{arg.event.title}</b>
         </span>
         {phone && (
@@ -109,9 +151,28 @@ function renderEventContent(arg: EventContentArg) {
     return (
       <>
         <div className="fc-event-time">{arg.timeText}</div>
-        <div className="fc-event-title">
-          {checkEl}
-          {arg.event.title}
+        <div
+          className="fc-event-title"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            minWidth: 0,
+            overflow: 'hidden',
+          }}
+        >
+          {statusEl}
+          <span
+            style={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              display: 'block',
+              minWidth: 0,
+              flex: 1,
+            }}
+          >
+            {arg.event.title}
+          </span>
         </div>
       </>
     );
@@ -120,7 +181,7 @@ function renderEventContent(arg: EventContentArg) {
   return (
     <>
       {arg.timeText && <span className="fc-event-time">{arg.timeText} </span>}
-      {checkEl}
+      {statusEl}
       <span className="fc-event-title">{arg.event.title}</span>
     </>
   );
@@ -134,8 +195,38 @@ export default function AgendaPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventClickArg | null>(null);
   const [officeId, setOfficeId] = useState<number>(0);
+  const [pendingAction, setPendingAction] = useState<AppointmentAction | null>(null);
+  const [notifyPatientAction, setNotifyPatientAction] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionToast, setActionToast] = useState<string | null>(null);
+  const [showPreviousAppointments, setShowPreviousAppointments] = useState(false);
+  const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
+  const [rescheduleAppointment, setRescheduleAppointment] = useState<{
+    id: number;
+    patient: PatientSimple | null;
+    reason?: string;
+  } | null>(null);
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [assignAppointment, setAssignAppointment] = useState<{
+    patient: PatientSimple | null;
+    reason?: string;
+  } | null>(null);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryData, setSummaryData] = useState<LastConsultationSummary | null>(null);
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
+  const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
+  const doctorName = useMemo(() => {
+    try {
+      const rawUser = localStorage.getItem('user');
+      if (!rawUser) return 'Doctor';
+      const user = JSON.parse(rawUser) as { name?: string };
+      return user.name?.trim() || 'Doctor';
+    } catch {
+      return 'Doctor';
+    }
+  }, []);
 
   // Load office_id on mount
   useEffect(() => {
@@ -159,50 +250,203 @@ export default function AgendaPage() {
   }, []);
 
   useEffect(() => {
+    if (!viewRange) return;
+
+    const viewStart = dayjs(viewRange.start);
+    const viewEnd = dayjs(viewRange.end);
+    const today = dayjs().startOf('day');
+
+    if (viewRange.viewType.startsWith('list')) {
+      const effectiveStart = showPreviousAppointments
+        ? viewStart
+        : (viewStart.isBefore(today) ? today : viewStart);
+
+      if (effectiveStart.valueOf() >= viewEnd.valueOf()) {
+        setAppointments([]);
+        setDateRange(null);
+        return;
+      }
+
+      setDateRange({
+        start: effectiveStart.format('YYYY-MM-DD'),
+        end: viewEnd.format('YYYY-MM-DD'),
+      });
+      return;
+    }
+
+    setDateRange({
+      start: viewStart.format('YYYY-MM-DD'),
+      end: viewEnd.format('YYYY-MM-DD'),
+    });
+  }, [viewRange, showPreviousAppointments]);
+
+  useEffect(() => {
     if (dateRange) {
       loadAppointments(dateRange.start, dateRange.end);
     }
   }, [dateRange, loadAppointments]);
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
-    const viewType = arg.view.type;
-    const viewStart = dayjs(arg.start);
-    const viewEnd = dayjs(arg.end);
-    const today = dayjs().startOf('day');
-
-    if (viewType.startsWith('list')) {
-      const effectiveStart = viewStart.isBefore(today) ? today : viewStart;
-      if (effectiveStart.valueOf() >= viewEnd.valueOf()) {
-        setAppointments([]);
-        return;
-      }
-      setDateRange({
-        start: effectiveStart.format('YYYY-MM-DD'),
-        end: viewEnd.format('YYYY-MM-DD'),
-      });
-    } else {
-      setDateRange({
-        start: viewStart.format('YYYY-MM-DD'),
-        end: viewEnd.format('YYYY-MM-DD'),
-      });
-    }
+    setViewRange({
+      start: arg.startStr,
+      end: arg.endStr,
+      viewType: arg.view.type,
+    });
   }, []);
 
+  const visibleAppointments = useMemo(() => {
+    const todayStart = dayjs().startOf('day');
+
+    if (showPreviousAppointments) {
+      return appointments;
+    }
+
+    return appointments.filter((appointment) => {
+      const isBeforeToday = dayjs(appointment.datestart).isBefore(todayStart);
+      const isCancelled = appointment.status === 3;
+      return !isBeforeToday && !isCancelled;
+    });
+  }, [appointments, showPreviousAppointments]);
+
   const events = useMemo(
-    () => appointments.map(appointmentToEvent),
-    [appointments]
+    () => visibleAppointments.map(appointmentToEvent),
+    [visibleAppointments]
   );
 
 
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
+    setPendingAction(null);
+    setNotifyPatientAction(false);
   };
+
+  const isSelectedEventToday = selectedEvent
+    ? dayjs(selectedEvent.event.start).isSame(dayjs(), 'day')
+    : false;
 
   const handleAppointmentCreated = useCallback(() => {
     if (dateRange) {
       loadAppointments(dateRange.start, dateRange.end);
     }
   }, [dateRange, loadAppointments]);
+
+  const handleCopyPhone = useCallback(async (phone?: string) => {
+    if (!phone) return;
+    try {
+      await navigator.clipboard.writeText(String(phone));
+    } catch (error) {
+      console.error('Error copiando telefono:', error);
+    }
+  }, []);
+
+  const handleCloseSelectedEvent = useCallback(() => {
+    setSelectedEvent(null);
+    setPendingAction(null);
+    setNotifyPatientAction(false);
+    setActionLoading(false);
+  }, []);
+
+  const handleOpenReschedule = useCallback(() => {
+    if (!selectedEvent) return;
+
+    const patientName = String(selectedEvent.event.title || '').trim();
+    const patientNameParts = patientName.split(/\s+/);
+    const currentPatient: PatientSimple | null = selectedEvent.event.extendedProps.patientId
+      ? {
+          id: Number(selectedEvent.event.extendedProps.patientId),
+          full_name: patientName,
+          name: patientNameParts[0] ?? patientName,
+          last_name: patientNameParts.slice(1).join(' '),
+          phone: String(selectedEvent.event.extendedProps.phone || ''),
+          phone_code: '',
+          full_phone: String(selectedEvent.event.extendedProps.phone || ''),
+        }
+      : null;
+
+    setRescheduleAppointment({
+      id: Number(selectedEvent.event.id),
+      patient: currentPatient,
+      reason: String(selectedEvent.event.extendedProps.reason || ''),
+    });
+    handleCloseSelectedEvent();
+    setRescheduleDialogOpen(true);
+  }, [selectedEvent, handleCloseSelectedEvent]);
+
+  const handleOpenAssignAppointment = useCallback(() => {
+    if (!selectedEvent) return;
+
+    const patientName = String(selectedEvent.event.title || '').trim();
+    const patientNameParts = patientName.split(/\s+/);
+    const currentPatient: PatientSimple | null = selectedEvent.event.extendedProps.patientId
+      ? {
+          id: Number(selectedEvent.event.extendedProps.patientId),
+          full_name: patientName,
+          name: patientNameParts[0] ?? patientName,
+          last_name: patientNameParts.slice(1).join(' '),
+          phone: String(selectedEvent.event.extendedProps.phone || ''),
+          phone_code: '',
+          full_phone: String(selectedEvent.event.extendedProps.phone || ''),
+        }
+      : null;
+
+    setAssignAppointment({
+      patient: currentPatient,
+      reason: String(selectedEvent.event.extendedProps.reason || ''),
+    });
+    handleCloseSelectedEvent();
+    setAssignDialogOpen(true);
+  }, [selectedEvent, handleCloseSelectedEvent]);
+
+  const handleAppointmentStatusAction = useCallback(async () => {
+    if (!selectedEvent || !pendingAction) return;
+
+    const statusMap: Record<AppointmentAction, number> = {
+      confirm: 1,
+      no_show: 2,
+      cancel: 3,
+    };
+    const successMessageMap: Record<AppointmentAction, string> = {
+      confirm: 'Cita confirmada correctamente',
+      cancel: 'Cita cancelada correctamente',
+      no_show: 'Cita marcada como no asistió',
+    };
+
+    setActionLoading(true);
+    try {
+      await appointmentService.updateAppointment(Number(selectedEvent.event.id), {
+        status: statusMap[pendingAction],
+      });
+
+      if (dateRange) {
+        await loadAppointments(dateRange.start, dateRange.end);
+      }
+
+      setActionToast(successMessageMap[pendingAction]);
+      handleCloseSelectedEvent();
+    } catch (error) {
+      console.error('Error actualizando estatus de la cita:', error);
+      setActionLoading(false);
+    }
+  }, [selectedEvent, pendingAction, dateRange, loadAppointments, handleCloseSelectedEvent]);
+
+  const handleOpenSummary = useCallback(async () => {
+    if (!selectedEvent?.event.extendedProps.patientId) return;
+
+    setSummaryLoading(true);
+    handleCloseSelectedEvent();
+    setSummaryOpen(true);
+    try {
+      const data = await appointmentService.getLastConsultationSummary(
+        Number(selectedEvent.event.extendedProps.patientId)
+      );
+      setSummaryData(data);
+    } catch (error) {
+      console.error('Error cargando resumen del paciente:', error);
+      setSummaryData(null);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [selectedEvent, handleCloseSelectedEvent]);
 
   const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
@@ -212,7 +456,9 @@ export default function AgendaPage() {
       if (row && row instanceof HTMLElement) {
         const bgColor = info.event.backgroundColor;
         const textColor = (info.event.extendedProps.rowTextColor as string) || info.event.textColor || '#333';
+        const rowType = (info.event.extendedProps.rowType as string) || '';
         row.style.backgroundColor = bgColor;
+        row.dataset.rowType = rowType;
         row.querySelectorAll('td').forEach((cell) => {
           (cell as HTMLElement).style.color = textColor;
         });
@@ -243,6 +489,23 @@ export default function AgendaPage() {
           onClick={() => setDialogOpen(true)}
         >
           Nueva Cita
+        </Button>
+      </Box>
+
+      <Box sx={{ mb: 2 }}>
+        <Button
+          variant="text"
+          onClick={() => setShowPreviousAppointments((value) => !value)}
+          sx={{
+            p: 0,
+            minWidth: 'auto',
+            textTransform: 'none',
+            textDecoration: 'underline',
+            color: '#2d64c8',
+            fontWeight: 400,
+          }}
+        >
+          {showPreviousAppointments ? 'Ocultar citas previas' : 'Mostrar citas previas'}
         </Button>
       </Box>
 
@@ -285,6 +548,25 @@ export default function AgendaPage() {
               cursor: 'pointer',
               borderRadius: '4px',
               fontSize: '0.8rem',
+              transition: 'filter 0.2s, background-color 0.2s, border-color 0.2s',
+            },
+            '& .fc-event:hover': {
+              filter: 'brightness(0.97)',
+            },
+            '& .appointment-event--first-time:hover': {
+              backgroundColor: `${FIRST_TIME_HOVER_BG} !important`,
+              borderColor: `${FIRST_TIME_HOVER_BG} !important`,
+              color: `${FIRST_TIME_TEXT} !important`,
+            },
+            '& .appointment-event--follow-up:hover': {
+              backgroundColor: `${FOLLOW_UP_HOVER_BG} !important`,
+              borderColor: `${FOLLOW_UP_HOVER_BG} !important`,
+              color: `${FOLLOW_UP_TEXT} !important`,
+            },
+            '& .appointment-event--past:hover': {
+              backgroundColor: '#8f8f8f !important',
+              borderColor: '#8f8f8f !important',
+              color: '#ffffff !important',
             },
             '& .fc-daygrid-event-dot': {
               borderColor: 'inherit',
@@ -293,10 +575,25 @@ export default function AgendaPage() {
               backgroundColor: 'rgba(0, 137, 123, 0.05) !important',
             },
             '& .fc-list-event:hover td': {
-              filter: 'brightness(0.95)',
+              filter: 'brightness(0.96)',
+            },
+            '& .fc-list-event[data-row-type="first-time"]:hover td, & tr.fc-list-event[data-row-type="first-time"]:hover td': {
+              backgroundColor: `${FIRST_TIME_HOVER_BG} !important`,
+              color: `${FIRST_TIME_TEXT} !important`,
+              filter: 'none',
+            },
+            '& .fc-list-event[data-row-type="follow-up"]:hover td, & tr.fc-list-event[data-row-type="follow-up"]:hover td': {
+              backgroundColor: `${FOLLOW_UP_HOVER_BG} !important`,
+              color: `${FOLLOW_UP_TEXT} !important`,
+              filter: 'none',
+            },
+            '& .fc-list-event[data-row-type="past"]:hover td, & tr.fc-list-event[data-row-type="past"]:hover td': {
+              backgroundColor: '#8f8f8f !important',
+              color: '#ffffff !important',
+              filter: 'none',
             },
             '& .fc-list-event td': {
-              transition: 'filter 0.2s',
+              transition: 'filter 0.2s, background-color 0.2s, color 0.2s',
             },
           }}
         >
@@ -354,54 +651,452 @@ export default function AgendaPage() {
       {/* Dialog: Detalle de cita */}
       <Dialog
         open={!!selectedEvent}
-        onClose={() => setSelectedEvent(null)}
+        onClose={handleCloseSelectedEvent}
         maxWidth="xs"
         fullWidth
+        sx={{
+          '& .MuiDialog-container': {
+            alignItems: 'flex-start',
+            pt: '4vh',
+          },
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            overflow: 'hidden',
+          },
+        }}
       >
-        <DialogTitle>Detalle de Cita</DialogTitle>
         <DialogContent>
           {selectedEvent && (
-            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <Typography>
-                <strong>Paciente:</strong> {selectedEvent.event.title}
-              </Typography>
-              <Typography>
-                <strong>Horario:</strong>{' '}
-                {dayjs(selectedEvent.event.start).format('HH:mm')} -{' '}
-                {selectedEvent.event.end
-                  ? dayjs(selectedEvent.event.end).format('HH:mm')
-                  : ''}
-              </Typography>
-              <Typography>
-                <strong>Fecha:</strong>{' '}
-                {dayjs(selectedEvent.event.start).format('dddd, D [de] MMMM YYYY')}
-              </Typography>
-              {selectedEvent.event.extendedProps.reason && (
-                <Typography>
-                  <strong>Motivo:</strong> {selectedEvent.event.extendedProps.reason}
+            <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                <Typography
+                  sx={{
+                    color: '#2d64c8',
+                    fontSize: '1rem',
+                    fontWeight: 500,
+                    textAlign: 'center',
+                    flex: 1,
+                  }}
+                >
+                  {doctorName}
                 </Typography>
-              )}
-              {selectedEvent.event.extendedProps.phone && (
-                <Typography>
-                  <strong>Teléfono:</strong> {selectedEvent.event.extendedProps.phone}
+                <IconButton
+                  onClick={handleCloseSelectedEvent}
+                  size="small"
+                  sx={{ ml: 1, color: '#b3b3b3' }}
+                >
+                  <CloseIcon />
+                </IconButton>
+              </Box>
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                  Paciente: {selectedEvent.event.title}
                 </Typography>
-              )}
-              {selectedEvent.event.extendedProps.confirmed && (
-                <Typography sx={{ color: '#00aeff' }}>
-                  <strong>Cita confirmada</strong>
+                <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                  Fecha de la cita: {`${dayjs(selectedEvent.event.start).format('dddd, DD/MMM HH:mm')} hrs`}
                 </Typography>
-              )}
-              {selectedEvent.event.extendedProps.is_first_time && (
-                <Typography sx={{ color: '#00aeff' }}>
-                  <strong>Paciente de primera vez</strong>
+                <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                  Motivo de la consulta: {String(selectedEvent.event.extendedProps.reason || 'Consulta general')}
                 </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                  Celular: {String(selectedEvent.event.extendedProps.phone || '-')}
+                </Typography>
+                <IconButton
+                  size="small"
+                  onClick={() => handleCopyPhone(String(selectedEvent.event.extendedProps.phone || ''))}
+                  sx={{
+                    border: '1px solid #49c5ff',
+                    borderRadius: 1,
+                    color: '#49c5ff',
+                    width: 42,
+                    height: 36,
+                  }}
+                >
+                  <ContentCopyIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  sx={{
+                    borderRadius: 1,
+                    backgroundColor: '#4caf50',
+                    color: '#ffffff',
+                    width: 42,
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: '#43a047',
+                    },
+                  }}
+                >
+                  <PhoneIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+                <Button
+                  variant="text"
+                  sx={{
+                    minWidth: 'auto',
+                    p: 0,
+                    color: '#666',
+                    textDecoration: 'underline',
+                    textTransform: 'none',
+                  }}
+                >
+                  ..más
+                </Button>
+              </Box>
+
+              {!pendingAction && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<CheckCircleIcon />}
+                    onClick={() => setPendingAction('confirm')}
+                    sx={{
+                      borderColor: '#50c65b',
+                      color: '#50c65b',
+                      py: 0.9,
+                      fontWeight: 500,
+                    }}
+                  >
+                    CONFIRMAR CITA
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<CancelOutlinedIcon />}
+                    onClick={() => setPendingAction('cancel')}
+                    sx={{
+                      borderColor: '#ff4f42',
+                      color: '#ff4f42',
+                      py: 0.9,
+                      fontWeight: 500,
+                    }}
+                  >
+                    CANCELAR CITA
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<CalendarMonthIcon />}
+                    onClick={handleOpenReschedule}
+                    sx={{
+                      borderColor: '#50c65b',
+                      color: '#50c65b',
+                      py: 0.9,
+                      fontWeight: 500,
+                    }}
+                  >
+                    REPROGRAMAR CITA
+                  </Button>
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    startIcon={<CalendarMonthIcon />}
+                    onClick={handleOpenAssignAppointment}
+                    sx={{
+                      borderColor: '#27c3ff',
+                      color: '#00b8f0',
+                      py: 0.9,
+                      fontWeight: 500,
+                    }}
+                  >
+                    ASIGNAR NUEVA CITA
+                  </Button>
+                  {isSelectedEventToday && (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<EventBusyIcon sx={{ color: '#ff9800', fontSize: 21 }} />}
+                      onClick={() => setPendingAction('no_show')}
+                      sx={{
+                        borderColor: '#ff9800',
+                        color: '#ff9800',
+                        py: 0.9,
+                        fontWeight: 500,
+                        '& .MuiButton-startIcon': {
+                          color: '#ff9800',
+                        },
+                      }}
+                    >
+                      NO ASISTIÓ
+                    </Button>
+                  )}
+                </Box>
               )}
+
+              {pendingAction && (
+                <Box sx={{ pt: 0.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                  <Typography
+                    sx={{
+                      textAlign: 'center',
+                      color:
+                        pendingAction === 'confirm'
+                          ? '#50c65b'
+                          : pendingAction === 'cancel'
+                            ? '#ff4f42'
+                            : '#ff9800',
+                      fontSize: '1rem',
+                    }}
+                  >
+                    {pendingAction === 'confirm'
+                      ? '¿El paciente asistirá a la cita?'
+                      : pendingAction === 'cancel'
+                        ? '¿Deseas cancelar la cita?'
+                        : '¿Confirmas que el paciente no asistió?'}
+                  </Typography>
+
+                  <Button
+                    fullWidth
+                    variant="contained"
+                    onClick={handleAppointmentStatusAction}
+                    disabled={actionLoading}
+                    sx={{
+                      py: 1,
+                      fontWeight: 700,
+                      backgroundColor:
+                        pendingAction === 'confirm'
+                          ? '#4caf50'
+                          : pendingAction === 'cancel'
+                            ? '#ff4f42'
+                            : '#ff9800',
+                      '&:hover': {
+                        backgroundColor:
+                          pendingAction === 'confirm'
+                            ? '#43a047'
+                            : pendingAction === 'cancel'
+                              ? '#f44336'
+                              : '#fb8c00',
+                      },
+                    }}
+                  >
+                    {actionLoading ? (
+                      <CircularProgress size={22} sx={{ color: '#fff' }} />
+                    ) : pendingAction === 'confirm' ? (
+                      'SI, CONFIRMAR'
+                    ) : pendingAction === 'cancel' ? (
+                      'SI, CANCELAR'
+                    ) : (
+                      'SI, MARCAR NO ASISTIÓ'
+                    )}
+                  </Button>
+
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={notifyPatientAction}
+                        onChange={(event) => setNotifyPatientAction(event.target.checked)}
+                        size="small"
+                        sx={{ py: 0.5 }}
+                      />
+                    }
+                    label="Notificar al paciente (WhatsApp o SMS)"
+                    sx={{
+                      alignSelf: 'center',
+                      color: '#5f6b75',
+                      '& .MuiFormControlLabel-label': {
+                        fontSize: '0.95rem',
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                  *Se va a realizar la acción indicada al paciente: {selectedEvent.event.title}
+                </Typography>
+                <Button
+                  variant="text"
+                  sx={{
+                    alignSelf: 'flex-start',
+                    minWidth: 'auto',
+                    p: 0,
+                    color: '#6f7680',
+                    textDecoration: 'underline',
+                    textTransform: 'none',
+                  }}
+                >
+                  ..datos de la cita
+                </Button>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleCloseSelectedEvent}
+                  sx={{
+                    backgroundColor: '#8c8c8c',
+                    '&:hover': { backgroundColor: '#7c7c7c' },
+                    minWidth: 92,
+                  }}
+                >
+                  SALIR
+                </Button>
+                <Button
+                  variant="contained"
+                  onClick={handleOpenSummary}
+                  sx={{
+                    backgroundColor: '#66d2ff',
+                    '&:hover': { backgroundColor: '#52c7fb' },
+                    minWidth: 106,
+                  }}
+                >
+                  RESUMEN
+                </Button>
+              </Box>
             </Box>
           )}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setSelectedEvent(null)}>Cerrar</Button>
-        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={!!actionToast}
+        autoHideDuration={3000}
+        onClose={() => setActionToast(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        sx={{ mt: 2 }}
+      >
+        <Alert
+          onClose={() => setActionToast(null)}
+          severity="success"
+          variant="filled"
+          sx={{
+            minWidth: { xs: '90vw', sm: 520 },
+            boxShadow: 3,
+            alignItems: 'center',
+            '& .MuiAlert-message': {
+              fontSize: '1rem',
+              fontWeight: 500,
+            },
+          }}
+        >
+          {actionToast}
+        </Alert>
+      </Snackbar>
+
+      <Dialog
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        sx={{
+          '& .MuiDialog-container': {
+            alignItems: 'flex-start',
+            pt: '3vh',
+          },
+        }}
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+          },
+        }}
+      >
+        <DialogContent>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+              <Typography
+                sx={{
+                  flex: 1,
+                  textAlign: 'center',
+                  fontSize: '1.05rem',
+                  color: '#4b5b6b',
+                  fontWeight: 500,
+                }}
+              >
+                Resumen del paciente
+              </Typography>
+              <IconButton onClick={() => setSummaryOpen(false)} size="small" sx={{ color: '#b3b3b3' }}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            {summaryLoading ? (
+              <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Typography sx={{ fontSize: '0.95rem', color: '#707b86' }}>
+                  Hora asignada de consulta: {selectedEvent ? `${dayjs(selectedEvent.event.start).format('dddd, DD/MMM/YYYY HH:mm')} hrs` : '-'}
+                </Typography>
+
+                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
+                  Paciente: {summaryData?.patient.full_name || (selectedEvent ? selectedEvent.event.title : '-')}
+                </Typography>
+
+                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
+                  Edad: {summaryData?.patient.age_text || '-'}
+                </Typography>
+
+                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
+                  Motivo de la consulta: {selectedEvent ? String(selectedEvent.event.extendedProps.reason || 'Consulta general') : '-'}
+                </Typography>
+
+                <Box sx={{ borderTop: '2px solid #355bb0', pt: 2 }}>
+                  <Typography sx={{ textAlign: 'center', color: '#707b86', fontSize: '1rem' }}>
+                    Información de la última consulta:
+                  </Typography>
+                  <Typography sx={{ textAlign: 'center', color: '#5b6772', fontSize: '0.95rem', mt: 0.5 }}>
+                    {summaryData?.last_consultation?.created_at
+                      ? dayjs(summaryData.last_consultation.created_at).format('dddd, DD [de] MMMM YYYY')
+                      : 'Sin consultas previas'}
+                  </Typography>
+                </Box>
+
+                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772', lineHeight: 1.55 }}>
+                  Diagnóstico: {summaryData?.last_consultation?.diagnostic_text || 'Sin diagnóstico registrado'}
+                </Typography>
+
+                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772', lineHeight: 1.55 }}>
+                  Medicamentos recetados: {summaryData?.last_consultation?.medicament_text || 'Sin medicamentos registrados'}
+                </Typography>
+
+                <Typography sx={{ fontSize: '0.95rem', color: '#d32f2f', lineHeight: 1.55 }}>
+                  Análisis: {summaryData?.last_consultation?.notes || 'Sin análisis registrados'}
+                </Typography>
+
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, gap: 1.5 }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => setSummaryOpen(false)}
+                    sx={{
+                      backgroundColor: '#8c8c8c',
+                      '&:hover': { backgroundColor: '#7c7c7c' },
+                      minWidth: 92,
+                    }}
+                  >
+                    CERRAR
+                  </Button>
+                  <Button
+                    variant="contained"
+                    sx={{
+                      backgroundColor: '#e91e63',
+                      '&:hover': { backgroundColor: '#d81b60' },
+                      minWidth: 140,
+                    }}
+                  >
+                    HISTORIA CLÍNICA
+                  </Button>
+                  <Button
+                    variant="contained"
+                    sx={{
+                      backgroundColor: '#e91e63',
+                      '&:hover': { backgroundColor: '#d81b60' },
+                      minWidth: 140,
+                    }}
+                  >
+                    NUEVA CONSULTA
+                  </Button>
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
       </Dialog>
 
       {/* Dialog: Nueva cita (wizard) */}
@@ -410,6 +1105,39 @@ export default function AgendaPage() {
         onClose={() => setDialogOpen(false)}
         officeId={officeId}
         onAppointmentCreated={handleAppointmentCreated}
+      />
+      <NewAppointmentDialog
+        open={rescheduleDialogOpen}
+        onClose={() => {
+          setRescheduleDialogOpen(false);
+          setRescheduleAppointment(null);
+        }}
+        officeId={officeId}
+        onAppointmentCreated={() => {
+          handleAppointmentCreated();
+          setRescheduleDialogOpen(false);
+          setRescheduleAppointment(null);
+        }}
+        mode="reschedule"
+        appointmentId={rescheduleAppointment?.id}
+        initialPatient={rescheduleAppointment?.patient ?? null}
+        initialReason={rescheduleAppointment?.reason ?? ''}
+      />
+      <NewAppointmentDialog
+        open={assignDialogOpen}
+        onClose={() => {
+          setAssignDialogOpen(false);
+          setAssignAppointment(null);
+        }}
+        officeId={officeId}
+        onAppointmentCreated={() => {
+          handleAppointmentCreated();
+          setAssignDialogOpen(false);
+          setAssignAppointment(null);
+        }}
+        mode="assign"
+        initialPatient={assignAppointment?.patient ?? null}
+        initialReason={assignAppointment?.reason ?? ''}
       />
     </Box>
   );

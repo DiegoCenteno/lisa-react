@@ -1,4 +1,4 @@
-import type { Appointment, Office, AvailableDatesResponse, AvailableSlot, PatientSimple, PatientSearchResult } from '../types';
+import type { Appointment, Office, AvailableDatesResponse, AvailableSlot, PatientSimple, PatientSearchResult, LastConsultationSummary } from '../types';
 import apiClient from './client';
 
 interface ApiListResponse {
@@ -27,6 +27,11 @@ interface ApiPatientsResponse {
     current_page: number;
     data: PatientSimple[];
   };
+}
+
+interface ApiLastConsultationSummaryResponse {
+  status: string;
+  data: LastConsultationSummary;
 }
 
 export const appointmentService = {
@@ -138,6 +143,13 @@ export const appointmentService = {
 
   async getOffices(): Promise<Office[]> {
     const response = await apiClient.get<ApiOfficesResponse>('/v2/offices');
+    return response.data.data;
+  },
+
+  async getLastConsultationSummary(patientId: number): Promise<LastConsultationSummary> {
+    const response = await apiClient.get<ApiLastConsultationSummaryResponse>(
+      `/v2/patients/${patientId}/last-consultation-summary`
+    );
     return response.data.data;
   },
 };
