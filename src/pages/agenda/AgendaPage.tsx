@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -38,14 +39,24 @@ import type { Appointment, PatientSimple, LastConsultationSummary } from '../../
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
 
-const FIRST_TIME_BG = 'rgb(148 221 255)';
-const FIRST_TIME_HOVER_BG = 'rgb(126 212 252)';
+const FIRST_TIME_BG = 'rgb(195 236 255)';
+const FIRST_TIME_HOVER_BG = 'rgb(176 229 255)';
 const FIRST_TIME_TEXT = 'rgb(51, 51, 51)';
 const FOLLOW_UP_BG = '#A8FBBD';
 const FOLLOW_UP_HOVER_BG = '#92f5ac';
 const FOLLOW_UP_TEXT = '#333333';
 
 type AppointmentAction = 'confirm' | 'cancel' | 'no_show';
+
+function toPascalCaseName(value?: string): string {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 function getEventColors(apt: Appointment): { bg: string; text: string } {
   const now = dayjs();
@@ -62,7 +73,7 @@ function getEventColors(apt: Appointment): { bg: string; text: string } {
 
 function appointmentToEvent(apt: Appointment): EventInput {
   const patientName = apt.patient
-    ? `${apt.patient.name} ${apt.patient.last_name}`
+    ? `${toPascalCaseName(apt.patient.name)} ${toPascalCaseName(apt.patient.last_name)}`.trim()
     : `Paciente #${apt.patient_id}`;
 
   const colors = getEventColors(apt);
@@ -103,9 +114,9 @@ function renderEventContent(arg: EventContentArg) {
   const isConfirmed = !isNoShow && !isCancelled && (confirmed || normalizedStatus === 1);
 
   // In list view, pick icon color that contrasts with row background
-  const confirmedColor = isListView && bgColor === FIRST_TIME_BG ? FIRST_TIME_TEXT : '#00aeff';
+  const confirmedColor = '#00aeff';
   const smsColor = isListView && bgColor === '#9e9e9e' ? '#ffffff' : '#04d84e';
-  const missedColor = '#ff9800';
+  const missedColor = '#ffb300';
   const cancelledColor = '#ff3b30';
 
   const statusEl = isConfirmed ? (
@@ -188,6 +199,7 @@ function renderEventContent(arg: EventContentArg) {
 }
 
 export default function AgendaPage() {
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -214,6 +226,12 @@ export default function AgendaPage() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryData, setSummaryData] = useState<LastConsultationSummary | null>(null);
+  const [summaryContext, setSummaryContext] = useState<{
+    patientId: number;
+    patientName: string;
+    reason: string;
+    start: string;
+  } | null>(null);
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
@@ -432,6 +450,12 @@ export default function AgendaPage() {
   const handleOpenSummary = useCallback(async () => {
     if (!selectedEvent?.event.extendedProps.patientId) return;
 
+    setSummaryContext({
+      patientId: Number(selectedEvent.event.extendedProps.patientId),
+      patientName: String(selectedEvent.event.title || ''),
+      reason: String(selectedEvent.event.extendedProps.reason || 'Consulta general'),
+      start: dayjs(selectedEvent.event.start).format('YYYY-MM-DD HH:mm:ss'),
+    });
     setSummaryLoading(true);
     handleCloseSelectedEvent();
     setSummaryOpen(true);
@@ -447,6 +471,26 @@ export default function AgendaPage() {
       setSummaryLoading(false);
     }
   }, [selectedEvent, handleCloseSelectedEvent]);
+
+  const handleOpenClinicalHistory = useCallback(() => {
+    const patientId =
+      summaryData?.patient?.id ?? summaryContext?.patientId ?? selectedEvent?.event.extendedProps.patientId ?? null;
+
+    if (!patientId) return;
+
+    setSummaryOpen(false);
+    navigate(`/pacientes/${Number(patientId)}?tab=history`);
+  }, [navigate, selectedEvent, summaryContext, summaryData]);
+
+  const handleOpenDailyNote = useCallback(() => {
+    const patientId =
+      summaryData?.patient?.id ?? summaryContext?.patientId ?? selectedEvent?.event.extendedProps.patientId ?? null;
+
+    if (!patientId) return;
+
+    setSummaryOpen(false);
+    navigate(`/pacientes/${Number(patientId)}?tab=soap`);
+  }, [navigate, selectedEvent, summaryContext, summaryData]);
 
   const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
@@ -793,33 +837,35 @@ export default function AgendaPage() {
                   >
                     REPROGRAMAR CITA
                   </Button>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<CalendarMonthIcon />}
-                    onClick={handleOpenAssignAppointment}
-                    sx={{
-                      borderColor: '#27c3ff',
-                      color: '#00b8f0',
-                      py: 0.9,
-                      fontWeight: 500,
-                    }}
-                  >
-                    ASIGNAR NUEVA CITA
-                  </Button>
                   {isSelectedEventToday && (
                     <Button
                       fullWidth
                       variant="outlined"
-                      startIcon={<EventBusyIcon sx={{ color: '#ff9800', fontSize: 21 }} />}
+                      startIcon={<CalendarMonthIcon />}
+                      onClick={handleOpenAssignAppointment}
+                      sx={{
+                        borderColor: '#27c3ff',
+                        color: '#00b8f0',
+                        py: 0.9,
+                        fontWeight: 500,
+                      }}
+                    >
+                      ASIGNAR NUEVA CITA
+                    </Button>
+                  )}
+                  {isSelectedEventToday && (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<EventBusyIcon sx={{ color: '#ffb300', fontSize: 22 }} />}
                       onClick={() => setPendingAction('no_show')}
                       sx={{
-                        borderColor: '#ff9800',
-                        color: '#ff9800',
+                        borderColor: '#ffb300',
+                        color: '#ffb300',
                         py: 0.9,
                         fontWeight: 500,
                         '& .MuiButton-startIcon': {
-                          color: '#ff9800',
+                          color: '#ffb300',
                         },
                       }}
                     >
@@ -1022,11 +1068,11 @@ export default function AgendaPage() {
             ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 <Typography sx={{ fontSize: '0.95rem', color: '#707b86' }}>
-                  Hora asignada de consulta: {selectedEvent ? `${dayjs(selectedEvent.event.start).format('dddd, DD/MMM/YYYY HH:mm')} hrs` : '-'}
+                  Hora asignada de consulta: {summaryContext ? `${dayjs(summaryContext.start).format('dddd, DD/MMM/YYYY HH:mm')} hrs` : '-'}
                 </Typography>
 
                 <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
-                  Paciente: {summaryData?.patient.full_name || (selectedEvent ? selectedEvent.event.title : '-')}
+                  Paciente: {summaryData?.patient.full_name || summaryContext?.patientName || '-'}
                 </Typography>
 
                 <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
@@ -1034,12 +1080,12 @@ export default function AgendaPage() {
                 </Typography>
 
                 <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
-                  Motivo de la consulta: {selectedEvent ? String(selectedEvent.event.extendedProps.reason || 'Consulta general') : '-'}
+                  Motivo de la consulta: {summaryContext?.reason || '-'}
                 </Typography>
 
                 <Box sx={{ borderTop: '2px solid #355bb0', pt: 2 }}>
                   <Typography sx={{ textAlign: 'center', color: '#707b86', fontSize: '1rem' }}>
-                    Información de la última consulta:
+                    {'Informaci\u00f3n de la \u00faltima consulta:'}
                   </Typography>
                   <Typography sx={{ textAlign: 'center', color: '#5b6772', fontSize: '0.95rem', mt: 0.5 }}>
                     {summaryData?.last_consultation?.created_at
@@ -1049,7 +1095,7 @@ export default function AgendaPage() {
                 </Box>
 
                 <Typography sx={{ fontSize: '0.95rem', color: '#5b6772', lineHeight: 1.55 }}>
-                  Diagnóstico: {summaryData?.last_consultation?.diagnostic_text || 'Sin diagnóstico registrado'}
+                  {'Diagn\u00f3stico: '}{summaryData?.last_consultation?.diagnostic_text || 'Sin diagn\u00f3stico registrado'}
                 </Typography>
 
                 <Typography sx={{ fontSize: '0.95rem', color: '#5b6772', lineHeight: 1.55 }}>
@@ -1057,7 +1103,7 @@ export default function AgendaPage() {
                 </Typography>
 
                 <Typography sx={{ fontSize: '0.95rem', color: '#d32f2f', lineHeight: 1.55 }}>
-                  Análisis: {summaryData?.last_consultation?.notes || 'Sin análisis registrados'}
+                  {'An\u00e1lisis: '}{summaryData?.last_consultation?.notes || 'Sin an\u00e1lisis registrados'}
                 </Typography>
 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, gap: 1.5 }}>
@@ -1074,16 +1120,18 @@ export default function AgendaPage() {
                   </Button>
                   <Button
                     variant="contained"
+                    onClick={handleOpenClinicalHistory}
                     sx={{
                       backgroundColor: '#e91e63',
                       '&:hover': { backgroundColor: '#d81b60' },
                       minWidth: 140,
                     }}
                   >
-                    HISTORIA CLÍNICA
+                    {'HISTORIA CL\u00cdNICA'}
                   </Button>
                   <Button
                     variant="contained"
+                    onClick={handleOpenDailyNote}
                     sx={{
                       backgroundColor: '#e91e63',
                       '&:hover': { backgroundColor: '#d81b60' },

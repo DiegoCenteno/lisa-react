@@ -1,6 +1,7 @@
-import type { Patient, ClinicalHistory, SOAPNote, PatientFile } from '../types';
+import type { Patient, ClinicalHistory, SOAPNote, PatientFile, PatientSoapContext, MedicamentHistoryItem, OfficeLabelItem } from '../types';
 import apiClient from './client';
 import { appointmentService } from './appointmentService';
+import { createEmptyClinicalHistory, decodeClinicalHistory, encodeClinicalHistory } from '../utils/clinicalHistory';
 
 type ApiPatientRecord = {
   id: number;
@@ -20,6 +21,8 @@ type ApiPatientRecord = {
   gender?: string;
   allergy?: string | null;
   datahc?: unknown;
+  effective_consultations_count?: number;
+  is_first_time?: boolean;
 };
 
 type ApiPatientsPayload =
@@ -33,100 +36,56 @@ interface ApiPatientsResponse {
   data: ApiPatientsPayload;
 }
 
-const MOCK_CLINICAL_HISTORY: ClinicalHistory = {
-  id: 1,
-  patient_id: 1,
-  hereditary_background: {
-    blood_type_rh: 'O+',
-    genetic_defects: 'Negados',
-    family_preeclampsia: 'Negada',
-    diabetes: 'Abuela paterna',
-    cancer: 'Abuela materna con CA de mama',
-    hypertension: 'Padre',
-    rheumatic_disease: 'Negada',
-    others: '',
-  },
-  personal_non_pathological: {
-    origin: 'Jalisco',
-    residence: 'Tivoli',
-    civil_status: 'Union libre',
-    education: 'Secundaria',
-    occupation: 'Ama de casa',
-    substance_use: 'Antes consumia con muy poca frecuencia, Marihuana',
-    medications: '',
-    smoking: 'Entre 1 y 2 cigarros a la semana, desde los 13 anos',
-    alcohol: '',
-    others: '',
-  },
-  personal_pathological: {
-    allergies: 'Negadas',
-    chronic_diseases: 'Trastornos de ansiedad sin TX actual',
-    surgeries: '',
-    transfusions: '',
-    fractures: '',
-    others: '',
-  },
-  gynecological: {
-    menarche: '11',
-    menstrual_cycles: 'Ciclos regulares 28x3, eumenorreica, dismenorrea: leve',
-    pregnant: false,
-    last_menstruation_date: '2026-03-02',
-    ivsa: '15',
-    sexual_partners: '3',
-    std: '',
-    cytology: 'Nunca',
-    family_planning: 'Ninguno',
-    gestations: '',
-    last_gestation_date: '',
-    deliveries: '',
-    cesareans: '',
-    abortions: '',
-    ectopic: '',
-    molar: '',
-    menopause_age: '',
-    climacteric_symptoms: '',
-    prenatal_care: '',
-  },
-};
+interface ApiPatientSoapContextResponse {
+  status: string;
+  data: PatientSoapContext;
+}
 
-const MOCK_SOAP_NOTES: SOAPNote[] = [
-  {
-    id: 1,
-    appointment_id: 1,
-    patient_id: 1,
-    subjective: 'Paciente refiere dolor abdominal leve desde hace 3 dias.',
-    objective: 'Signos vitales normales. Abdomen blando, depresible.',
-    assessment: 'Probable gastritis.',
-    plan: 'Se indica omeprazol 20mg cada 24hrs por 14 dias. Dieta blanda.',
-    private_comments: 'Evaluar en siguiente consulta posible referencia a gastro.',
-    labels: [
-      { id: 1, name: 'Estudio de Papanicolaou', status: 'Pendiente revision por el medico', color: '#FB8C00' },
-    ],
-    created_at: '2024-06-20T09:30:00',
-    updated_at: '2024-06-20T09:45:00',
-  },
-];
+interface ApiPatientConsultationsHistoryResponse {
+  status: string;
+  data: Array<{
+    consultation_id: number;
+    patient_id: number;
+    office_id?: number;
+    currentcondition?: string;
+    ailingdate?: string;
+    height?: string;
+    weight?: string;
+    ta?: string;
+    temp?: string;
+    fc?: string;
+    os?: string;
+    studies?: string;
+    examination?: string;
+    diagnostics?: string[];
+    diagnostic_text?: string;
+    medications?: Array<{
+      medicament?: string;
+      prescription?: string;
+    }>;
+    medicament_text?: string;
+    indicaciones?: string;
+    notes?: string;
+    office_label_ids?: number[];
+    created_at: string;
+    updated_at?: string;
+  }>;
+}
 
-const MOCK_FILES: PatientFile[] = [
-  {
-    id: 1,
-    patient_id: 1,
-    name: 'Ultrasonido_20240615.pdf',
-    type: 'application/pdf',
-    url: '#',
-    size: 2048000,
-    uploaded_at: '2024-06-15',
-  },
-  {
-    id: 2,
-    patient_id: 1,
-    name: 'Resultados_Laboratorio.pdf',
-    type: 'application/pdf',
-    url: '#',
-    size: 1024000,
-    uploaded_at: '2024-06-10',
-  },
-];
+interface ApiMedicamentHistoryResponse {
+  status: string;
+  data: MedicamentHistoryItem[];
+}
+
+interface ApiOfficeLabelsResponse {
+  status: string;
+  data: OfficeLabelItem[];
+}
+
+interface ApiPatientFilesResponse {
+  status: string;
+  data: PatientFile[];
+}
 
 function splitFullName(fullName?: string): { name: string; lastName: string } {
   const safe = (fullName ?? '').trim();
@@ -157,6 +116,8 @@ function normalizePatient(record: ApiPatientRecord): Patient {
     age: record.age,
     allergy: record.allergy ?? undefined,
     datahc: record.datahc,
+    effective_consultations_count: record.effective_consultations_count ?? 0,
+    is_first_time: record.is_first_time ?? (record.effective_consultations_count ?? 0) === 0,
   };
 }
 
@@ -211,44 +172,152 @@ export const patientService = {
     return patient;
   },
 
+  async updatePatient(
+    id: number,
+    data: {
+      name: string;
+      last_name: string;
+      phone?: string;
+      birth?: string;
+      gender?: string;
+      allergy?: string;
+      datahc?: Record<string, unknown>;
+    }
+  ): Promise<Patient> {
+    const response = await apiClient.put<{ status: string; data: ApiPatientRecord }>(`/v2/patients/${id}`, data);
+    return normalizePatient(response.data.data);
+  },
+
   async getClinicalHistory(patientId: number): Promise<ClinicalHistory> {
-    return { ...MOCK_CLINICAL_HISTORY, patient_id: patientId };
+    const patient = await this.getPatient(patientId);
+    if (!patient.datahc && !patient.allergy) {
+      return createEmptyClinicalHistory(patientId);
+    }
+    return decodeClinicalHistory(patient);
   },
 
   async updateClinicalHistory(
     patientId: number,
     data: Partial<ClinicalHistory>
   ): Promise<ClinicalHistory> {
-    return { ...MOCK_CLINICAL_HISTORY, ...data, patient_id: patientId };
+    const patient = await this.getPatient(patientId);
+    const currentHistory = decodeClinicalHistory(patient);
+    const nextHistory: ClinicalHistory = {
+      ...currentHistory,
+      ...data,
+      hereditary_background: {
+        ...currentHistory.hereditary_background,
+        ...data.hereditary_background,
+      },
+      personal_non_pathological: {
+        ...currentHistory.personal_non_pathological,
+        ...data.personal_non_pathological,
+      },
+      personal_pathological: {
+        ...currentHistory.personal_pathological,
+        ...data.personal_pathological,
+      },
+      gynecological: {
+        ...currentHistory.gynecological,
+        ...data.gynecological,
+      },
+    };
+
+    const updatedPatient = await this.updatePatient(patientId, {
+      name: patient.name,
+      last_name: patient.last_name,
+      phone: patient.phone,
+      birth: patient.birth_date,
+      gender: patient.gender,
+      allergy: nextHistory.personal_pathological.allergies ?? '',
+      datahc: encodeClinicalHistory(nextHistory),
+    });
+
+    return decodeClinicalHistory(updatedPatient);
   },
 
   async getSOAPNotes(patientId: number): Promise<SOAPNote[]> {
-    return MOCK_SOAP_NOTES.filter((n) => n.patient_id === patientId);
+    const response = await apiClient.get<ApiPatientConsultationsHistoryResponse>(`/v2/patients/${patientId}/consultations-history`);
+    return (response.data.data ?? []).map((item) => ({
+      id: item.consultation_id,
+      consultation_id: item.consultation_id,
+      appointment_id: 0,
+      patient_id: item.patient_id,
+      office_id: item.office_id,
+      subjective: item.currentcondition ?? '',
+      objective: item.studies ?? '',
+      assessment: item.diagnostic_text ?? item.examination ?? '',
+      plan: [item.medicament_text, item.indicaciones].filter(Boolean).join(' | '),
+      private_comments: item.notes ?? undefined,
+      labels: [],
+      created_at: item.created_at,
+      updated_at: item.updated_at ?? item.created_at,
+      ailingdate: item.ailingdate ?? '',
+      height: item.height ?? '',
+      weight: item.weight ?? '',
+      ta: item.ta ?? '',
+      temp: item.temp ?? '',
+      fc: item.fc ?? '',
+      os: item.os ?? '',
+      studies: item.studies ?? '',
+      examination: item.examination ?? '',
+      diagnostics: item.diagnostics ?? [],
+      medications: (item.medications ?? []).map((row) => ({
+        medicament: row.medicament ?? '',
+        prescription: row.prescription ?? '',
+      })),
+      indicaciones: item.indicaciones ?? '',
+      office_label_ids: item.office_label_ids ?? [],
+    }));
   },
 
-  async createSOAPNote(
-    patientId: number,
-    data: Partial<SOAPNote>
-  ): Promise<SOAPNote> {
-    const newNote: SOAPNote = {
-      id: MOCK_SOAP_NOTES.length + 1,
-      appointment_id: data.appointment_id ?? 0,
-      patient_id: patientId,
-      subjective: data.subjective ?? '',
-      objective: data.objective ?? '',
-      assessment: data.assessment ?? '',
-      plan: data.plan ?? '',
-      private_comments: data.private_comments,
-      labels: data.labels ?? [],
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    };
-    MOCK_SOAP_NOTES.push(newNote);
-    return newNote;
+  async getPatientSoapContext(patientId: number): Promise<PatientSoapContext> {
+    const response = await apiClient.get<ApiPatientSoapContextResponse>(`/v2/patients/${patientId}/soap-context`);
+    return response.data.data;
+  },
+
+  async getMedicamentHistory(): Promise<MedicamentHistoryItem[]> {
+    const response = await apiClient.get<ApiMedicamentHistoryResponse>('/v2/consultations/medicament-history');
+    return response.data.data;
+  },
+
+  async getOfficeLabels(): Promise<OfficeLabelItem[]> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.get<ApiOfficeLabelsResponse>('/v2/datahelp/office-labels', {
+      params: { office_id: officeId },
+    });
+    return response.data.data;
   },
 
   async getFiles(patientId: number): Promise<PatientFile[]> {
-    return MOCK_FILES.filter((f) => f.patient_id === patientId);
+    const response = await apiClient.get<ApiPatientFilesResponse>(`/v2/patients/${patientId}/files`);
+    return response.data.data ?? [];
+  },
+
+  async downloadFile(fileId: number, fallbackName: string): Promise<void> {
+    const response = await apiClient.get<Blob>(`/v2/files/${fileId}/download`, {
+      responseType: 'blob',
+    });
+
+    const disposition = response.headers['content-disposition'] as string | undefined;
+    const match = disposition?.match(/filename\*?=(?:UTF-8''|")?([^\";]+)/i);
+    const filename = match ? decodeURIComponent(match[1].replace(/"/g, '').trim()) : fallbackName;
+
+    const blobUrl = window.URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = blobUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  },
+
+  async getFileBlob(fileId: number): Promise<Blob> {
+    const response = await apiClient.get<Blob>(`/v2/files/${fileId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
   },
 
   async searchPatients(query: string): Promise<Patient[]> {
