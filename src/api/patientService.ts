@@ -8,6 +8,7 @@ import type {
   OfficeLabelItem,
   PatientTagControlData,
   PatientResultTemplate,
+  ActivityLogItem,
 } from '../types';
 import apiClient from './client';
 import { appointmentService } from './appointmentService';
@@ -100,6 +101,11 @@ interface ApiPatientFilesResponse {
 interface ApiPatientTagControlResponse {
   status: string;
   data: PatientTagControlData;
+}
+
+interface ApiActivityLogListResponse {
+  status: string;
+  data: ActivityLogItem[];
 }
 
 function splitFullName(fullName?: string): { name: string; lastName: string } {
@@ -352,6 +358,11 @@ export const patientService = {
       params: { office_id: officeId },
     });
     return response.data.data;
+  },
+
+  async getPatientActivityLogs(patientId: number): Promise<ActivityLogItem[]> {
+    const response = await apiClient.get<ApiActivityLogListResponse>(`/v2/patients/${patientId}/activity-logs`);
+    return response.data.data ?? [];
   },
 
   async updatePatientTagStatuses(

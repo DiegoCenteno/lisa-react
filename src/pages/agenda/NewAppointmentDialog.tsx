@@ -402,6 +402,7 @@ export default function NewAppointmentDialog({
           datestart: selectedSlot.datestart,
           dateend: selectedSlot.dateend,
           reason: reason || undefined,
+          activity_action: 'assign',
         });
       } else if (selectedPatient) {
         await appointmentService.createAppointment({
@@ -410,6 +411,7 @@ export default function NewAppointmentDialog({
           datestart: selectedSlot.datestart,
           dateend: selectedSlot.dateend,
           reason: reason || undefined,
+          activity_action: 'create',
         });
       } else {
         await appointmentService.createAppointmentWithNewPatient({
@@ -423,6 +425,7 @@ export default function NewAppointmentDialog({
           phone_code: newPatient.phone_code,
           gender: newPatient.gender || undefined,
           birth_date: newPatient.birth_date || undefined,
+          activity_action: mode === 'assign' ? 'assign' : 'create',
         });
       }
       onAppointmentCreated();

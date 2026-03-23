@@ -1,4 +1,4 @@
-import type { Appointment, Office, AvailableDatesResponse, AvailableSlot, PatientSimple, PatientSearchResult, LastConsultationSummary } from '../types';
+import type { Appointment, Office, AvailableDatesResponse, AvailableSlot, PatientSimple, PatientSearchResult, LastConsultationSummary, ActivityLogItem } from '../types';
 import apiClient from './client';
 
 interface ApiListResponse {
@@ -34,6 +34,11 @@ interface ApiLastConsultationSummaryResponse {
   data: LastConsultationSummary;
 }
 
+interface ApiActivityLogListResponse {
+  status: string;
+  data: ActivityLogItem[];
+}
+
 export const appointmentService = {
   async getAppointmentsByRange(
     startDate: string,
@@ -54,6 +59,7 @@ export const appointmentService = {
     datestart: string;
     dateend: string;
     reason?: string;
+    activity_action?: 'create' | 'assign';
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',
@@ -84,6 +90,7 @@ export const appointmentService = {
     phone_code: string;
     gender?: string;
     birth_date?: string;
+    activity_action?: 'create' | 'assign';
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',
@@ -151,5 +158,12 @@ export const appointmentService = {
       `/v2/patients/${patientId}/last-consultation-summary`
     );
     return response.data.data;
+  },
+
+  async getAppointmentActivityLogs(appointmentId: number): Promise<ActivityLogItem[]> {
+    const response = await apiClient.get<ApiActivityLogListResponse>(
+      `/v2/appointments/${appointmentId}/activity-logs`
+    );
+    return response.data.data ?? [];
   },
 };

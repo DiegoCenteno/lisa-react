@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -16,6 +16,7 @@ import {
   useTheme,
 } from '@mui/material';
 import {
+  ArrowBack as ArrowBackIcon,
   Add as AddIcon,
   Check as CheckIcon,
   DoneAll as DoneAllIcon,
@@ -35,7 +36,7 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventInput, EventClickArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
-import type { Appointment, PatientSimple, LastConsultationSummary } from '../../types';
+import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultationSummary } from '../../types';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
 
@@ -47,6 +48,14 @@ const FOLLOW_UP_HOVER_BG = '#92f5ac';
 const FOLLOW_UP_TEXT = '#333333';
 
 type AppointmentAction = 'confirm' | 'cancel' | 'no_show';
+
+const appointmentStatusLabels: Record<number, string> = {
+  0: 'Pendiente de confirmar',
+  1: 'Confirmada',
+  2: 'No asistió',
+  3: 'Cancelada',
+  4: 'Reprogramada',
+};
 
 function toPascalCaseName(value?: string): string {
   return String(value ?? '')
@@ -61,14 +70,40 @@ function toPascalCaseName(value?: string): string {
 function getEventColors(apt: Appointment): { bg: string; text: string } {
   const now = dayjs();
   const end = dayjs(apt.dateend);
+  const isCancelled = Number(apt.status) === 3;
 
-  if (end.isBefore(now)) {
-    return { bg: '#9e9e9e', text: '#ffffff' };
+  if (end.isBefore(now) || isCancelled) {
+    return { bg: 'rgb(189 189 189)', text: '#ffffff' };
   }
   if (apt.is_first_time) {
     return { bg: FIRST_TIME_BG, text: FIRST_TIME_TEXT };
   }
   return { bg: FOLLOW_UP_BG, text: FOLLOW_UP_TEXT };
+}
+
+function getAppointmentStatusLabel(value: unknown): string {
+  const numericValue = Number(value);
+  if (!Number.isNaN(numericValue) && appointmentStatusLabels[numericValue]) {
+    return appointmentStatusLabels[numericValue];
+  }
+
+  return String(value ?? '-');
+}
+
+function getReadableAgeText(value?: string | null): string {
+  const raw = String(value ?? '').trim();
+  if (!raw) return '-';
+
+  if (!/[ÃÂâ]/.test(raw)) {
+    return raw;
+  }
+
+  const firstNumber = raw.match(/\d{1,3}/)?.[0];
+  if (!firstNumber) {
+    return '-';
+  }
+
+  return `${firstNumber} a\u00f1os`;
 }
 
 function appointmentToEvent(apt: Appointment): EventInput {
@@ -78,7 +113,8 @@ function appointmentToEvent(apt: Appointment): EventInput {
 
   const colors = getEventColors(apt);
   const isPast = dayjs(apt.dateend).isBefore(dayjs());
-  const eventType = isPast ? 'past' : apt.is_first_time ? 'first-time' : 'follow-up';
+  const isCancelled = Number(apt.status) === 3;
+  const eventType = isPast || isCancelled ? 'past' : apt.is_first_time ? 'first-time' : 'follow-up';
 
   return {
     id: String(apt.id),
@@ -200,9 +236,11 @@ function renderEventContent(arg: EventContentArg) {
 
 export default function AgendaPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [offices, setOffices] = useState<Office[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<EventClickArg | null>(null);
@@ -223,15 +261,13 @@ export default function AgendaPage() {
     patient: PatientSimple | null;
     reason?: string;
   } | null>(null);
+  const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
+  const [showAppointmentMore, setShowAppointmentMore] = useState(false);
+  const [appointmentActivityLogs, setAppointmentActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [activityLogsLoading, setActivityLogsLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryData, setSummaryData] = useState<LastConsultationSummary | null>(null);
-  const [summaryContext, setSummaryContext] = useState<{
-    patientId: number;
-    patientName: string;
-    reason: string;
-    start: string;
-  } | null>(null);
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
@@ -249,11 +285,36 @@ export default function AgendaPage() {
   // Load office_id on mount
   useEffect(() => {
     appointmentService.getOffices().then((offices) => {
+      setOffices(offices);
       if (offices.length > 0) {
         setOfficeId(offices[0].id);
       }
     }).catch((err) => console.error('Error loading offices:', err));
   }, []);
+
+  useEffect(() => {
+    const resetToken = (location.state as { sidebarResetAt?: number } | null)?.sidebarResetAt;
+    if (!resetToken) return;
+
+    setShowPreviousAppointments(false);
+    setDialogOpen(false);
+    setSelectedEvent(null);
+    setPendingAction(null);
+    setNotifyPatientAction(false);
+    setActionLoading(false);
+    setActionToast(null);
+    setRescheduleDialogOpen(false);
+    setRescheduleAppointment(null);
+    setAssignDialogOpen(false);
+    setAssignAppointment(null);
+    setShowAppointmentDetails(false);
+    setShowAppointmentMore(false);
+    setAppointmentActivityLogs([]);
+    setActivityLogsLoading(false);
+    setSummaryOpen(false);
+    setSummaryLoading(false);
+    setSummaryData(null);
+  }, [location.state]);
 
   const loadAppointments = useCallback(async (startDate: string, endDate: string) => {
     setLoading(true);
@@ -331,11 +392,27 @@ export default function AgendaPage() {
     [visibleAppointments]
   );
 
+  const calendarRenderKey = useMemo(
+    () => visibleAppointments
+      .map((appointment) => [
+        appointment.id,
+        appointment.status,
+        appointment.confirmed ? 1 : 0,
+        appointment.datestart,
+        appointment.dateend,
+      ].join(':'))
+      .join('|'),
+    [visibleAppointments]
+  );
+
 
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
     setPendingAction(null);
     setNotifyPatientAction(false);
+    setShowAppointmentDetails(false);
+    setShowAppointmentMore(false);
+    setAppointmentActivityLogs([]);
   };
 
   const isSelectedEventToday = selectedEvent
@@ -362,7 +439,52 @@ export default function AgendaPage() {
     setPendingAction(null);
     setNotifyPatientAction(false);
     setActionLoading(false);
+    setShowAppointmentDetails(false);
+    setShowAppointmentMore(false);
+    setAppointmentActivityLogs([]);
   }, []);
+
+  const doctorSpecialty = useMemo(() => {
+    try {
+      const rawUser = localStorage.getItem('user');
+      if (!rawUser) return 'Sin especialidad';
+      const user = JSON.parse(rawUser) as { specialty?: string };
+      return user.specialty?.trim() || 'Sin especialidad';
+    } catch {
+      return 'Sin especialidad';
+    }
+  }, []);
+
+  const handleCopyAppointmentDetails = useCallback(async () => {
+    if (!selectedEvent) return;
+
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    const patientName = String(selectedEvent.event.title || '').trim() || 'Paciente';
+    const appointmentDate = dayjs(selectedEvent.event.start).format('dddd, DD/MMM/YYYY');
+    const appointmentTime = `${dayjs(selectedEvent.event.start).format('HH:mm')} hrs`;
+    const address = selectedOffice
+      ? [selectedOffice.address, selectedOffice.suburb].filter(Boolean).join(' ')
+      : 'Consultorio';
+    const officePhone = selectedOffice?.phone ? ` Tel: ${selectedOffice.phone}` : '';
+
+    const text = [
+      'Datos de la cita',
+      `Paciente: ${patientName}`,
+      `Fecha de la cita: ${appointmentDate}`,
+      `Hora de la cita: ${appointmentTime}`,
+      `Médico: ${doctorName}`,
+      `Especialidad: ${doctorSpecialty}`,
+      `Dirección: ${address}${officePhone}`,
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setActionToast('Datos de la cita copiados correctamente');
+      handleCloseSelectedEvent();
+    } catch (error) {
+      console.error('Error copiando datos de la cita:', error);
+    }
+  }, [doctorName, doctorSpecialty, handleCloseSelectedEvent, officeId, offices, selectedEvent]);
 
   const handleOpenReschedule = useCallback(() => {
     if (!selectedEvent) return;
@@ -447,22 +569,43 @@ export default function AgendaPage() {
     }
   }, [selectedEvent, pendingAction, dateRange, loadAppointments, handleCloseSelectedEvent]);
 
-  const handleOpenSummary = useCallback(async () => {
-    if (!selectedEvent?.event.extendedProps.patientId) return;
+  const handleOpenAppointmentMore = useCallback(async () => {
+    if (!selectedEvent) return;
 
-    setSummaryContext({
-      patientId: Number(selectedEvent.event.extendedProps.patientId),
-      patientName: String(selectedEvent.event.title || ''),
-      reason: String(selectedEvent.event.extendedProps.reason || 'Consulta general'),
-      start: dayjs(selectedEvent.event.start).format('YYYY-MM-DD HH:mm:ss'),
-    });
-    setSummaryLoading(true);
-    handleCloseSelectedEvent();
-    setSummaryOpen(true);
+    setShowAppointmentMore(true);
+    setShowAppointmentDetails(false);
+    setActivityLogsLoading(true);
+
     try {
-      const data = await appointmentService.getLastConsultationSummary(
-        Number(selectedEvent.event.extendedProps.patientId)
-      );
+      const logs = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id));
+      setAppointmentActivityLogs(logs);
+    } catch (error) {
+      console.error('Error cargando historial de movimientos de la cita:', error);
+      setAppointmentActivityLogs([]);
+    } finally {
+      setActivityLogsLoading(false);
+    }
+  }, [selectedEvent]);
+
+  const handleOpenPatientLogbook = useCallback(() => {
+    const patientId = selectedEvent?.event.extendedProps.patientId;
+    if (!patientId) return;
+
+    handleCloseSelectedEvent();
+    navigate(`/pacientes/${Number(patientId)}?tab=bitacora`);
+  }, [handleCloseSelectedEvent, navigate, selectedEvent]);
+
+  const handleOpenSummary = useCallback(async () => {
+    const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
+    if (!patientId) return;
+
+    setSummaryOpen(true);
+    setSummaryLoading(true);
+    setSummaryData(null);
+    handleCloseSelectedEvent();
+
+    try {
+      const data = await appointmentService.getLastConsultationSummary(patientId);
       setSummaryData(data);
     } catch (error) {
       console.error('Error cargando resumen del paciente:', error);
@@ -470,27 +613,7 @@ export default function AgendaPage() {
     } finally {
       setSummaryLoading(false);
     }
-  }, [selectedEvent, handleCloseSelectedEvent]);
-
-  const handleOpenClinicalHistory = useCallback(() => {
-    const patientId =
-      summaryData?.patient?.id ?? summaryContext?.patientId ?? selectedEvent?.event.extendedProps.patientId ?? null;
-
-    if (!patientId) return;
-
-    setSummaryOpen(false);
-    navigate(`/pacientes/${Number(patientId)}?tab=history`);
-  }, [navigate, selectedEvent, summaryContext, summaryData]);
-
-  const handleOpenDailyNote = useCallback(() => {
-    const patientId =
-      summaryData?.patient?.id ?? summaryContext?.patientId ?? selectedEvent?.event.extendedProps.patientId ?? null;
-
-    if (!patientId) return;
-
-    setSummaryOpen(false);
-    navigate(`/pacientes/${Number(patientId)}?tab=soap`);
-  }, [navigate, selectedEvent, summaryContext, summaryData]);
+  }, [handleCloseSelectedEvent, selectedEvent]);
 
   const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
@@ -504,6 +627,7 @@ export default function AgendaPage() {
         row.style.backgroundColor = bgColor;
         row.dataset.rowType = rowType;
         row.querySelectorAll('td').forEach((cell) => {
+          (cell as HTMLElement).style.backgroundColor = bgColor;
           (cell as HTMLElement).style.color = textColor;
         });
         const dot = row.querySelector('.fc-list-event-dot') as HTMLElement | null;
@@ -608,9 +732,9 @@ export default function AgendaPage() {
               color: `${FOLLOW_UP_TEXT} !important`,
             },
             '& .appointment-event--past:hover': {
-              backgroundColor: '#8f8f8f !important',
-              borderColor: '#8f8f8f !important',
-              color: '#ffffff !important',
+               backgroundColor: 'rgb(189 189 189) !important',
+               borderColor: 'rgb(189 189 189) !important',
+               color: '#ffffff !important',
             },
             '& .fc-daygrid-event-dot': {
               borderColor: 'inherit',
@@ -632,8 +756,8 @@ export default function AgendaPage() {
               filter: 'none',
             },
             '& .fc-list-event[data-row-type="past"]:hover td, & tr.fc-list-event[data-row-type="past"]:hover td': {
-              backgroundColor: '#8f8f8f !important',
-              color: '#ffffff !important',
+               backgroundColor: 'rgb(189 189 189) !important',
+               color: '#ffffff !important',
               filter: 'none',
             },
             '& .fc-list-event td': {
@@ -642,6 +766,7 @@ export default function AgendaPage() {
           }}
         >
           <FullCalendar
+            key={calendarRenderKey}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             initialView="listMonth"
             locale="es"
@@ -724,7 +849,11 @@ export default function AgendaPage() {
                     flex: 1,
                   }}
                 >
-                  {doctorName}
+                  {showAppointmentMore
+                    ? `Movimientos de la cita`
+                    : showAppointmentDetails
+                    ? ''
+                    : doctorName}
                 </Typography>
                 <IconButton
                   onClick={handleCloseSelectedEvent}
@@ -735,6 +864,239 @@ export default function AgendaPage() {
                 </IconButton>
               </Box>
 
+              {showAppointmentMore ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {activityLogsLoading ? (
+                    <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : appointmentActivityLogs.length === 0 ? (
+                    <Typography sx={{ color: '#5f6b75', fontSize: '0.95rem' }}>
+                      Aún no hay movimientos registrados para esta cita.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      {appointmentActivityLogs.slice(0, 3).map((log) => (
+                        <Box
+                          key={log.id}
+                          sx={{
+                            borderBottom: '1px solid #e5e9ef',
+                            pb: 1.25,
+                          }}
+                        >
+                          <Typography sx={{ fontSize: '0.95rem', color: '#3f4a56', fontWeight: 600 }}>
+                            {log.message || log.action}
+                          </Typography>
+                          <Typography sx={{ fontSize: '0.88rem', color: '#6b7785', mt: 0.25 }}>
+                            {log.user_name || 'Sistema'}{' '}
+                            {log.created_at ? `(${dayjs(log.created_at).format('dddd DD/MMM, HH:mm')} hrs)` : ''}
+                          </Typography>
+
+                          {log.meta && (
+                            <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.35 }}>
+                              {log.action === 'rescheduled' && (
+                                <>
+                                  <Typography sx={{ fontSize: '0.85rem', color: '#5f6b75' }}>
+                                    Anterior: {String(log.meta.previous_datestart || '-')}
+                                  </Typography>
+                                  <Typography sx={{ fontSize: '0.85rem', color: '#5f6b75' }}>
+                                    Nueva: {String(log.meta.new_datestart || '-')}
+                                  </Typography>
+                                </>
+                              )}
+                              {'new_status' in log.meta && (
+                                <Typography sx={{ fontSize: '0.85rem', color: '#5f6b75' }}>
+                                  Estatus: {getAppointmentStatusLabel(log.meta.previous_status)}{' -> '}{getAppointmentStatusLabel(log.meta.new_status)}
+                                </Typography>
+                              )}
+                              {'new_reason' in log.meta && String(log.meta.new_reason || '').trim() !== '' && (
+                                <Typography sx={{ fontSize: '0.85rem', color: '#5f6b75' }}>
+                                  Motivo: {String(log.meta.new_reason)}
+                                </Typography>
+                              )}
+                            </Box>
+                          )}
+                        </Box>
+                      ))}
+
+                      {appointmentActivityLogs.length > 3 ? (
+                        <Button
+                          variant="text"
+                          onClick={handleOpenPatientLogbook}
+                          sx={{
+                            alignSelf: 'flex-start',
+                            minWidth: 'auto',
+                            p: 0,
+                            color: '#6f7680',
+                            textDecoration: 'underline',
+                            textTransform: 'none',
+                          }}
+                        >
+                          Ver bitácora completa del paciente
+                        </Button>
+                      ) : null}
+                    </Box>
+                  )}
+
+                  <Button
+                    variant="text"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => setShowAppointmentMore(false)}
+                    sx={{
+                      alignSelf: 'flex-start',
+                      minWidth: 'auto',
+                      p: 0,
+                      color: '#6f7680',
+                      textDecoration: 'underline',
+                      textTransform: 'none',
+                    }}
+                  >
+                    Regresar
+                  </Button>
+                </Box>
+              ) : showAppointmentDetails ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <Box
+                    sx={{
+                      background: 'linear-gradient(180deg, #c8f4ea 0%, #b7efdf 100%)',
+                      borderRadius: 2,
+                      px: { xs: 1.5, sm: 2.5 },
+                      py: { xs: 2, sm: 3 },
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        position: 'relative',
+                        backgroundColor: '#ffffff',
+                        borderRadius: 2,
+                        px: { xs: 2, sm: 2.5 },
+                        py: { xs: 2.5, sm: 3 },
+                        boxShadow: '0 4px 14px rgba(60, 92, 86, 0.12)',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          top: -18,
+                          left: 16,
+                          backgroundColor: '#4caf50',
+                          color: '#ffffff',
+                          px: 2,
+                          py: 1.4,
+                          borderRadius: 0.75,
+                          boxShadow: '0 6px 14px rgba(76, 175, 80, 0.35)',
+                        }}
+                      >
+                        <Typography sx={{ fontSize: '0.95rem', fontWeight: 500 }}>
+                          Datos de la cita
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          alignItems: 'center',
+                          mb: 1,
+                        }}
+                      >
+                        <IconButton
+                          size="small"
+                          onClick={handleCopyAppointmentDetails}
+                          sx={{
+                            border: '1px solid #49c5ff',
+                            borderRadius: 1,
+                            color: '#49c5ff',
+                            width: 42,
+                            height: 36,
+                          }}
+                        >
+                          <ContentCopyIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.15, pt: 2.2 }}>
+                        <Typography sx={{ fontSize: '0.98rem', color: '#666' }}>
+                          Paciente:{' '}
+                          <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                            {selectedEvent.event.title}
+                          </Box>
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.98rem', color: '#666' }}>
+                          Fecha de la cita:{' '}
+                          <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                            {dayjs(selectedEvent.event.start).format('dddd, DD/MMM/YYYY')}
+                          </Box>
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.98rem', color: '#666' }}>
+                          Hora de la cita:{' '}
+                          <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                            {dayjs(selectedEvent.event.start).format('HH:mm')} hrs
+                          </Box>
+                        </Typography>
+
+                        <Box
+                          sx={{
+                            width: '100%',
+                            maxWidth: 340,
+                            height: 2,
+                            backgroundColor: '#476bc2',
+                            my: 1,
+                            alignSelf: 'center',
+                          }}
+                        />
+
+                        <Typography sx={{ fontSize: '0.98rem', color: '#666' }}>
+                          Médico:{' '}
+                          <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                            {doctorName}
+                          </Box>
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.98rem', color: '#666' }}>
+                          Especialidad:{' '}
+                          <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                            {doctorSpecialty}
+                          </Box>
+                        </Typography>
+                        <Typography sx={{ fontSize: '0.98rem', color: '#666' }}>
+                          Dirección:{' '}
+                          <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                            {(() => {
+                              const selectedOffice = offices.find((office) => office.id === officeId);
+                              if (!selectedOffice) return 'Consultorio';
+                              return [selectedOffice.address, selectedOffice.suburb].filter(Boolean).join(' ');
+                            })()}
+                          </Box>
+                          {(() => {
+                            const selectedOffice = offices.find((office) => office.id === officeId);
+                            return selectedOffice?.phone ? (
+                              <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
+                                {` Tel: ${selectedOffice.phone}`}
+                              </Box>
+                            ) : null;
+                          })()}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+
+                  <Button
+                    variant="text"
+                    startIcon={<ArrowBackIcon />}
+                    onClick={() => setShowAppointmentDetails(false)}
+                    sx={{
+                      alignSelf: 'flex-start',
+                      minWidth: 'auto',
+                      p: 0,
+                      color: '#6f7680',
+                      textDecoration: 'underline',
+                      textTransform: 'none',
+                    }}
+                  >
+                    Regresar
+                  </Button>
+                </Box>
+              ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
                   Paciente: {selectedEvent.event.title}
@@ -746,7 +1108,9 @@ export default function AgendaPage() {
                   Motivo de la consulta: {String(selectedEvent.event.extendedProps.reason || 'Consulta general')}
                 </Typography>
               </Box>
+              )}
 
+              {!showAppointmentDetails && !showAppointmentMore && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
                 <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
                   Celular: {String(selectedEvent.event.extendedProps.phone || '-')}
@@ -764,23 +1128,28 @@ export default function AgendaPage() {
                 >
                   <ContentCopyIcon sx={{ fontSize: 18 }} />
                 </IconButton>
-                <IconButton
-                  size="small"
-                  sx={{
-                    borderRadius: 1,
-                    backgroundColor: '#4caf50',
-                    color: '#ffffff',
-                    width: 42,
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: '#43a047',
-                    },
-                  }}
-                >
-                  <PhoneIcon sx={{ fontSize: 18 }} />
-                </IconButton>
+                {isMobile ? (
+                  <IconButton
+                    size="small"
+                    component="a"
+                    href={`tel:${String(selectedEvent.event.extendedProps.phone || '')}`}
+                    sx={{
+                      borderRadius: 1,
+                      backgroundColor: '#4caf50',
+                      color: '#ffffff',
+                      width: 42,
+                      height: 36,
+                      '&:hover': {
+                        backgroundColor: '#43a047',
+                      },
+                    }}
+                  >
+                    <PhoneIcon sx={{ fontSize: 18 }} />
+                  </IconButton>
+                ) : null}
                 <Button
                   variant="text"
+                  onClick={handleOpenAppointmentMore}
                   sx={{
                     minWidth: 'auto',
                     p: 0,
@@ -792,8 +1161,9 @@ export default function AgendaPage() {
                   ..más
                 </Button>
               </Box>
+              )}
 
-              {!pendingAction && (
+              {!showAppointmentDetails && !showAppointmentMore && !pendingAction && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
                   <Button
                     fullWidth
@@ -875,7 +1245,7 @@ export default function AgendaPage() {
                 </Box>
               )}
 
-              {pendingAction && (
+              {!showAppointmentDetails && !showAppointmentMore && pendingAction && (
                 <Box sx={{ pt: 0.5, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                   <Typography
                     sx={{
@@ -952,12 +1322,14 @@ export default function AgendaPage() {
                 </Box>
               )}
 
+              {!showAppointmentDetails && !showAppointmentMore && (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
                 <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
                   *Se va a realizar la acción indicada al paciente: {selectedEvent.event.title}
                 </Typography>
                 <Button
                   variant="text"
+                  onClick={() => setShowAppointmentDetails(true)}
                   sx={{
                     alignSelf: 'flex-start',
                     minWidth: 'auto',
@@ -970,7 +1342,9 @@ export default function AgendaPage() {
                   ..datos de la cita
                 </Button>
               </Box>
+              )}
 
+              {!showAppointmentDetails && !showAppointmentMore && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1 }}>
                 <Button
                   variant="contained"
@@ -980,23 +1354,148 @@ export default function AgendaPage() {
                     '&:hover': { backgroundColor: '#7c7c7c' },
                     minWidth: 92,
                   }}
-                >
-                  SALIR
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleOpenSummary}
-                  sx={{
-                    backgroundColor: '#66d2ff',
-                    '&:hover': { backgroundColor: '#52c7fb' },
-                    minWidth: 106,
-                  }}
-                >
-                  RESUMEN
-                </Button>
-              </Box>
+                  >
+                    SALIR
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={handleOpenSummary}
+                    sx={{
+                      backgroundColor: '#5bc0eb',
+                      '&:hover': { backgroundColor: '#43b3e0' },
+                      minWidth: 110,
+                    }}
+                  >
+                    RESUMEN
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={summaryOpen}
+        onClose={() => setSummaryOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            overflow: 'hidden',
+          },
+        }}
+      >
+        <DialogContent>
+          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+              <Typography
+                sx={{
+                  color: '#2d64c8',
+                  fontSize: '1rem',
+                  fontWeight: 500,
+                  textAlign: 'center',
+                  flex: 1,
+                }}
+              >
+                Resumen del paciente
+              </Typography>
+              <IconButton
+                onClick={() => setSummaryOpen(false)}
+                size="small"
+                sx={{ ml: 1, color: '#b3b3b3' }}
+              >
+                <CloseIcon />
+              </IconButton>
+            </Box>
+
+            {summaryLoading ? (
+              <Box sx={{ py: 5, display: 'flex', justifyContent: 'center' }}>
+                <CircularProgress />
+              </Box>
+            ) : summaryData ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box
+                  sx={{
+                    backgroundColor: '#f7fbff',
+                    border: '1px solid #dfeaf5',
+                    borderRadius: 2,
+                    p: 2,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 1.5,
+                  }}
+                >
+                  <Typography sx={{ fontSize: '1rem', color: '#3f4f5f', fontWeight: 600 }}>
+                    {summaryData.patient.full_name}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.95rem', color: '#5f6b75' }}>
+                    Edad: {getReadableAgeText(summaryData.patient.age_text)}
+                  </Typography>
+                  <Typography sx={{ fontSize: '0.95rem', color: '#5f6b75' }}>
+                    Última consulta:{' '}
+                    {summaryData.last_consultation
+                      ? dayjs(summaryData.last_consultation.created_at).format('dddd, DD/MMM/YYYY HH:mm [hrs]')
+                      : 'Sin consultas registradas'}
+                  </Typography>
+                </Box>
+
+                {summaryData.last_consultation ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Box>
+                      <Typography sx={{ fontSize: '0.9rem', color: '#758391', fontWeight: 600, mb: 0.4 }}>
+                        Diagnóstico
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                        {summaryData.last_consultation.diagnostic_text || '-'}
+                      </Typography>
+                    </Box>
+
+                    <Box>
+                      <Typography sx={{ fontSize: '0.9rem', color: '#758391', fontWeight: 600, mb: 0.4 }}>
+                        Medicamentos
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                        {summaryData.last_consultation.medicament_text || '-'}
+                      </Typography>
+                    </Box>
+
+                    <Box>
+                      <Typography sx={{ fontSize: '0.9rem', color: '#758391', fontWeight: 600, mb: 0.4 }}>
+                        Análisis
+                      </Typography>
+                      <Typography sx={{ fontSize: '0.95rem', color: '#4b5b6b' }}>
+                        {summaryData.last_consultation.notes || '-'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                ) : (
+                  <Alert severity="info" sx={{ borderRadius: 2 }}>
+                    Este paciente aún no tiene consultas registradas.
+                  </Alert>
+                )}
+
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
+                  <Button
+                    variant="contained"
+                    onClick={() => setSummaryOpen(false)}
+                    sx={{
+                      backgroundColor: '#8c8c8c',
+                      '&:hover': { backgroundColor: '#7c7c7c' },
+                      minWidth: 92,
+                    }}
+                  >
+                    CERRAR
+                  </Button>
+                </Box>
+              </Box>
+            ) : (
+              <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                No se pudo cargar el resumen del paciente.
+              </Alert>
+            )}
+          </Box>
         </DialogContent>
       </Dialog>
 
@@ -1024,128 +1523,6 @@ export default function AgendaPage() {
           {actionToast}
         </Alert>
       </Snackbar>
-
-      <Dialog
-        open={summaryOpen}
-        onClose={() => setSummaryOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        sx={{
-          '& .MuiDialog-container': {
-            alignItems: 'flex-start',
-            pt: '3vh',
-          },
-        }}
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-          },
-        }}
-      >
-        <DialogContent>
-          <Box sx={{ pt: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-              <Typography
-                sx={{
-                  flex: 1,
-                  textAlign: 'center',
-                  fontSize: '1.05rem',
-                  color: '#4b5b6b',
-                  fontWeight: 500,
-                }}
-              >
-                Resumen del paciente
-              </Typography>
-              <IconButton onClick={() => setSummaryOpen(false)} size="small" sx={{ color: '#b3b3b3' }}>
-                <CloseIcon />
-              </IconButton>
-            </Box>
-
-            {summaryLoading ? (
-              <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
-                <CircularProgress />
-              </Box>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <Typography sx={{ fontSize: '0.95rem', color: '#707b86' }}>
-                  Hora asignada de consulta: {summaryContext ? `${dayjs(summaryContext.start).format('dddd, DD/MMM/YYYY HH:mm')} hrs` : '-'}
-                </Typography>
-
-                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
-                  Paciente: {summaryData?.patient.full_name || summaryContext?.patientName || '-'}
-                </Typography>
-
-                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
-                  Edad: {summaryData?.patient.age_text || '-'}
-                </Typography>
-
-                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772' }}>
-                  Motivo de la consulta: {summaryContext?.reason || '-'}
-                </Typography>
-
-                <Box sx={{ borderTop: '2px solid #355bb0', pt: 2 }}>
-                  <Typography sx={{ textAlign: 'center', color: '#707b86', fontSize: '1rem' }}>
-                    {'Informaci\u00f3n de la \u00faltima consulta:'}
-                  </Typography>
-                  <Typography sx={{ textAlign: 'center', color: '#5b6772', fontSize: '0.95rem', mt: 0.5 }}>
-                    {summaryData?.last_consultation?.created_at
-                      ? dayjs(summaryData.last_consultation.created_at).format('dddd, DD [de] MMMM YYYY')
-                      : 'Sin consultas previas'}
-                  </Typography>
-                </Box>
-
-                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772', lineHeight: 1.55 }}>
-                  {'Diagn\u00f3stico: '}{summaryData?.last_consultation?.diagnostic_text || 'Sin diagn\u00f3stico registrado'}
-                </Typography>
-
-                <Typography sx={{ fontSize: '0.95rem', color: '#5b6772', lineHeight: 1.55 }}>
-                  Medicamentos recetados: {summaryData?.last_consultation?.medicament_text || 'Sin medicamentos registrados'}
-                </Typography>
-
-                <Typography sx={{ fontSize: '0.95rem', color: '#d32f2f', lineHeight: 1.55 }}>
-                  {'An\u00e1lisis: '}{summaryData?.last_consultation?.notes || 'Sin an\u00e1lisis registrados'}
-                </Typography>
-
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', pt: 1, gap: 1.5 }}>
-                  <Button
-                    variant="contained"
-                    onClick={() => setSummaryOpen(false)}
-                    sx={{
-                      backgroundColor: '#8c8c8c',
-                      '&:hover': { backgroundColor: '#7c7c7c' },
-                      minWidth: 92,
-                    }}
-                  >
-                    CERRAR
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={handleOpenClinicalHistory}
-                    sx={{
-                      backgroundColor: '#e91e63',
-                      '&:hover': { backgroundColor: '#d81b60' },
-                      minWidth: 140,
-                    }}
-                  >
-                    {'HISTORIA CL\u00cdNICA'}
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={handleOpenDailyNote}
-                    sx={{
-                      backgroundColor: '#e91e63',
-                      '&:hover': { backgroundColor: '#d81b60' },
-                      minWidth: 140,
-                    }}
-                  >
-                    NUEVA CONSULTA
-                  </Button>
-                </Box>
-              </Box>
-            )}
-          </Box>
-        </DialogContent>
-      </Dialog>
 
       {/* Dialog: Nueva cita (wizard) */}
       <NewAppointmentDialog

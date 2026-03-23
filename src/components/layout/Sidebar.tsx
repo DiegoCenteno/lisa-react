@@ -122,7 +122,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             <ListItem key={item.path} disablePadding sx={{ mb: 0.5 }}>
               <ListItemButton
                 onClick={() => {
-                  navigate(item.path);
+                  navigate(item.path, item.path === '/agenda'
+                    ? { state: { sidebarResetAt: Date.now() } }
+                    : undefined);
                   if (isMobile) onClose();
                 }}
                 sx={{

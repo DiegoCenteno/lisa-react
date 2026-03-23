@@ -607,14 +607,8 @@ export default function PatientsPage() {
                                  <Box>
                                    <Typography
                                      variant="body1"
-                                     sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}
+                                     sx={{ fontWeight: 700 }}
                                    >
-                                     <Box
-                                       component="span"
-                                       sx={{ color: '#ffcf48', fontSize: 20, lineHeight: 1 }}
-                                     >
-                                       &#9873;
-                                     </Box>
                                      {template.code}
                                    </Typography>
                                   {template.data ? (
@@ -726,7 +720,16 @@ export default function PatientsPage() {
                         <Box key={tag.id}>
                           {index > 0 && <Divider sx={{ my: 2 }} />}
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
-                            <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                            <Typography
+                              variant="body1"
+                              sx={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.9 }}
+                            >
+                              <Box
+                                component="span"
+                                sx={{ color: '#ffcf48', fontSize: 20, lineHeight: 1 }}
+                              >
+                                &#9873;
+                              </Box>
                               {tag.code}
                             </Typography>
                             {tag.created_at_label ? (

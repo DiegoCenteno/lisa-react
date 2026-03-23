@@ -340,6 +340,23 @@ export interface LastConsultationSummary {
   } | null;
 }
 
+export interface ActivityLogItem {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  action: string;
+  patient_id?: number | null;
+  office_id?: number | null;
+  appointment_id?: number | null;
+  user_id?: number | null;
+  user_role_id?: number | null;
+  user_name?: string | null;
+  message?: string | null;
+  meta?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at?: string | null;
+}
+
 export interface PatientSoapContext {
   last_consultation: {
     id: number;
