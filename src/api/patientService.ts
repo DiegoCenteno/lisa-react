@@ -1,4 +1,14 @@
-import type { Patient, ClinicalHistory, SOAPNote, PatientFile, PatientSoapContext, MedicamentHistoryItem, OfficeLabelItem } from '../types';
+import type {
+  Patient,
+  ClinicalHistory,
+  SOAPNote,
+  PatientFile,
+  PatientSoapContext,
+  MedicamentHistoryItem,
+  OfficeLabelItem,
+  PatientTagControlData,
+  PatientResultTemplate,
+} from '../types';
 import apiClient from './client';
 import { appointmentService } from './appointmentService';
 import { createEmptyClinicalHistory, decodeClinicalHistory, encodeClinicalHistory } from '../utils/clinicalHistory';
@@ -85,6 +95,11 @@ interface ApiOfficeLabelsResponse {
 interface ApiPatientFilesResponse {
   status: string;
   data: PatientFile[];
+}
+
+interface ApiPatientTagControlResponse {
+  status: string;
+  data: PatientTagControlData;
 }
 
 function splitFullName(fullName?: string): { name: string; lastName: string } {
@@ -289,9 +304,106 @@ export const patientService = {
     return response.data.data;
   },
 
+  async createOfficeLabel(code: string, identify?: string): Promise<OfficeLabelItem> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.post<{ status: string; data: OfficeLabelItem }>('/v2/datahelp/office-labels', {
+      office_id: officeId,
+      code,
+      identify,
+      status: 1,
+    });
+
+    return response.data.data;
+  },
+
+  async updateOfficeLabel(id: number, payload: { code?: string; identify?: string; status?: number }): Promise<OfficeLabelItem> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.put<{ status: string; data: OfficeLabelItem }>(`/v2/datahelp/office-labels/${id}`, {
+      office_id: officeId,
+      ...payload,
+    });
+
+    return response.data.data;
+  },
+
+  async createOfficeResultTemplate(code: string, data: string): Promise<PatientResultTemplate> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.post<{ status: string; data: PatientResultTemplate }>(
+      '/v2/datahelp/office-result-templates',
+      {
+        office_id: officeId,
+        code,
+        data,
+        status: 1,
+      }
+    );
+
+    return response.data.data;
+  },
+
   async getFiles(patientId: number): Promise<PatientFile[]> {
     const response = await apiClient.get<ApiPatientFilesResponse>(`/v2/patients/${patientId}/files`);
     return response.data.data ?? [];
+  },
+
+  async getPatientTagControl(patientId: number): Promise<PatientTagControlData> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.get<ApiPatientTagControlResponse>(`/v2/patients/${patientId}/tag-control`, {
+      params: { office_id: officeId },
+    });
+    return response.data.data;
+  },
+
+  async updatePatientTagStatuses(
+    patientId: number,
+    updates: Array<{ tag_id: number; status_id: number }>,
+    options?: {
+      file?: File | null;
+      notifyPatient?: boolean;
+    }
+  ): Promise<PatientTagControlData> {
+    const officeId = await resolveOfficeId();
+    const payload = new FormData();
+    payload.append('office_id', String(officeId));
+    payload.append('updates', JSON.stringify(updates));
+
+    if (options?.file) {
+      payload.append('file', options.file);
+      payload.append('notify_patient', options.notifyPatient ? '1' : '0');
+    }
+
+    const response = await apiClient.post<ApiPatientTagControlResponse>(
+      `/v2/patients/${patientId}/tag-control/statuses`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    return response.data.data;
+  },
+
+  async getColposcopyFiles(patientId: number): Promise<PatientFile[]> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.get<ApiPatientFilesResponse>(`/v2/patients/${patientId}/colposcopy-files`, {
+      params: { office_id: officeId },
+    });
+    return response.data.data ?? [];
+  },
+
+  async captureColposcopy(patientId: number, image: string): Promise<PatientFile> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.post<{ status: string; data: PatientFile }>(
+      `/v2/patients/${patientId}/colposcopy-captures`,
+      {
+        office_id: officeId,
+        image,
+      }
+    );
+
+    return response.data.data;
   },
 
   async downloadFile(fileId: number, fallbackName: string): Promise<void> {

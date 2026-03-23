@@ -31,3 +31,22 @@ export function formatDisplayDateTime(value?: string | null): string {
 
   return `${formattedDate} ${hours}:${minutes}`;
 }
+
+export function formatDisplayDateTimeLongEs(value?: string | null): string {
+  if (!value) return '';
+
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = date.toLocaleString('es-MX', { month: 'long' }).toLowerCase();
+  const year = date.getFullYear();
+  const hours24 = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const suffix = hours24 >= 12 ? 'pm' : 'am';
+  const hours12 = hours24 % 12 || 12;
+  const hours = String(hours12).padStart(2, '0');
+
+  return `${day}/${month}/${year} ${hours}:${minutes}${suffix}`;
+}

@@ -297,6 +297,7 @@ export interface PatientFile {
   url: string;
   size: number;
   uploaded_at: string;
+  description?: string;
 }
 
 export interface DashboardStats {
@@ -367,6 +368,61 @@ export interface OfficeLabelItem {
   id: number;
   code?: string;
   identify?: string;
+  status?: number | null;
+  created_at?: string;
+}
+
+export interface PatientTagStatusOption {
+  id: number;
+  code: string;
+  identify: number;
+  color_class: string;
+}
+
+export interface PatientResultTemplate {
+  id: number;
+  code: string;
+  data?: string | null;
+}
+
+export interface PatientTagControlTag {
+  id: number;
+  code: string;
+  consultation_id?: number | null;
+  created_at?: string | null;
+  created_at_label?: string;
+  is_undefined: boolean;
+  current_status: {
+    code: string;
+    color_class: string;
+    date?: string | null;
+  };
+  history: Array<{
+    note?: string;
+    code?: string;
+    color?: string;
+    date?: string;
+    rol_id?: number;
+  }>;
+}
+
+export interface PatientTagControlData {
+  patient: {
+    id: number;
+    full_name: string;
+    phone?: string;
+    age_text?: string;
+    last_consultation_text?: string;
+    last_consultation_diff?: string;
+    next_appointment_text?: string;
+    next_appointment_diff?: string;
+    last_file_name?: string;
+    last_file_text?: string;
+    last_file_diff?: string;
+  };
+  statuses: PatientTagStatusOption[];
+  tags: PatientTagControlTag[];
+  templates: PatientResultTemplate[];
 }
 
 export interface ConsultationListItem {
