@@ -70,7 +70,9 @@ export const appointmentService = {
 
   async updateAppointment(
     id: number,
-    data: Partial<Pick<Appointment, 'datestart' | 'dateend' | 'status' | 'reason'>>
+    data: Partial<Pick<Appointment, 'datestart' | 'dateend' | 'status' | 'reason'>> & {
+      notify_patient?: boolean;
+    }
   ): Promise<Appointment> {
     const response = await apiClient.put<ApiSingleResponse>(
       `/v2/appointments/${id}`,

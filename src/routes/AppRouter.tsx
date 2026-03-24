@@ -7,9 +7,11 @@ import AgendaPage from '../pages/agenda/AgendaPage';
 import PatientsPage from '../pages/patients/PatientsPage';
 import PatientDetailPage from '../pages/patients/PatientDetailPage';
 import ConsultationsPage from '../pages/consultations/ConsultationsPage';
+import NotificationsPage from '../pages/notifications/NotificationsPage';
 import SettingsPage from '../pages/settings/SettingsPage';
 import PublicAppointmentPage from '../pages/public/PublicAppointmentPage';
 import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
+import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 
 export default function AppRouter() {
   return (
@@ -19,6 +21,7 @@ export default function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/cita/:token" element={<PublicAppointmentPage />} />
         <Route path="/historia/:token" element={<PublicHistoryFormPage />} />
+        <Route path="/app/:code" element={<PublicStudyResultPage />} />
 
         {/* Protected routes */}
         <Route
@@ -33,6 +36,7 @@ export default function AppRouter() {
           <Route path="/pacientes" element={<PatientsPage />} />
           <Route path="/pacientes/:id" element={<PatientDetailPage />} />
           <Route path="/consultas" element={<ConsultationsPage />} />
+          <Route path="/notificaciones" element={<NotificationsPage />} />
           <Route path="/configuracion" element={<SettingsPage />} />
         </Route>
 

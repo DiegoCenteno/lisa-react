@@ -292,6 +292,18 @@ export default function AgendaPage() {
     }).catch((err) => console.error('Error loading offices:', err));
   }, []);
 
+  const selectedOfficeNotificationPreferences = useMemo(() => {
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    return selectedOffice?.notification_preferences ?? {};
+  }, [officeId, offices]);
+
+  const cancelNotificationDefault = Boolean(
+    selectedOfficeNotificationPreferences.cancelacion_cita_paciente
+  );
+  const confirmNotificationDefault = Boolean(
+    selectedOfficeNotificationPreferences.confirmacion_cita
+  );
+
   useEffect(() => {
     const resetToken = (location.state as { sidebarResetAt?: number } | null)?.sidebarResetAt;
     if (!resetToken) return;
@@ -555,6 +567,10 @@ export default function AgendaPage() {
     try {
       await appointmentService.updateAppointment(Number(selectedEvent.event.id), {
         status: statusMap[pendingAction],
+        notify_patient:
+          pendingAction === 'confirm' || pendingAction === 'cancel'
+            ? notifyPatientAction
+            : false,
       });
 
       if (dateRange) {
@@ -1169,7 +1185,10 @@ export default function AgendaPage() {
                     fullWidth
                     variant="outlined"
                     startIcon={<CheckCircleIcon />}
-                    onClick={() => setPendingAction('confirm')}
+                    onClick={() => {
+                      setPendingAction('confirm');
+                      setNotifyPatientAction(confirmNotificationDefault);
+                    }}
                     sx={{
                       borderColor: '#50c65b',
                       color: '#50c65b',
@@ -1183,7 +1202,10 @@ export default function AgendaPage() {
                     fullWidth
                     variant="outlined"
                     startIcon={<CancelOutlinedIcon />}
-                    onClick={() => setPendingAction('cancel')}
+                    onClick={() => {
+                      setPendingAction('cancel');
+                      setNotifyPatientAction(cancelNotificationDefault);
+                    }}
                     sx={{
                       borderColor: '#ff4f42',
                       color: '#ff4f42',
@@ -1228,7 +1250,10 @@ export default function AgendaPage() {
                       fullWidth
                       variant="outlined"
                       startIcon={<EventBusyIcon sx={{ color: '#ffb300', fontSize: 22 }} />}
-                      onClick={() => setPendingAction('no_show')}
+                      onClick={() => {
+                        setPendingAction('no_show');
+                        setNotifyPatientAction(false);
+                      }}
                       sx={{
                         borderColor: '#ffb300',
                         color: '#ffb300',
@@ -1301,24 +1326,26 @@ export default function AgendaPage() {
                     )}
                   </Button>
 
-                  <FormControlLabel
-                    control={
-                      <Checkbox
-                        checked={notifyPatientAction}
-                        onChange={(event) => setNotifyPatientAction(event.target.checked)}
-                        size="small"
-                        sx={{ py: 0.5 }}
-                      />
-                    }
-                    label="Notificar al paciente (WhatsApp o SMS)"
-                    sx={{
-                      alignSelf: 'center',
-                      color: '#5f6b75',
-                      '& .MuiFormControlLabel-label': {
-                        fontSize: '0.95rem',
-                      },
-                    }}
-                  />
+                  {pendingAction !== 'no_show' ? (
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={notifyPatientAction}
+                          onChange={(event) => setNotifyPatientAction(event.target.checked)}
+                          size="small"
+                          sx={{ py: 0.5 }}
+                        />
+                      }
+                      label="Notificar al paciente (WhatsApp o SMS)"
+                      sx={{
+                        alignSelf: 'center',
+                        color: '#5f6b75',
+                        '& .MuiFormControlLabel-label': {
+                          fontSize: '0.95rem',
+                        },
+                      }}
+                    />
+                  ) : null}
                 </Box>
               )}
 

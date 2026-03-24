@@ -371,6 +371,7 @@ export const patientService = {
     options?: {
       file?: File | null;
       notifyPatient?: boolean;
+      templateId?: number | null;
     }
   ): Promise<PatientTagControlData> {
     const officeId = await resolveOfficeId();
@@ -381,6 +382,9 @@ export const patientService = {
     if (options?.file) {
       payload.append('file', options.file);
       payload.append('notify_patient', options.notifyPatient ? '1' : '0');
+      if (options?.templateId) {
+        payload.append('template_id', String(options.templateId));
+      }
     }
 
     const response = await apiClient.post<ApiPatientTagControlResponse>(

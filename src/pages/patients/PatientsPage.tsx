@@ -354,6 +354,11 @@ export default function PatientsPage() {
       return;
     }
 
+    if (attachSelectedFile && sendResultToPatient && !selectedTemplateId) {
+      setAttachError('Selecciona una plantilla para preparar el envío del resultado al paciente.');
+      return;
+    }
+
     setAttachSaving(true);
     setAttachError(null);
     setAttachMessage(null);
@@ -362,6 +367,7 @@ export default function PatientsPage() {
       const data = await patientService.updatePatientTagStatuses(attachPatientId, updates, {
         file: attachSelectedFile,
         notifyPatient: sendResultToPatient,
+        templateId: selectedTemplateId,
       });
 
       setAttachControl(data);

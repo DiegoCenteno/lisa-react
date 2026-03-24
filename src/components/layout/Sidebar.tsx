@@ -17,8 +17,10 @@ import {
   CalendarMonth as CalendarIcon,
   People as PeopleIcon,
   Assignment as ConsultationIcon,
+  Sms as WhatsAppIcon,
   Settings as SettingsIcon,
   LocalHospital as HospitalIcon,
+  Sms as SmsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -73,6 +75,14 @@ const menuItems: MenuItem[] = [
     ],
   },
   {
+    text: 'WhatsApp',
+    icon: <WhatsAppIcon />,
+    path: '/notificaciones',
+    roles: [
+      UserRole.MEDICO,
+    ],
+  },
+  {
     text: 'Configuración',
     icon: <SettingsIcon />,
     path: '/configuracion',
@@ -88,6 +98,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const { hasRole } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const mockWhatsappUrl = 'http://lisa.test/smsmasivos/mock-whatsapp';
 
   const filteredItems = menuItems.filter((item) => hasRole(item.roles));
 
@@ -156,6 +167,39 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </ListItem>
           );
         })}
+      </List>
+      <Divider />
+      <List sx={{ px: 1, py: 1.25 }}>
+        <ListItem disablePadding>
+          <ListItemButton
+            onClick={() => {
+              window.open(mockWhatsappUrl, '_blank', 'noopener,noreferrer');
+              if (isMobile) onClose();
+            }}
+            sx={{
+              borderRadius: 1,
+              backgroundColor: 'rgba(76, 175, 80, 0.08)',
+              color: 'text.primary',
+              '&:hover': {
+                backgroundColor: 'rgba(76, 175, 80, 0.14)',
+              },
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                color: 'success.main',
+                minWidth: 40,
+              }}
+            >
+              <SmsIcon />
+            </ListItemIcon>
+            <ListItemText
+              primary="Mock WhatsApp"
+              secondary="Temporal"
+              secondaryTypographyProps={{ sx: { lineHeight: 1.1 } }}
+            />
+          </ListItemButton>
+        </ListItem>
       </List>
     </Box>
   );

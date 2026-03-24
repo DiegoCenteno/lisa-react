@@ -82,6 +82,7 @@ export interface Office {
   suburb?: string;
   phone?: string;
   role: 'owner' | 'assistant';
+  notification_preferences?: Record<string, boolean>;
 }
 
 export interface ClinicalHistory {
@@ -440,6 +441,81 @@ export interface PatientTagControlData {
   statuses: PatientTagStatusOption[];
   tags: PatientTagControlTag[];
   templates: PatientResultTemplate[];
+}
+
+export interface PublicStudyResult {
+  code: string;
+  template_name: string;
+  template_text: string;
+  patient_name: string;
+  medic_name: string;
+  file: {
+    id: number;
+    name: string;
+    description?: string | null;
+    type: 'image' | 'pdf';
+    mime_type: string;
+    preview_url: string;
+    download_url: string;
+  };
+}
+
+export interface PublicAppLinkResponse {
+  type: 'study_result';
+  study: PublicStudyResult;
+}
+
+export interface NotificationHistoryItem {
+  id: number;
+  month_label: string;
+  sms_count: number;
+  whatsapp_count: number;
+  used_count: number;
+  available_count: number;
+  created_at: string;
+  is_current_month: boolean;
+}
+
+export interface NotificationSettingsData {
+  monthly_limit: number;
+  available_credits: number;
+  preferences: Record<string, boolean>;
+  history: NotificationHistoryItem[];
+}
+
+export interface NotificationAssistantItem {
+  assistant_id: number;
+  user_id: number;
+  name: string;
+  phone: string;
+  enabled: boolean;
+  recipient_id?: number | null;
+  can_receive: boolean;
+}
+
+export interface NotificationLegacyRecipient {
+  id: number;
+  phone: string;
+  enabled: boolean;
+}
+
+export interface NotificationAssistantRecipientsData {
+  office: {
+    id: number;
+    title: string;
+  };
+  assistants: NotificationAssistantItem[];
+  legacy_recipients: NotificationLegacyRecipient[];
+  limits: {
+    legacy_max: number;
+    total_max: number;
+    registered_assistants: number;
+    registered_legacy: number;
+    registered_total: number;
+    enabled_assistants: number;
+    enabled_legacy: number;
+    enabled_total: number;
+  };
 }
 
 export interface ConsultationListItem {
