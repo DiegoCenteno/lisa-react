@@ -20,6 +20,7 @@ export default function AppRouter() {
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/cita/:token" element={<PublicAppointmentPage />} />
+        <Route path="/nuevacita/:code" element={<PublicAppointmentPage />} />
         <Route path="/historia/:token" element={<PublicHistoryFormPage />} />
         <Route path="/app/:code" element={<PublicStudyResultPage />} />
 

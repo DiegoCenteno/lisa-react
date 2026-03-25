@@ -60,6 +60,7 @@ export const appointmentService = {
     dateend: string;
     reason?: string;
     activity_action?: 'create' | 'assign';
+    notify_patient?: boolean;
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',
@@ -93,6 +94,7 @@ export const appointmentService = {
     gender?: string;
     birth_date?: string;
     activity_action?: 'create' | 'assign';
+    notify_patient?: boolean;
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',

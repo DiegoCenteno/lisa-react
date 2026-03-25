@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -12,6 +12,7 @@ import {
   IconButton,
   CircularProgress,
   Snackbar,
+  Stack,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -94,7 +95,7 @@ function getReadableAgeText(value?: string | null): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '-';
 
-  if (!/[ÃÂâ]/.test(raw)) {
+  if (!/[ÃƒÃ‚Ã¢]/.test(raw)) {
     return raw;
   }
 
@@ -128,9 +129,11 @@ function appointmentToEvent(apt: Appointment): EventInput {
     extendedProps: {
       reason: apt.reason,
       status: apt.status,
+      smscode: apt.smscode,
       confirmed: apt.confirmed,
       smsstatus: apt.smsstatus,
       is_first_time: apt.is_first_time,
+      history_form_required: apt.history_form_required,
       patientId: apt.patient?.id ?? apt.patient_id,
       phone: apt.patient?.phone,
       office: apt.office?.title,
@@ -302,6 +305,9 @@ export default function AgendaPage() {
   );
   const confirmNotificationDefault = Boolean(
     selectedOfficeNotificationPreferences.confirmacion_cita
+  );
+  const newAppointmentNotificationDefault = Boolean(
+    selectedOfficeNotificationPreferences.nueva_cita
   );
 
   useEffect(() => {
@@ -497,6 +503,23 @@ export default function AgendaPage() {
       console.error('Error copiando datos de la cita:', error);
     }
   }, [doctorName, doctorSpecialty, handleCloseSelectedEvent, officeId, offices, selectedEvent]);
+
+  const handleCopyHistoryFormLink = useCallback(async () => {
+    if (!selectedEvent) return;
+
+    const smscode = String(selectedEvent.event.extendedProps.smscode || '').trim();
+    if (!smscode) return;
+
+    const baseUrl = (import.meta.env.VITE_PUBLIC_APP_BASE_URL as string | undefined)?.trim() || 'http://lisa.test';
+    const historyLink = `${baseUrl.replace(/\/$/, '')}/app/${smscode}`;
+
+    try {
+      await navigator.clipboard.writeText(historyLink);
+      setActionToast('Enlace de historia clínica copiado correctamente');
+    } catch (error) {
+      console.error('Error copiando enlace de historia clínica:', error);
+    }
+  }, [selectedEvent]);
 
   const handleOpenReschedule = useCallback(() => {
     if (!selectedEvent) return;
@@ -1111,6 +1134,48 @@ export default function AgendaPage() {
                   >
                     Regresar
                   </Button>
+
+                  {selectedEvent.event.extendedProps.smscode ? (
+                    <Box
+                      sx={{
+                        mt: 1.5,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1.25,
+                      }}
+                    >
+                      <Typography sx={{ fontSize: '0.95rem', color: '#5f6a76', lineHeight: 1.6 }}>
+                        {selectedEvent.event.extendedProps.history_form_required
+                          ? 'Comparte un enlace con tu paciente para que conteste las preguntas de su historia clínica.'
+                          : 'Este enlace público también abre la ficha de la cita. Si la historia clínica del paciente ya fue respondida, el cuestionario ya no se mostrará.'}
+                      </Typography>
+                      <Stack
+                        direction="row"
+                        spacing={1.25}
+                        alignItems="center"
+                        justifyContent="flex-end"
+                        sx={{ flexWrap: 'wrap', width: '100%' }}
+                      >
+                        <Typography sx={{ fontSize: '0.9rem', color: '#5b6470', fontWeight: 600 }}>
+                          Link de historia clínica
+                        </Typography>
+                        <IconButton
+                          size="small"
+                          onClick={handleCopyHistoryFormLink}
+                          sx={{
+                            alignSelf: 'flex-start',
+                            border: '1px solid #49c5ff',
+                            borderRadius: 1,
+                            color: '#49c5ff',
+                            width: 42,
+                            height: 36,
+                          }}
+                        >
+                          <ContentCopyIcon sx={{ fontSize: 18 }} />
+                        </IconButton>
+                      </Stack>
+                    </Box>
+                  ) : null}
                 </Box>
               ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -1557,6 +1622,7 @@ export default function AgendaPage() {
         onClose={() => setDialogOpen(false)}
         officeId={officeId}
         onAppointmentCreated={handleAppointmentCreated}
+        initialNotifyPatient={newAppointmentNotificationDefault}
       />
       <NewAppointmentDialog
         open={rescheduleDialogOpen}
@@ -1574,6 +1640,7 @@ export default function AgendaPage() {
         appointmentId={rescheduleAppointment?.id}
         initialPatient={rescheduleAppointment?.patient ?? null}
         initialReason={rescheduleAppointment?.reason ?? ''}
+        initialNotifyPatient={newAppointmentNotificationDefault}
       />
       <NewAppointmentDialog
         open={assignDialogOpen}
@@ -1590,7 +1657,9 @@ export default function AgendaPage() {
         mode="assign"
         initialPatient={assignAppointment?.patient ?? null}
         initialReason={assignAppointment?.reason ?? ''}
+        initialNotifyPatient={newAppointmentNotificationDefault}
       />
     </Box>
   );
 }
+

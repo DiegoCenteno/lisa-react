@@ -51,9 +51,11 @@ export interface Appointment {
   dateend: string;
   status: number;
   reason?: string;
+  smscode?: string | null;
   confirmed?: boolean;
   smsstatus?: number;
   is_first_time?: boolean;
+  history_form_required?: boolean;
   patient?: {
     id: number;
     name: string;
@@ -81,6 +83,17 @@ export interface Office {
   address?: string;
   suburb?: string;
   phone?: string;
+  logo_url?: string | null;
+  firsttime?: number | null;
+  recurrent?: number | null;
+  getlink?: string;
+  opendays?: Array<{
+    day: number;
+    start: string;
+    end: string;
+    breakstart?: string;
+    breakend?: string;
+  }>;
   role: 'owner' | 'assistant';
   notification_preferences?: Record<string, boolean>;
 }
@@ -460,9 +473,124 @@ export interface PublicStudyResult {
   };
 }
 
+export interface PublicAppointmentConfirmation {
+  code: string;
+  appointment_id: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  question_text: string;
+  patient: {
+    first_name: string;
+    full_name: string;
+    gender?: string;
+  };
+  appointment: {
+    date_label: string;
+    time_label: string;
+    reason?: string;
+  };
+  office: {
+    phone?: string;
+    doctor_name: string;
+    specialty?: string;
+    address?: string;
+  };
+  history_form_completed: boolean;
+  history_form_required: boolean;
+  show_history_form: boolean;
+  history_form_title?: string;
+  history_form_message?: string;
+  history_form?: {
+    allow_gender_question: boolean;
+    include_referral_question: boolean;
+    blood_type_options: Array<{ value: string; label: string }>;
+    birth_place_options: string[];
+    civil_status_options: string[];
+    education_options: Array<{ value: string; label: string }>;
+    exercise_options: string[];
+    smoking_options: string[];
+    substance_use_options: string[];
+    drug_options: Array<{ key: string; label: string }>;
+    disease_options: Array<{ key: string; label: string }>;
+    referral_options: Array<{ value: string; label: string }>;
+  };
+  can_respond: boolean;
+}
+
 export interface PublicAppLinkResponse {
-  type: 'study_result';
-  study: PublicStudyResult;
+  type: 'study_result' | 'appointment_confirmation';
+  study?: PublicStudyResult;
+  appointment?: PublicAppointmentConfirmation;
+}
+
+export interface PublicRescheduleLinkResponse {
+  mode: 'reschedule' | 'booking';
+  code: string;
+  minutes: number;
+  can_reschedule: boolean;
+  show_contact_actions: boolean;
+  reschedule_message?: string | null;
+  reschedule_count_used: number;
+  reschedule_count_remaining: number;
+  office: {
+    id: number;
+    title: string;
+    doctor_name: string;
+    specialty?: string;
+    address?: string;
+    phone?: string;
+  };
+  patient: {
+    id: number;
+    name: string;
+    first_name: string;
+  } | null;
+  appointment: {
+    id: number;
+    status: number;
+    date_label: string;
+    time_label: string;
+    reason?: string;
+    datestart: string;
+    dateend: string;
+  } | null;
+}
+
+export interface PublicRescheduleDateOption {
+  date: string;
+  slots: string[];
+  label: string;
+}
+
+export interface PublicRescheduleSuccessResponse {
+  mode: 'reschedule' | 'booking';
+  message: string;
+  appointment: {
+    id: number;
+    date_label: string;
+    time_label: string;
+    datestart: string;
+    dateend: string;
+  };
+  patient?: {
+    name: string;
+  };
+}
+
+export interface PublicBookingCandidate {
+  user_id: number;
+  patient_id: number;
+  full_name: string;
+  age?: number | null;
+  birth?: string | null;
+  has_history: boolean;
+  has_consultations: boolean;
+  has_appointments: boolean;
+}
+
+export interface PublicBookingCandidateResponse {
+  has_candidates: boolean;
+  candidates: PublicBookingCandidate[];
+  limit_reached: boolean;
 }
 
 export interface NotificationHistoryItem {

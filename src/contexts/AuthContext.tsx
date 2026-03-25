@@ -51,6 +51,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const updateUser = useCallback((updater: Partial<User> | ((current: User | null) => User | null)) => {
+    setUser((current) => {
+      const nextUser = typeof updater === 'function'
+        ? updater(current)
+        : (current ? { ...current, ...updater } : current);
+
+      if (nextUser) {
+        localStorage.setItem('user', JSON.stringify(nextUser));
+      } else {
+        localStorage.removeItem('user');
+      }
+
+      return nextUser;
+    });
+  }, []);
+
   const value = useMemo(() => ({
     user,
     token,
@@ -59,7 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     hasRole,
-  }), [user, token, login, logout, hasRole]);
+    updateUser,
+  }), [user, token, login, logout, hasRole, updateUser]);
 
   return (
     <AuthContext.Provider value={value}>

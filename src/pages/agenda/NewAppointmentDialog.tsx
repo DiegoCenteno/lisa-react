@@ -22,6 +22,7 @@ import {
   ContentCopy as CopyIcon,
   Close as CloseIcon,
   ArrowBack as BackIcon,
+  CalendarMonth as CalendarMonthIcon,
 } from '@mui/icons-material';
 import type { AvailableSlot, PatientSimple, NewPatientData, PatientSearchResult } from '../../types';
 import { appointmentService } from '../../api/appointmentService';
@@ -35,9 +36,9 @@ dayjs.locale('es');
 const ROW_LIGHT = '#e0f7fa';
 const TEAL = '#00897B';
 const MAGENTA = '#e91e63';
-const DURATION_BG = '#fff8e1';
-const DURATION_COLOR = '#f57f17';
-const DURATION_HOVER = '#ffecb3';
+const DURATION_BG = '#eef4ff';
+const DURATION_COLOR = '#2f5fb3';
+const DURATION_HOVER = '#dde9ff';
 
 function formatDateEs(dateStr: string): string {
   const d = dayjs(dateStr);
@@ -58,6 +59,13 @@ function formatDuration(totalMin: number): string {
   return h + 'h ' + String(m).padStart(2, '0') + 'm';
 }
 
+function formatManualHourMinute(hour24: number, minute: number = 0): string {
+  const normalizedHour = ((hour24 % 24) + 24) % 24;
+  const period = normalizedHour >= 12 ? 'PM' : 'AM';
+  const hour12 = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+  return `${String(hour12).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -67,10 +75,11 @@ interface Props {
   appointmentId?: number;
   initialPatient?: PatientSimple | null;
   initialReason?: string;
+  initialNotifyPatient?: boolean;
 }
 
 type WizardStep = 'dates' | 'patient' | 'summary';
-type ManualStep = 'month' | 'day' | 'hour' | 'ampm' | 'duration';
+type ManualStep = 'month' | 'day' | 'period' | 'hour' | 'duration';
 
 export default function NewAppointmentDialog({
   open,
@@ -81,6 +90,7 @@ export default function NewAppointmentDialog({
   appointmentId,
   initialPatient = null,
   initialReason = '',
+  initialNotifyPatient = true,
 }: Props) {
   // ── Wizard state ──
   const [step, setStep] = useState<WizardStep>('dates');
@@ -124,11 +134,13 @@ export default function NewAppointmentDialog({
   const [showAllMonths, setShowAllMonths] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number } | null>(null);
   const [selectedDay, setSelectedDay] = useState<dayjs.Dayjs | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<'morning' | 'afternoon' | null>(null);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [selectedMinute, setSelectedMinute] = useState<number | null>(null);
-  const [selectedAmPm, setSelectedAmPm] = useState<'AM' | 'PM' | null>(null);
   const [expandedManualHour, setExpandedManualHour] = useState<number | null>(null);
   const [manualDurationTotal, setManualDurationTotal] = useState<number | null>(null);
+  const manualContentRef = useRef<HTMLDivElement | null>(null);
+  const afternoonAnchorRef = useRef<HTMLDivElement | null>(null);
 
   // ── Step 3: summary ──
   const [reason, setReason] = useState('');
@@ -169,19 +181,19 @@ export default function NewAppointmentDialog({
       setShowAllMonths(false);
       setSelectedMonth(null);
       setSelectedDay(null);
+      setSelectedPeriod(null);
       setSelectedHour(null);
       setSelectedMinute(null);
-      setSelectedAmPm(null);
       setExpandedManualHour(null);
       setManualDurationTotal(null);
       setReason(initialReason);
-      setNotifyPatient(true);
+      setNotifyPatient(initialNotifyPatient);
       setSaving(false);
       setSaveError('');
       loadAvailableDates();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [initialNotifyPatient, open]);
 
   // Phone duplicate detection: search when 10 digits
   useEffect(() => {
@@ -403,6 +415,7 @@ export default function NewAppointmentDialog({
           dateend: selectedSlot.dateend,
           reason: reason || undefined,
           activity_action: 'assign',
+          notify_patient: notifyPatient,
         });
       } else if (selectedPatient) {
         await appointmentService.createAppointment({
@@ -412,6 +425,7 @@ export default function NewAppointmentDialog({
           dateend: selectedSlot.dateend,
           reason: reason || undefined,
           activity_action: 'create',
+          notify_patient: notifyPatient,
         });
       } else {
         await appointmentService.createAppointmentWithNewPatient({
@@ -426,6 +440,7 @@ export default function NewAppointmentDialog({
           gender: newPatient.gender || undefined,
           birth_date: newPatient.birth_date || undefined,
           activity_action: mode === 'assign' ? 'assign' : 'create',
+          notify_patient: notifyPatient,
         });
       }
       onAppointmentCreated();
@@ -462,9 +477,9 @@ export default function NewAppointmentDialog({
       setShowAllMonths(false);
       setSelectedMonth(null);
       setSelectedDay(null);
+      setSelectedPeriod(null);
       setSelectedHour(null);
       setSelectedMinute(null);
-      setSelectedAmPm(null);
       setExpandedManualHour(null);
       setManualDurationTotal(null);
     } else if (step === 'patient') {
@@ -491,12 +506,9 @@ export default function NewAppointmentDialog({
   };
 
   const handleManualDurationSelect = useCallback((totalMinutes: number) => {
-    if (selectedDay === null || selectedHour === null || selectedMinute === null || selectedAmPm === null) return;
+    if (selectedDay === null || selectedHour === null || selectedMinute === null) return;
     setManualDurationTotal(totalMinutes);
-    let hour24 = selectedHour;
-    if (selectedAmPm === 'PM' && hour24 !== 12) hour24 += 12;
-    if (selectedAmPm === 'AM' && hour24 === 12) hour24 = 0;
-    const start = selectedDay.hour(hour24).minute(selectedMinute).second(0);
+    const start = selectedDay.hour(selectedHour).minute(selectedMinute).second(0);
     const end = start.add(totalMinutes, 'minute');
     setSelectedSlot({
       datestart: start.format('YYYY-MM-DD HH:mm:ss'),
@@ -514,7 +526,26 @@ export default function NewAppointmentDialog({
     }
     setStep('patient');
     loadPatients();
-  }, [selectedDay, selectedHour, selectedMinute, selectedAmPm, loadPatients, mode]);
+  }, [selectedDay, selectedHour, selectedMinute, loadPatients, mode]);
+
+  useEffect(() => {
+    if (!open || step !== 'dates' || !showManualForm) return;
+
+    const contentNode = manualContentRef.current;
+    if (!contentNode) return;
+
+    const rafId = window.requestAnimationFrame(() => {
+      if (manualStep === 'hour' && selectedPeriod === 'afternoon' && afternoonAnchorRef.current) {
+        const targetTop = Math.max(afternoonAnchorRef.current.offsetTop - 20, 0);
+        contentNode.scrollTo({ top: targetTop, behavior: 'auto' });
+        return;
+      }
+
+      contentNode.scrollTo({ top: 0, behavior: 'auto' });
+    });
+
+    return () => window.cancelAnimationFrame(rafId);
+  }, [manualStep, open, selectedPeriod, showManualForm, step]);
 
   // Generate months list (3 years from today)
   const monthsList = useMemo(() => {
@@ -570,15 +601,11 @@ export default function NewAppointmentDialog({
       parts.push(dayName + ' ' + selectedDay.format('D'));
     }
     if (selectedHour !== null) {
-      const hourStr = String(selectedHour).padStart(2, '0');
       if (selectedMinute !== null) {
-        parts.push(hourStr + ':' + String(selectedMinute).padStart(2, '0'));
+        parts.push(formatManualHourMinute(selectedHour, selectedMinute));
       } else {
-        parts.push(hourStr + ':00');
+        parts.push(formatManualHourMinute(selectedHour, 0));
       }
-    }
-    if (selectedAmPm) {
-      parts[parts.length - 1] = parts[parts.length - 1] + ' ' + selectedAmPm;
     }
     if (manualDurationTotal !== null) {
       const h = Math.floor(manualDurationTotal / 60);
@@ -590,7 +617,7 @@ export default function NewAppointmentDialog({
       }
     }
     return parts;
-  }, [selectedMonth, selectedDay, selectedHour, selectedMinute, selectedAmPm, manualDurationTotal, monthsList]);
+  }, [selectedMonth, selectedDay, selectedHour, selectedMinute, manualDurationTotal, monthsList]);
 
   // Sticky title style for manual form step titles
   const stickyTitleSx = {
@@ -615,11 +642,22 @@ export default function NewAppointmentDialog({
     };
 
     // Duration row style (different color)
-    const durationRowSx = {
-      py: 1.5, px: 2, textAlign: 'center' as const, cursor: 'pointer',
-      backgroundColor: DURATION_BG, borderBottom: '1px solid #ffe0b2',
-      color: DURATION_COLOR, fontSize: '0.95rem',
-      '&:hover': { backgroundColor: DURATION_HOVER },
+    const durationOptionSx = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 1,
+      py: 1.15,
+      px: 1.5,
+      borderRadius: 2.5,
+      cursor: 'pointer',
+      backgroundColor: DURATION_BG,
+      color: DURATION_COLOR,
+      fontSize: '0.95rem',
+      border: '1px solid transparent',
+      '&:hover': {
+        backgroundColor: DURATION_HOVER,
+        borderColor: '#ffcc80',
+      },
     };
 
     if (manualStep === 'month') {
@@ -651,7 +689,14 @@ export default function NewAppointmentDialog({
             <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>No hay días disponibles en este mes</Typography>
           ) : (
             daysList.map((d, i) => (
-              <Box key={i} sx={rowSx} onClick={() => { setSelectedDay(d.date); setManualStep('hour'); }}>
+              <Box key={i} sx={rowSx} onClick={() => {
+                setSelectedDay(d.date);
+                setSelectedPeriod(null);
+                setSelectedHour(null);
+                setSelectedMinute(null);
+                setExpandedManualHour(null);
+                setManualStep('period');
+              }}>
                 {d.label}
               </Box>
             ))
@@ -660,17 +705,91 @@ export default function NewAppointmentDialog({
       );
     }
 
+    if (manualStep === 'period') {
+      const periodOptionSx = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        py: 2.25,
+        px: 2,
+        borderRadius: 3,
+        cursor: 'pointer',
+        backgroundColor: '#eeeeee',
+        color: '#1f2937',
+        fontSize: '1rem',
+        fontWeight: 700,
+        border: '1px solid transparent',
+        '&:hover': {
+          backgroundColor: '#e0e0e0',
+          borderColor: '#b0bec5',
+        },
+      };
+
+      return (
+        <Box>
+          <Typography sx={stickyTitleSx}>Selecciona el horario base</Typography>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },
+              gap: 1.5,
+              px: 1.5,
+              py: 2,
+            }}
+          >
+            <Box
+              sx={periodOptionSx}
+              onClick={() => {
+                setSelectedPeriod('morning');
+                setExpandedManualHour(null);
+                setManualStep('hour');
+              }}
+            >
+              MAÑANA
+            </Box>
+            <Box
+              sx={periodOptionSx}
+              onClick={() => {
+                setSelectedPeriod('afternoon');
+                setExpandedManualHour(null);
+                setManualStep('hour');
+              }}
+            >
+              TARDE
+            </Box>
+          </Box>
+        </Box>
+      );
+    }
+
     if (manualStep === 'hour') {
-      // Expandable hour list: click hour to show minutes below
-      const hours = Array.from({ length: 12 }, (_, i) => i + 1);
+      const hours = [...Array.from({ length: 19 }, (_, i) => i + 5), 0];
+      const minuteOptionSx = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1,
+        py: 1.15,
+        px: 1.5,
+        borderRadius: 2.5,
+        cursor: 'pointer',
+        backgroundColor: '#eeeeee',
+        color: '#263238',
+        fontSize: '0.95rem',
+        border: '1px solid transparent',
+        '&:hover': {
+          backgroundColor: '#e0e0e0',
+          borderColor: '#b0bec5',
+        },
+      };
       return (
         <Box>
           <Typography sx={stickyTitleSx}>Selecciona la hora</Typography>
           {hours.map((h) => {
             const isExpanded = expandedManualHour === h;
-            const hourLabel = String(h).padStart(2, '0') + ':00';
+            const hourLabel = formatManualHourMinute(h, 0).toLowerCase();
+            const shouldMarkAfternoonAnchor = h === 12;
             return (
-              <Box key={h}>
+              <Box key={h} ref={shouldMarkAfternoonAnchor ? afternoonAnchorRef : null}>
                 <Box
                   sx={{
                     ...rowSx,
@@ -682,29 +801,38 @@ export default function NewAppointmentDialog({
                     } else {
                       setExpandedManualHour(h);
                       setSelectedHour(h);
+                      setSelectedMinute(null);
                     }
                   }}
                 >
                   {hourLabel}
                 </Box>
                 {isExpanded && (
-                  <Box>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
+                      gap: 1.2,
+                      px: 1.5,
+                      py: 1.5,
+                      backgroundColor: '#fafafa',
+                      borderBottom: '1px solid #e0e0e0',
+                    }}
+                  >
                     {Array.from({ length: 12 }, (_, mi) => mi * 5).map((minute) => (
                       <Box
                         key={minute}
-                        sx={{
-                          py: 1, px: 4, textAlign: 'center' as const, cursor: 'pointer',
-                          backgroundColor: '#e8f5e9', borderBottom: '1px solid #c8e6c9',
-                          color: '#2e7d32', fontSize: '0.9rem',
-                          '&:hover': { backgroundColor: '#c8e6c9' },
-                        }}
+                        sx={minuteOptionSx}
                         onClick={() => {
                           setSelectedHour(h);
                           setSelectedMinute(minute);
-                          setManualStep('ampm');
+                          setManualStep('duration');
                         }}
                       >
-                        {String(h).padStart(2, '0')}:{String(minute).padStart(2, '0')}
+                        <CalendarMonthIcon sx={{ fontSize: 18, color: '#616161' }} />
+                        <Typography sx={{ fontSize: '0.95rem', fontWeight: 500 }}>
+                          {formatManualHourMinute(h, minute).toLowerCase()}
+                        </Typography>
                       </Box>
                     ))}
                   </Box>
@@ -716,25 +844,30 @@ export default function NewAppointmentDialog({
       );
     }
 
-    if (manualStep === 'ampm') {
-      return (
-        <Box>
-          <Typography sx={stickyTitleSx}>Selecciona AM o PM</Typography>
-          <Box sx={rowSx} onClick={() => { setSelectedAmPm('AM'); setManualStep('duration'); }}>AM</Box>
-          <Box sx={rowSx} onClick={() => { setSelectedAmPm('PM'); setManualStep('duration'); }}>PM</Box>
-        </Box>
-      );
-    }
-
     if (manualStep === 'duration') {
       return (
         <Box>
           <Typography sx={{ ...stickyTitleSx, color: DURATION_COLOR }}>Duración de la cita</Typography>
-          {durationList.map((d) => (
-            <Box key={d.totalMin} sx={durationRowSx} onClick={() => handleManualDurationSelect(d.totalMin)}>
-              {d.label}
-            </Box>
-          ))}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' },
+              gap: 1.2,
+              px: 1.5,
+              py: 1.5,
+              backgroundColor: '#fffaf1',
+              borderTop: '1px solid #ffe0b2',
+            }}
+          >
+            {durationList.map((d) => (
+              <Box key={d.totalMin} sx={durationOptionSx} onClick={() => handleManualDurationSelect(d.totalMin)}>
+                <CalendarMonthIcon sx={{ fontSize: 18, color: '#f57f17' }} />
+                <Typography sx={{ fontSize: '0.95rem', fontWeight: 500 }}>
+                  {d.label}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
         </Box>
       );
     }
@@ -1246,11 +1379,17 @@ export default function NewAppointmentDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      maxWidth="xs"
+      maxWidth="sm"
       fullWidth
       sx={{ '& .MuiDialog-container': { alignItems: 'flex-start', pt: '8vh' } }}
       PaperProps={{
-        sx: { borderRadius: 2, height: 450, display: 'flex', flexDirection: 'column' },
+        sx: {
+          borderRadius: 2,
+          height: 500,
+          maxWidth: 700,
+          display: 'flex',
+          flexDirection: 'column',
+        },
       }}
     >
       <DialogTitle
@@ -1302,7 +1441,10 @@ export default function NewAppointmentDialog({
           </Typography>
         )}
       </DialogTitle>
-      <DialogContent sx={{ p: '20px 10px', flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}>
+      <DialogContent
+        ref={manualContentRef}
+        sx={{ p: '20px 10px', flex: 1, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+      >
         {step === 'dates' && renderDatesStep()}
         {step === 'patient' && renderPatientStep()}
         {step === 'summary' && renderSummaryStep()}

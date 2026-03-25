@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import axios from 'axios';
 import {
   Alert,
   Box,
@@ -12,6 +13,7 @@ import {
   DialogContent,
   DialogTitle,
   FormControlLabel,
+  Snackbar,
   Divider,
   FormControl,
   InputLabel,
@@ -103,7 +105,7 @@ const notificationOptions = [
 export default function NotificationsPage() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [settings, setSettings] = useState<NotificationSettingsData | null>(null);
@@ -191,11 +193,13 @@ export default function NotificationsPage() {
     };
   }, [preferences.alertas_citas_proximas, selectedOfficeId]);
 
-  const handleToggle = (key: string, checked: boolean) => {
-    setPreferences((current) => ({
-      ...current,
-      [key]: checked,
-    }));
+  const savePreferences = async (nextPreferences: Record<string, boolean>, successMessage?: string) => {
+    const data = await notificationService.updateSettings(nextPreferences);
+    setSettings(data);
+    setPreferences(data.preferences ?? nextPreferences);
+    if (successMessage) {
+      setMessage(successMessage);
+    }
   };
 
   const ensureAlertasCitasProximasEnabled = async () => {
@@ -215,26 +219,33 @@ export default function NotificationsPage() {
       setPreferences(nextPreferences);
     }
 
-    const data = await notificationService.updateSettings(nextPreferences);
-    setSettings(data);
-    setPreferences(data.preferences ?? nextPreferences);
+    await savePreferences(nextPreferences);
   };
 
-  const handleSave = async () => {
+  const handleToggle = async (key: string, checked: boolean) => {
+    const nextPreferences = {
+      ...preferences,
+      [key]: checked,
+    };
+
     try {
-      setSaving(true);
+      setSavingKey(key);
       setError(null);
       setMessage(null);
-
-      const data = await notificationService.updateSettings(preferences);
-      setSettings(data);
-      setPreferences(data.preferences ?? {});
-      setMessage('Configuracion de notificaciones actualizada correctamente.');
+      setPreferences(nextPreferences);
+      await savePreferences(
+        nextPreferences,
+        checked ? 'Notificación habilitada correctamente.' : 'Notificación deshabilitada correctamente.'
+      );
     } catch (requestError) {
       console.error('Error guardando notificaciones:', requestError);
+      setPreferences((current) => ({
+        ...current,
+        [key]: !checked,
+      }));
       setError('No se pudo guardar la configuracion de notificaciones.');
     } finally {
-      setSaving(false);
+      setSavingKey(null);
     }
   };
 
@@ -258,7 +269,8 @@ export default function NotificationsPage() {
       control={
         <Checkbox
           checked={Boolean(preferences[option.key])}
-          onChange={(event) => handleToggle(option.key, event.target.checked)}
+          disabled={savingKey === option.key}
+          onChange={(event) => void handleToggle(option.key, event.target.checked)}
         />
       }
       label={
@@ -371,7 +383,10 @@ export default function NotificationsPage() {
       setMessage('Telefono adicional habilitado para alertas cercanas.');
     } catch (requestError) {
       console.error('Error agregando telefono adicional:', requestError);
-      setError('No se pudo agregar el telefono adicional.');
+      const backendMessage = axios.isAxiosError(requestError)
+        ? (requestError.response?.data as { message?: string } | undefined)?.message
+        : undefined;
+      setError(backendMessage || 'No se pudo agregar el telefono adicional.');
     } finally {
       setAddingLegacyPhone(false);
     }
@@ -405,7 +420,6 @@ export default function NotificationsPage() {
       </Box>
 
       {error ? <Alert severity="error">{error}</Alert> : null}
-      {message ? <Alert severity="success">{message}</Alert> : null}
 
       <Card
         sx={{
@@ -612,7 +626,7 @@ export default function NotificationsPage() {
                     {(assistantData?.legacy_recipients ?? []).length > 0 ? (
                       <Box sx={{ pt: 1 }}>
                         <Typography sx={{ mb: 1, fontWeight: 700, color: 'text.primary' }}>
-                          Otros tel\u00E9fonos habilitados
+                          Otros teléfonos habilitados
                         </Typography>
                         <Stack spacing={1}>
                           {(assistantData?.legacy_recipients ?? []).map((recipient) => (
@@ -692,9 +706,6 @@ export default function NotificationsPage() {
             </Box>
           ) : null}
 
-          <Button sx={{ mt: 2.5 }} variant="contained" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? 'Guardando...' : 'Actualizar'}
-          </Button>
         </CardContent>
       </Card>
 
@@ -821,6 +832,22 @@ export default function NotificationsPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(message)}
+        autoHideDuration={3200}
+        onClose={() => setMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setMessage(null)}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
