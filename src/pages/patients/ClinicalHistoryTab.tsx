@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -9,6 +9,7 @@ import {
   FormControlLabel,
   Grid,
   MenuItem,
+  Skeleton,
   Snackbar,
   TextField,
   Typography,
@@ -27,8 +28,8 @@ import { patientService } from '../../api/patientService';
 import { clinicalHistoryCatalogs } from '../../utils/clinicalHistory';
 
 interface Props {
-  clinicalHistory: ClinicalHistory;
-  onHistorySaved: (history: ClinicalHistory) => void;
+  patientId: number;
+  onHistoryLoaded?: (history: ClinicalHistory) => void;
 }
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
@@ -110,26 +111,44 @@ function CheckField({
   );
 }
 
-export default function ClinicalHistoryTab({ clinicalHistory, onHistorySaved }: Props) {
+function ClinicalHistoryTabInner({ patientId, onHistoryLoaded }: Props) {
+  const [clinicalHistory, setClinicalHistory] = useState<ClinicalHistory | null>(null);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [form, setForm] = useState(clinicalHistory);
+  const [form, setForm] = useState<ClinicalHistory | null>(null);
+  const onHistoryLoadedRef = useRef(onHistoryLoaded);
+  useEffect(() => { onHistoryLoadedRef.current = onHistoryLoaded; }, [onHistoryLoaded]);
 
   useEffect(() => {
-    setForm(clinicalHistory);
-  }, [clinicalHistory]);
+    let cancelled = false;
+    setLoading(true);
+    patientService.getClinicalHistory(patientId).then((data) => {
+      if (cancelled) return;
+      setClinicalHistory(data);
+      setForm(data);
+      onHistoryLoadedRef.current?.(data);
+    }).catch((err) => {
+      console.error('Error cargando historia clínica:', err);
+    }).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [patientId]);
 
   const save = async () => {
+    if (!form) return;
     setSaving(true);
     setError(null);
     try {
-      const updated = await patientService.updateClinicalHistory(clinicalHistory.patient_id, form);
-      onHistorySaved(updated);
+      const updated = await patientService.updateClinicalHistory(patientId, form);
+      setClinicalHistory(updated);
       setForm(updated);
       setEditing(false);
       setMessage('Historia clínica actualizada');
+      onHistoryLoadedRef.current?.(updated);
     } catch (saveError) {
       console.error(saveError);
       setError('No se pudo guardar la historia clínica');
@@ -137,6 +156,16 @@ export default function ClinicalHistoryTab({ clinicalHistory, onHistorySaved }: 
       setSaving(false);
     }
   };
+
+  if (loading || !form) {
+    return (
+      <Box>
+        <Skeleton height={60} />
+        <Skeleton height={200} sx={{ mt: 2 }} />
+        <Skeleton height={200} sx={{ mt: 2 }} />
+      </Box>
+    );
+  }
 
   const hereditary = form.hereditary_background;
   const nonPath = form.personal_non_pathological;
@@ -149,7 +178,7 @@ export default function ClinicalHistoryTab({ clinicalHistory, onHistorySaved }: 
         <Typography variant="h6">Historia clínica</Typography>
         {editing ? (
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button variant="outlined" startIcon={<CancelIcon />} onClick={() => { setForm(clinicalHistory); setEditing(false); }} disabled={saving}>Cancelar</Button>
+            <Button variant="outlined" startIcon={<CancelIcon />} onClick={() => { setForm(clinicalHistory ?? form); setEditing(false); }} disabled={saving}>Cancelar</Button>
             <Button variant="contained" startIcon={<SaveIcon />} onClick={save} disabled={saving}>Guardar</Button>
           </Box>
         ) : (
@@ -229,3 +258,5 @@ export default function ClinicalHistoryTab({ clinicalHistory, onHistorySaved }: 
     </Box>
   );
 }
+
+export default memo(ClinicalHistoryTabInner);
