@@ -1,38 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   Tabs,
   Tab,
-  Grid,
   Avatar,
   Button,
-  TextField,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
   Skeleton,
   IconButton,
   Alert,
-  MenuItem,
   Snackbar,
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TablePagination,
-  TableRow,
-  Paper,
-  CircularProgress,
-  InputAdornment,
-  TableHead,
   useMediaQuery,
   useTheme,
 } from '@mui/material';
@@ -44,28 +22,20 @@ import {
   History as HistoryIcon,
   ArticleOutlined as LogbookIcon,
   LocalOfferOutlined as TagIcon,
-  PictureAsPdf as PdfIcon,
-  Image as ImageIcon,
-  InsertDriveFile as DocIcon,
-  Add as AddIcon,
   ContentCopy as ContentCopyIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
-  Close as CancelIcon,
-  Search as SearchIcon,
-  Visibility as VisibilityIcon,
-  Close as CloseIcon,
   CameraAlt as CameraAltIcon,
 } from '@mui/icons-material';
-import Lightbox from 'yet-another-react-lightbox';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import 'yet-another-react-lightbox/styles.css';
 import { patientService } from '../../api/patientService';
 import { useAuth } from '../../hooks/useAuth';
 import type { Patient, ClinicalHistory, SOAPNote, PatientFile, PatientSoapContext, MedicamentHistoryItem, OfficeLabelItem, PatientTagControlData, ActivityLogItem } from '../../types';
-import { formatDisplayDate, formatDisplayDateTimeLongEs } from '../../utils/date';
 import ClinicalHistoryTab from './ClinicalHistoryTab';
 import PatientDailyNoteTab from './PatientDailyNoteTab';
+import PatientProfileTab from './PatientProfileTab';
+import PatientFilesTab from './PatientFilesTab';
+import PatientColposcopyTab from './PatientColposcopyTab';
+import PatientTagsTab from './PatientTagsTab';
+import PatientActivityLogTab from './PatientActivityLogTab';
+import ConsultationHistoryTab from './ConsultationHistoryTab';
 
 interface TabPanelProps {
   children: React.ReactNode;
@@ -76,110 +46,6 @@ interface TabPanelProps {
 function TabPanel({ children, value, index }: TabPanelProps) {
   if (value !== index) return null;
   return <Box sx={{ py: 2 }}>{children}</Box>;
-}
-
-function InfoRow({ label, value }: { label: string; value?: string }) {
-  if (!value) return null;
-  return (
-    <Box sx={{ mb: 1.5 }}>
-      <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-        {label}
-      </Typography>
-      <Typography variant="body2">{value}</Typography>
-    </Box>
-  );
-}
-
-const fileIcons: Record<string, React.ReactNode> = {
-  'application/pdf': <PdfIcon sx={{ color: '#E53935' }} />,
-  'image/jpeg': <ImageIcon sx={{ color: '#43A047' }} />,
-  'image/png': <ImageIcon sx={{ color: '#43A047' }} />,
-};
-
-const tagStatusColorMap: Record<string, { bg: string; text: string }> = {
-  'btn-primary': { bg: '#1e88e5', text: '#ffffff' },
-  'btn-success': { bg: '#4caf50', text: '#ffffff' },
-  'btn-danger': { bg: '#e53935', text: '#ffffff' },
-  'btn-warning': { bg: '#ff9800', text: '#ffffff' },
-  'btn-info': { bg: '#29b6f6', text: '#ffffff' },
-  'btn-rose': { bg: '#e91e63', text: '#ffffff' },
-  'btn-default': { bg: '#9e9e9e', text: '#ffffff' },
-};
-
-function getTagStatusBadgeSx(colorClass?: string) {
-  const palette = tagStatusColorMap[colorClass ?? 'btn-default'] ?? tagStatusColorMap['btn-default'];
-
-  return {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    px: 1.5,
-    py: 0.7,
-    borderRadius: 1,
-    backgroundColor: palette.bg,
-    color: palette.text,
-    fontSize: '0.78rem',
-    fontWeight: 700,
-    lineHeight: 1.2,
-    textTransform: 'uppercase',
-    minHeight: 34,
-  };
-}
-
-function getTagHistoryBadgeSx(colorClass?: string) {
-  const palette = tagStatusColorMap[colorClass ?? 'btn-default'] ?? tagStatusColorMap['btn-default'];
-
-  return {
-    ...getTagStatusBadgeSx(colorClass),
-    backgroundColor: palette.bg,
-    color: '#cdcdcd',
-    opacity: 0.68,
-    px: 1.15,
-    py: 0,
-    minHeight: 24,
-    fontSize: '0.72rem',
-    lineHeight: 1,
-  };
-}
-
-function getTagHistoryActorLabel(roleId?: number) {
-  if (roleId === 1) return 'Observaciones del m\u00e9dico';
-  if (roleId === 2) return 'Observaciones del asistente';
-  return 'Observaciones';
-}
-
-function getPatientActivityMetaLines(log: ActivityLogItem): string[] {
-  const meta = log.meta ?? {};
-  const lines: string[] = [];
-
-  if (log.action === 'rescheduled') {
-    if (meta.previous_datestart) {
-      lines.push(`Anterior: ${String(meta.previous_datestart)}`);
-    }
-    if (meta.new_datestart) {
-      lines.push(`Nueva: ${String(meta.new_datestart)}`);
-    }
-  }
-
-  if ('previous_status' in meta || 'new_status' in meta) {
-    lines.push(`Estatus: ${String(meta.previous_status ?? '-')} -> ${String(meta.new_status ?? '-')}`);
-  }
-
-  if ('new_reason' in meta && String(meta.new_reason ?? '').trim() !== '') {
-    lines.push(`Motivo: ${String(meta.new_reason)}`);
-  } else if ('reason' in meta && String(meta.reason ?? '').trim() !== '') {
-    lines.push(`Motivo: ${String(meta.reason)}`);
-  }
-
-  return lines;
-}
-
-function isImageFile(type?: string) {
-  return type === 'image/jpeg' || type === 'image/png';
-}
-
-function isPdfFile(type?: string) {
-  return type === 'application/pdf';
 }
 
 export default function PatientDetailPage() {
@@ -201,36 +67,9 @@ export default function PatientDetailPage() {
   const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
   const [patientActivityLogs, setPatientActivityLogs] = useState<ActivityLogItem[]>([]);
   const [files, setFiles] = useState<PatientFile[]>([]);
-  const [colposcopyFiles, setColposcopyFiles] = useState<PatientFile[]>([]);
-  const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<number, string>>({});
-  const imagePreviewUrlsRef = useRef<Record<number, string>>({});
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const [lightboxSlides, setLightboxSlides] = useState<Array<{ src: string; alt: string }>>([]);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [pdfPreviewName, setPdfPreviewName] = useState('');
-  const [loadingColposcopy, setLoadingColposcopy] = useState(false);
-  const [cameraReady, setCameraReady] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
-  const [capturingColposcopy, setCapturingColposcopy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [editingGeneralData, setEditingGeneralData] = useState(false);
-  const [savingGeneralData, setSavingGeneralData] = useState(false);
-  const [generalDataMessage, setGeneralDataMessage] = useState<string | null>(null);
-  const [generalDataError, setGeneralDataError] = useState<string | null>(null);
-  const [generalForm, setGeneralForm] = useState({
-    name: '',
-    last_name: '',
-    phone: '',
-    birth_date: '',
-    gender: '',
-  });
-  const [historySearchQuery, setHistorySearchQuery] = useState('');
-  const [historyPage, setHistoryPage] = useState(0);
-  const [historyRowsPerPage, setHistoryRowsPerPage] = useState(5);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const [dailyNoteMessage, setDailyNoteMessage] = useState<string | null>(null);
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [dailyNoteEditRequest, setDailyNoteEditRequest] = useState<SOAPNote | null>(null);
@@ -280,7 +119,7 @@ export default function PatientDetailPage() {
       if (!id) return;
       const patientId = parseInt(id, 10);
       try {
-        const [patientData, historyData, notesData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData, patientActivityLogsData, filesData, colposcopyFilesData] = await Promise.all([
+        const [patientData, historyData, notesData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData, patientActivityLogsData, filesData] = await Promise.all([
           patientService.getPatient(patientId),
           patientService.getClinicalHistory(patientId),
           patientService.getSOAPNotes(patientId),
@@ -290,7 +129,6 @@ export default function PatientDetailPage() {
           patientService.getPatientTagControl(patientId),
           patientService.getPatientActivityLogs(patientId),
           patientService.getFiles(patientId),
-          patientService.getColposcopyFiles(patientId),
         ]);
         setPatient(patientData);
         setClinicalHistory(historyData);
@@ -305,11 +143,6 @@ export default function PatientDetailPage() {
             (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
           )
         );
-        setColposcopyFiles(
-          [...colposcopyFilesData].sort(
-            (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
-          )
-        );
       } catch (err) {
         console.error('Error cargando datos del paciente:', err);
       } finally {
@@ -319,63 +152,6 @@ export default function PatientDetailPage() {
     loadData();
   }, [id]);
 
-  useEffect(() => {
-    imagePreviewUrlsRef.current = imagePreviewUrls;
-  }, [imagePreviewUrls]);
-
-  useEffect(() => {
-    return () => {
-      stopCameraStream();
-      Object.values(imagePreviewUrlsRef.current).forEach((url) => {
-        window.URL.revokeObjectURL(url);
-      });
-      if (pdfPreviewUrl) {
-        window.URL.revokeObjectURL(pdfPreviewUrl);
-      }
-    };
-  }, [pdfPreviewUrl]);
-
-  useEffect(() => {
-    if (!patient?.id) return;
-
-    if (tab === 4) {
-      loadColposcopyFiles(patient.id);
-      startCameraStream();
-      return;
-    }
-
-    stopCameraStream();
-  }, [tab, patient?.id]);
-
-  useEffect(() => {
-    if (tab !== 4) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'b' || event.key === 'B') {
-        event.preventDefault();
-        void handleCaptureColposcopy();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [tab, patient, capturingColposcopy]);
-
-  useEffect(() => {
-    if (!patient) return;
-    setGeneralForm({
-      name: patient.name ?? '',
-      last_name: patient.last_name ?? '',
-      phone: patient.phone ?? '',
-      birth_date: patient.birth_date ?? '',
-      gender: patient.gender ?? '',
-    });
-  }, [patient]);
-
-  useEffect(() => {
-    setHistoryPage(0);
-  }, [historySearchQuery]);
-
   const formatPhoneNumber = (phone?: string) => {
     const digits = String(phone ?? '').replace(/\D/g, '');
     if (digits.length === 10) {
@@ -384,245 +160,14 @@ export default function PatientDetailPage() {
     return phone ?? '';
   };
 
-  const normalizeSearchText = (value: string) =>
-    value
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
-
-  const matchesFragmentedSearch = (value: string, query: string) => {
-    const normalizedValue = normalizeSearchText(value);
-    const normalizedQuery = normalizeSearchText(query);
-
-    if (!normalizedQuery) return true;
-
-    const valueWords = normalizedValue.split(/\s+/).filter(Boolean);
-    const queryParts = normalizedQuery.split(/\s+/).filter(Boolean);
-
-    return queryParts.every((part) =>
-      normalizedValue.includes(part) || valueWords.some((word) => word.includes(part))
-    );
-  };
-
-  const filteredSoapNotes = soapNotes.filter((note) =>
-    matchesFragmentedSearch(
-      [note.subjective, note.objective, note.assessment, note.plan, note.private_comments].join(' '),
-      historySearchQuery
-    )
-  );
-  const paginatedSoapNotes = filteredSoapNotes.slice(
-    historyPage * historyRowsPerPage,
-    historyPage * historyRowsPerPage + historyRowsPerPage
-  );
-
   const handleCopyPhone = async () => {
     if (!patient?.phone) return;
     try {
       await navigator.clipboard.writeText(patient.phone);
-      setGeneralDataMessage('Tel\u00e9fono copiado');
+      setCopyMessage('Tel\u00e9fono copiado');
     } catch (error) {
       console.error('Error copiando tel\u00e9fono:', error);
-      setGeneralDataError('No se pudo copiar el tel\u00e9fono');
-    }
-  };
-
-  const handleDownloadFile = async (file: PatientFile) => {
-    try {
-      await patientService.downloadFile(file.id, file.name);
-    } catch (error) {
-      console.error('Error descargando archivo:', error);
-      setGeneralDataError('No se pudo descargar el archivo');
-    }
-  };
-
-  const imageFiles = files.filter((file) => isImageFile(file.type));
-
-  const handlePreviewImage = async (selectedFile: PatientFile, collection?: PatientFile[]) => {
-    try {
-      const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
-      const imageCollection = (collection ?? imageFiles).filter((file) => isImageFile(file.type));
-
-      if (!nextPreviewUrls[selectedFile.id]) {
-        nextPreviewUrls[selectedFile.id] = window.URL.createObjectURL(
-          await patientService.getFileBlob(selectedFile.id)
-        );
-        setImagePreviewUrls(nextPreviewUrls);
-      }
-
-      const slides = imageCollection
-        .map((file) => {
-          const src = nextPreviewUrls[file.id] ?? imagePreviewUrlsRef.current[file.id];
-          if (!src) return null;
-          return {
-            src,
-            alt: file.name,
-          };
-        })
-        .filter((slide): slide is { src: string; alt: string } => Boolean(slide));
-
-      setLightboxSlides(slides);
-
-      const selectedIndex = imageCollection.findIndex((file) => file.id === selectedFile.id);
-      setLightboxIndex(selectedIndex >= 0 ? selectedIndex : 0);
-      setLightboxOpen(true);
-    } catch (error) {
-      console.error('Error visualizando imagen:', error);
-      setGeneralDataError('No se pudo abrir la imagen');
-    }
-  };
-
-  const handlePreviewPdf = async (file: PatientFile) => {
-    try {
-      if (pdfPreviewUrl) {
-        window.URL.revokeObjectURL(pdfPreviewUrl);
-      }
-
-      const blob = await patientService.getFileBlob(file.id);
-      const previewUrl = window.URL.createObjectURL(blob);
-      setPdfPreviewUrl(previewUrl);
-      setPdfPreviewName(file.name);
-    } catch (error) {
-      console.error('Error visualizando PDF:', error);
-      setGeneralDataError('No se pudo abrir el PDF');
-    }
-  };
-
-  const handleClosePdfPreview = () => {
-    if (pdfPreviewUrl) {
-      window.URL.revokeObjectURL(pdfPreviewUrl);
-    }
-    setPdfPreviewUrl(null);
-    setPdfPreviewName('');
-  };
-
-  const stopCameraStream = () => {
-    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
-    mediaStreamRef.current = null;
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
-    }
-    setCameraReady(false);
-  };
-
-  const loadColposcopyFiles = async (patientId: number) => {
-    setLoadingColposcopy(true);
-    try {
-      const nextFiles = await patientService.getColposcopyFiles(patientId);
-      setColposcopyFiles(
-        [...nextFiles].sort(
-          (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
-        )
-      );
-    } catch (error) {
-      console.error('Error cargando capturas de colposcopÃƒÂ­a:', error);
-      setGeneralDataError('No se pudieron cargar las capturas de colposcop\u00eda');
-    } finally {
-      setLoadingColposcopy(false);
-    }
-  };
-
-  const startCameraStream = async () => {
-    if (mediaStreamRef.current || !navigator.mediaDevices?.getUserMedia) {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        setCameraError('Este navegador no permite abrir la c\u00e1mara en este contexto');
-      }
-      return;
-    }
-
-    try {
-      setCameraError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-        },
-        audio: false,
-      });
-
-      mediaStreamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
-      setCameraReady(true);
-    } catch (error) {
-      console.error('Error abriendo cÃƒÂ¡mara:', error);
-      setCameraReady(false);
-      setCameraError('Necesitas habilitar permisos de c\u00e1mara para usar colposcop\u00eda');
-    }
-  };
-
-  const handleCaptureColposcopy = async () => {
-    if (!patient || capturingColposcopy || !videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const width = video.videoWidth;
-    const height = video.videoHeight;
-
-    if (!width || !height) {
-      setGeneralDataError('La c\u00e1mara todav\u00eda no est\u00e1 lista para capturar');
-      return;
-    }
-
-    setCapturingColposcopy(true);
-
-    try {
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
-
-      if (!context) {
-        throw new Error('No se pudo crear el contexto del canvas');
-      }
-
-      context.drawImage(video, 0, 0, width, height);
-      const image = canvas.toDataURL('image/jpeg', 0.92);
-      const createdFile = await patientService.captureColposcopy(patient.id, image);
-
-      setColposcopyFiles((current) => [createdFile, ...current.filter((file) => file.id !== createdFile.id)]);
-      setGeneralDataMessage('Captura realizada');
-    } catch (error) {
-      console.error('Error capturando imagen de colposcop\u00eda:', error);
-      setGeneralDataError('No se pudo guardar la captura');
-    } finally {
-      setCapturingColposcopy(false);
-    }
-  };
-
-  const handleCancelGeneralEdit = () => {
-    if (!patient) return;
-    setGeneralForm({
-      name: patient.name ?? '',
-      last_name: patient.last_name ?? '',
-      phone: patient.phone ?? '',
-      birth_date: patient.birth_date ?? '',
-      gender: patient.gender ?? '',
-    });
-    setEditingGeneralData(false);
-  };
-
-  const handleSaveGeneralData = async () => {
-    if (!patient) return;
-
-    setSavingGeneralData(true);
-    setGeneralDataError(null);
-    try {
-      const updatedPatient = await patientService.updatePatient(patient.id, {
-        name: generalForm.name.trim(),
-        last_name: generalForm.last_name.trim(),
-        phone: generalForm.phone.trim(),
-        birth: generalForm.birth_date || undefined,
-        gender: generalForm.gender || undefined,
-      });
-      setPatient(updatedPatient);
-      setEditingGeneralData(false);
-      setGeneralDataMessage('Datos generales actualizados');
-    } catch (error) {
-      console.error('Error actualizando paciente:', error);
-      setGeneralDataError('No se pudieron guardar los cambios');
-    } finally {
-      setSavingGeneralData(false);
+      setCopyError('No se pudo copiar el tel\u00e9fono');
     }
   };
 
@@ -668,7 +213,7 @@ export default function PatientDetailPage() {
           <Box>
             <Typography variant="h5">
               {patient.name} {patient.last_name}
-              {patient.age ? ` (${patient.age} a\u00f1os)` : ""}
+              {patient.age ? ` (${patient.age} años)` : ""}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', color: 'text.secondary' }}>
               <Typography variant="body2" color="inherit">
@@ -730,118 +275,13 @@ export default function PatientDetailPage() {
         <Tab value={7} icon={<HistoryIcon />} label={'Hist\u00f3rico'} iconPosition="start" />
         <Tab value={2} icon={<NoteIcon />} label="Nota Diaria" iconPosition="start" />
       </Tabs>
-      {/* Tab 0: Datos Generales */}
+
+      {/* Tab 0: Perfil */}
       <TabPanel value={tab} index={0}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="h6">Perfil</Typography>
-              {editingGeneralData ? (
-                <Box sx={{ display: 'flex', gap: 1 }}>
-                  <Button
-                    variant="outlined"
-                    startIcon={<CancelIcon />}
-                    onClick={handleCancelGeneralEdit}
-                    disabled={savingGeneralData}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={handleSaveGeneralData}
-                    disabled={savingGeneralData}
-                  >
-                    Guardar
-                  </Button>
-                </Box>
-              ) : (
-                <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditingGeneralData(true)}>
-                  Editar
-                </Button>
-              )}
-            </Box>
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                {editingGeneralData ? (
-                  <TextField
-                    label="Nombre(s)"
-                    fullWidth
-                    value={generalForm.name}
-                    onChange={(e) => setGeneralForm({ ...generalForm, name: e.target.value })}
-                  />
-                ) : (
-                  <InfoRow label="Nombre" value={patient.name} />
-                )}
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                {editingGeneralData ? (
-                  <TextField
-                    label="Apellidos"
-                    fullWidth
-                    value={generalForm.last_name}
-                    onChange={(e) => setGeneralForm({ ...generalForm, last_name: e.target.value })}
-                  />
-                ) : (
-                  <InfoRow label="Apellidos" value={patient.last_name} />
-                )}
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                {editingGeneralData ? (
-                  <TextField
-                    label={'Tel\u00e9fono'}
-                    fullWidth
-                    value={generalForm.phone}
-                    onChange={(e) => setGeneralForm({ ...generalForm, phone: e.target.value })}
-                  />
-                ) : (
-                  <InfoRow label={'Tel\u00e9fono'} value={formatPhoneNumber(patient.phone)} />
-                )}
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                {editingGeneralData ? (
-                  <TextField
-                    label="Fecha de nacimiento"
-                    type="date"
-                    fullWidth
-                    value={generalForm.birth_date}
-                    onChange={(e) => setGeneralForm({ ...generalForm, birth_date: e.target.value })}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                ) : (
-                  <InfoRow
-                    label="Fecha de Nacimiento"
-                    value={
-                      patient.birth_date
-                        ? `${formatDisplayDate(patient.birth_date)}${patient.age ? ` (${patient.age} a\u00f1os)` : ''}`
-                        : undefined
-                    }
-                  />
-                )}
-              </Grid>
-              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
-                {editingGeneralData ? (
-                  <TextField
-                    select
-                    label="G\u00e9nero"
-                    fullWidth
-                    value={generalForm.gender}
-                    onChange={(e) => setGeneralForm({ ...generalForm, gender: e.target.value })}
-                  >
-                    <MenuItem value="">Sin especificar</MenuItem>
-                    <MenuItem value="Masculino">Masculino</MenuItem>
-                    <MenuItem value="Femenino">Femenino</MenuItem>
-                  </TextField>
-                ) : (
-                  <InfoRow label="G\u00e9nero" value={patient.gender} />
-                )}
-              </Grid>
-            </Grid>
-          </CardContent>
-        </Card>
+        <PatientProfileTab patient={patient} onPatientUpdated={setPatient} />
       </TabPanel>
 
-      {/* Tab 1: Historia Clínica */}
+      {/* Tab 1: Historia Cl\u00ednica */}
       <TabPanel value={tab} index={1}>
         <ClinicalHistoryTab patientId={patient.id} onHistoryLoaded={setClinicalHistory} />
       </TabPanel>
@@ -869,513 +309,65 @@ export default function PatientDetailPage() {
           />
         )}
       </Box>
+
       {/* Tab 3: Archivos */}
       <TabPanel value={tab} index={3}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="h6">Archivos del Paciente</Typography>
-              <Button variant="outlined" startIcon={<AddIcon />} size="small">
-                Subir Archivo
-              </Button>
-            </Box>
-            {files.length === 0 ? (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                No hay archivos almacenados
-              </Typography>
-            ) : (
-              <List>
-                {files.map((file) => (
-                  <ListItem key={file.id} divider>
-                    <ListItemIcon>
-                      {fileIcons[file.type] ?? <DocIcon sx={{ color: '#1565C0' }} />}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={file.name}
-                      secondary={`${Math.round(Number(file.size) || 0)} KB | Subido: ${formatDisplayDateTimeLongEs(file.uploaded_at)}`}
-                    />
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {isImageFile(file.type) && (
-                        <Button
-                          size="small"
-                          startIcon={<VisibilityIcon />}
-                          onClick={() => handlePreviewImage(file)}
-                        >
-                          Ver
-                        </Button>
-                      )}
-                      {isPdfFile(file.type) && (
-                        <Button
-                          size="small"
-                          startIcon={<VisibilityIcon />}
-                          onClick={() => handlePreviewPdf(file)}
-                        >
-                          Ver
-                        </Button>
-                      )}
-                      <Button size="small" onClick={() => handleDownloadFile(file)}>
-                        Descargar
-                      </Button>
-                    </Box>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </CardContent>
-        </Card>
-        <Lightbox
-          open={lightboxOpen}
-          close={() => setLightboxOpen(false)}
-          slides={lightboxSlides}
-          index={lightboxIndex}
-          plugins={[Zoom]}
-        />
-        <Dialog
-          open={Boolean(pdfPreviewUrl)}
-          onClose={handleClosePdfPreview}
-          maxWidth="lg"
-          fullWidth
-        >
-          <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-            <Box component="span">{pdfPreviewName || 'Vista previa PDF'}</Box>
-            <IconButton onClick={handleClosePdfPreview} size="small">
-              <CloseIcon />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent sx={{ p: 0, height: '80vh' }}>
-            {pdfPreviewUrl && (
-              <Box
-                component="iframe"
-                src={pdfPreviewUrl}
-                title={pdfPreviewName || 'Vista previa PDF'}
-                sx={{ border: 0, width: '100%', height: '100%' }}
-              />
-            )}
-          </DialogContent>
-        </Dialog>
+        <PatientFilesTab files={files} onError={(msg) => setCopyError(msg)} />
       </TabPanel>
 
-      {/* Tab 4: Colposcopia */}
+      {/* Tab 4: Colposcop\u00eda */}
       <TabPanel value={tab} index={4}>
-        <Card>
-          <CardContent>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
-<Typography variant="h6">{"Captura de colposcop\u00eda"}</Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                startIcon={capturingColposcopy ? <CircularProgress size={18} color="inherit" /> : <CameraAltIcon />}
-                onClick={handleCaptureColposcopy}
-                disabled={!cameraReady || capturingColposcopy}
-              >
-                {capturingColposcopy ? 'Capturando...' : 'Capturar imagen'}
-              </Button>
-            </Box>
-
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-{"Puedes capturar con el bot\u00f3n, con click sobre la vista previa o presionando la tecla "}<strong>B</strong>.
-            </Typography>
-
-            {cameraError && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {cameraError}
-              </Alert>
-            )}
-
-            <Box
-              onClick={() => void handleCaptureColposcopy()}
-              sx={{
-                position: 'relative',
-                width: '100%',
-                maxWidth: 840,
-                mx: 'auto',
-                borderRadius: 2,
-                overflow: 'hidden',
-                bgcolor: '#111',
-                border: '1px solid',
-                borderColor: 'divider',
-                cursor: cameraReady && !capturingColposcopy ? 'pointer' : 'default',
-                aspectRatio: '16 / 9',
-                mb: 3,
-              }}
-            >
-              <Box
-                component="video"
-                ref={videoRef}
-                autoPlay
-                muted
-                playsInline
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                  display: cameraReady ? 'block' : 'none',
-                }}
-              />
-              {!cameraReady && (
-                <Box
-                  sx={{
-                    position: 'absolute',
-                    inset: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    px: 3,
-                    textAlign: 'center',
-                  }}
-                >
-<Typography variant="body1">{cameraError ?? "Abriendo c\u00e1mara..."}</Typography>
-                </Box>
-              )}
-              <canvas ref={canvasRef} style={{ display: 'none' }} />
-            </Box>
-
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, gap: 1, flexWrap: 'wrap' }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                Capturas del paciente
-              </Typography>
-              {loadingColposcopy && <CircularProgress size={20} />}
-            </Box>
-
-            {colposcopyFiles.length === 0 ? (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-{"No hay capturas colposc\u00f3picas almacenadas"}
-              </Typography>
-            ) : (
-              <List>
-                {colposcopyFiles.map((file) => (
-                  <ListItem key={file.id} divider>
-                    <ListItemIcon>
-                      <ImageIcon sx={{ color: '#43A047' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={file.name}
-                      secondary={`${Math.round(Number(file.size) || 0)} KB | Capturada: ${formatDisplayDateTimeLongEs(file.uploaded_at)}`}
-                    />
-                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      <Button size="small" startIcon={<VisibilityIcon />} onClick={() => handlePreviewImage(file, colposcopyFiles)}>
-                        Ver
-                      </Button>
-                      <Button size="small" onClick={() => handleDownloadFile(file)}>
-                        Descargar
-                      </Button>
-                    </Box>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </CardContent>
-        </Card>
+        <PatientColposcopyTab patientId={patient.id} />
       </TabPanel>
 
       {/* Tab 5: Etiquetas */}
       <TabPanel value={tab} index={5}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2.5 }}>
-              Etiquetas
-            </Typography>
-
-            {!patientTagControl ? (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                No se pudo cargar el histÃƒÂ³rico de etiquetas.
-              </Typography>
-            ) : patientTagControl.tags.length === 0 ? (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                Este paciente no tiene etiquetas registradas.
-              </Typography>
-            ) : (
-              <TableContainer component={Paper} variant="outlined">
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ width: 72 }}>#</TableCell>
-                      <TableCell>Informaci\u00f3n</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {patientTagControl.tags.map((tag, index) => {
-                      const tagHistory = [...(tag.history ?? [])].reverse();
-
-                      return (
-                        <TableRow key={tag.id} hover>
-                          <TableCell sx={{ color: 'text.secondary', verticalAlign: 'top' }}>
-                            {index + 1}
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                              <Typography
-                                variant="h6"
-                                sx={{
-                                  color: '#177b26',
-                                  fontWeight: 700,
-                                  fontSize: { xs: '1.1rem', md: '1.35rem' },
-                                }}
-                              >
-                                {tag.code}{' '}
-                                {tag.created_at_label ? (
-                                  <Box component="span" sx={{ fontWeight: 500, fontSize: '0.9em' }}>
-                                    {tag.created_at_label}
-                                  </Box>
-                                ) : null}
-                              </Typography>
-
-                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                <Typography variant="body1" sx={{ color: 'text.secondary' }}>
-                                  Estatus actual:
-                                </Typography>
-                                <Box component="span" sx={getTagStatusBadgeSx(tag.current_status.color_class)}>
-                                  {tag.current_status.code || 'Indefinido'}
-                                </Box>
-                              </Box>
-
-                              <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700 }}>
-                                HistÃƒÂ³ricos de cambio de estatus de las etiquetas:
-                              </Typography>
-
-                              {tagHistory.length === 0 ? (
-                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                  No hay cambios registrados para esta etiqueta.
-                                </Typography>
-                              ) : (
-                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
-                                  {tagHistory.map((entry, historyIndex) => (
-                                    <Box
-                                      key={`${tag.id}-${historyIndex}-${entry.date ?? 'sin-fecha'}-${entry.code ?? 'sin-codigo'}`}
-                                      sx={{
-                                        pt: historyIndex === 0 ? 0 : 1.25,
-                                        borderTop: historyIndex === 0 ? 'none' : '1px solid',
-                                        borderColor: 'divider',
-                                      }}
-                                    >
-                                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                          {entry.date || 'Sin fecha'}
-                                        </Typography>
-                                        <Box component="span" sx={getTagHistoryBadgeSx(entry.color)}>
-                                          {entry.code || 'Indefinido'}
-                                        </Box>
-                                      </Box>
-                                      <Typography variant="body2" sx={{ mt: 0.75 }}>
-                                        <Box component="span" sx={{ fontWeight: 600 }}>
-                                          {getTagHistoryActorLabel(entry.rol_id)}:
-                                        </Box>{' '}
-                                        {entry.note?.trim() || 'Sin observaciones'}
-                                      </Typography>
-                                    </Box>
-                                  ))}
-                                </Box>
-                              )}
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </CardContent>
-        </Card>
+        <PatientTagsTab patientTagControl={patientTagControl} />
       </TabPanel>
 
-      {/* Tab 6: HistÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³rico de Consultas */}
+      {/* Tab 6: Bit\u00e1cora */}
       <TabPanel value={tab} index={6}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Bit\u00e1cora
-            </Typography>
-
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={<HistoryIcon />}
-                onClick={() => {
-                  setTab(7);
-                  setSearchParams({ tab: 'historical' }, { replace: true });
-                }}
-              >
-                HistÃƒÂ³rico
-              </Button>
-            </Box>
-
-            {patientActivityLogs.length === 0 ? (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                No hay movimientos registrados para este paciente.
-              </Typography>
-            ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                {patientActivityLogs.map((log) => {
-                  const metaLines = getPatientActivityMetaLines(log);
-
-                  return (
-                    <Box
-                      key={log.id}
-                      sx={{
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 2,
-                        px: 2,
-                        py: 1.5,
-                        backgroundColor: '#ffffff',
-                      }}
-                    >
-                      <Typography sx={{ fontWeight: 700, color: '#3f4a56' }}>
-                        {log.message || log.action}
-                      </Typography>
-                      <Typography sx={{ fontSize: '0.9rem', color: '#6b7785', mt: 0.25 }}>
-                        {log.user_name || 'Sistema'}
-                        {log.created_at ? ` (${formatDisplayDateTimeLongEs(log.created_at)})` : ''}
-                      </Typography>
-
-                      {metaLines.length > 0 ? (
-                        <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
-                          {metaLines.map((line, index) => (
-                            <Typography key={`${log.id}-${index}`} sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
-                              {line}
-                            </Typography>
-                          ))}
-                        </Box>
-                      ) : null}
-                    </Box>
-                  );
-                })}
-              </Box>
-            )}
-          </CardContent>
-        </Card>
+        <PatientActivityLogTab
+          patientActivityLogs={patientActivityLogs}
+          onNavigateToHistorical={() => {
+            setTab(7);
+            setSearchParams({ tab: 'historical' }, { replace: true });
+          }}
+        />
       </TabPanel>
 
+      {/* Tab 7: Hist\u00f3rico */}
       <TabPanel value={tab} index={7}>
-        <Card>
-          <CardContent>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              {"Hist\u00f3rico de Consultas"}
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-              <Button
-                variant="outlined"
-                startIcon={<LogbookIcon />}
-                onClick={() => {
-                  setTab(6);
-                  setSearchParams({ tab: 'bitacora' }, { replace: true });
-                }}
-              >
-                Bit\u00e1cora
-              </Button>
-            </Box>
-            <TextField
-              fullWidth
-              placeholder={"Buscar en motivo, an\u00e1lisis, plan o notas..."}
-              value={historySearchQuery}
-              onChange={(e) => setHistorySearchQuery(e.target.value)}
-              size="small"
-              sx={{ mb: 2 }}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon color="action" />
-                    </InputAdornment>
-                  ),
-                },
-              }}
-            />
-            {soapNotes.length === 0 ? (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                No hay consultas registradas
-              </Typography>
-            ) : (
-              <>
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Fecha</TableCell>
-                        <TableCell>Motivo</TableCell>
-                        <TableCell>Resumen</TableCell>
-                        <TableCell align="right">{"Acci\u00f3n"}</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {paginatedSoapNotes.map((note) => (
-                        <TableRow key={note.consultation_id ?? note.id} hover>
-                          <TableCell sx={{ whiteSpace: 'nowrap', fontWeight: 500 }}>
-                            {formatDisplayDate(note.created_at)}
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 280 }}>
-                            <Typography sx={{ fontSize: '0.92rem', color: '#333' }}>
-                              {note.subjective || '-'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell sx={{ maxWidth: 520 }}>
-                            <Typography sx={{ fontSize: '0.9rem', color: '#59636e' }}>
-                              {[note.objective, note.assessment, note.plan, note.private_comments].filter(Boolean).join(' | ') || '-'}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              onClick={() => handleDailyNoteEditRequest(note)}
-                              disabled={!canEditConsultationHistory}
-                            >
-                              Editar
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {paginatedSoapNotes.length === 0 && (
-                        <TableRow>
-                          <TableCell colSpan={4} sx={{ textAlign: 'center', py: 4 }}>
-                            <Typography color="text.secondary">
-                              No se encontraron consultas
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-                <TablePagination
-                  component="div"
-                  count={filteredSoapNotes.length}
-                  page={historyPage}
-                  onPageChange={(_event, newPage) => setHistoryPage(newPage)}
-                  rowsPerPage={historyRowsPerPage}
-                  onRowsPerPageChange={(event) => {
-                    setHistoryRowsPerPage(parseInt(event.target.value, 10));
-                    setHistoryPage(0);
-                  }}
-                  rowsPerPageOptions={[5, 10, 25]}
-                  labelRowsPerPage="Filas"
-                />
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <ConsultationHistoryTab
+          soapNotes={soapNotes}
+          canEditConsultationHistory={canEditConsultationHistory}
+          onNavigateToBitacora={() => {
+            setTab(6);
+            setSearchParams({ tab: 'bitacora' }, { replace: true });
+          }}
+          onEditNote={handleDailyNoteEditRequest}
+        />
       </TabPanel>
+
       <Snackbar
-        open={Boolean(generalDataMessage)}
+        open={Boolean(copyMessage)}
         autoHideDuration={3000}
-        onClose={() => setGeneralDataMessage(null)}
+        onClose={() => setCopyMessage(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert onClose={() => setGeneralDataMessage(null)} severity="success" sx={{ width: '100%' }}>
-          {generalDataMessage}
+        <Alert onClose={() => setCopyMessage(null)} severity="success" sx={{ width: '100%' }}>
+          {copyMessage}
         </Alert>
       </Snackbar>
 
       <Snackbar
-        open={Boolean(generalDataError)}
+        open={Boolean(copyError)}
         autoHideDuration={3000}
-        onClose={() => setGeneralDataError(null)}
+        onClose={() => setCopyError(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
-        <Alert onClose={() => setGeneralDataError(null)} severity="error" sx={{ width: '100%' }}>
-          {generalDataError}
+        <Alert onClose={() => setCopyError(null)} severity="error" sx={{ width: '100%' }}>
+          {copyError}
         </Alert>
       </Snackbar>
 
