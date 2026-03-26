@@ -6,10 +6,11 @@ import type { UserRole } from '../types';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   roles?: UserRole[];
+  permissions?: string[];
 }
 
-export default function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, hasRole } = useAuth();
+export default function ProtectedRoute({ children, roles, permissions }: ProtectedRouteProps) {
+  const { isAuthenticated, isLoading, hasRole, can } = useAuth();
 
   if (isLoading) {
     return (
@@ -31,6 +32,10 @@ export default function ProtectedRoute({ children, roles }: ProtectedRouteProps)
   }
 
   if (roles && !hasRole(roles)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (permissions && permissions.some((permission) => !can(permission))) {
     return <Navigate to="/dashboard" replace />;
   }
 

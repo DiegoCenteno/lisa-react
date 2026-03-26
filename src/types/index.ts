@@ -11,6 +11,8 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
+  assistant_access_level?: 'full' | 'limited';
+  permissions?: string[];
   avatar?: string;
   specialty?: string;
   phone?: string;
@@ -597,6 +599,25 @@ export interface PublicBookingCandidateResponse {
   has_candidates: boolean;
   candidates: PublicBookingCandidate[];
   limit_reached: boolean;
+}
+
+export interface PublicAssistantLinkResponse {
+  code: string;
+  name: string;
+  phone: string;
+  can_register: boolean;
+  message: string | null;
+  office: {
+    id: number;
+    title: string;
+    doctor_name: string;
+  };
+}
+
+export interface PublicAssistantRegisterResponse {
+  message: string;
+  phone: string;
+  office_title: string;
 }
 
 export interface NotificationHistoryItem {

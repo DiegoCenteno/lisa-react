@@ -9,6 +9,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   hasRole: (roles: UserRole[]) => boolean;
+  can: (permission: string) => boolean;
   updateUser: (updater: Partial<User> | ((current: User | null) => User | null)) => void;
 }
 

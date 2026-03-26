@@ -17,6 +17,8 @@ interface PassportLoginResponse {
       phone: string;
       rol_id: number | null;
       specialty_id: number | null;
+      assistant_access_level?: 'full' | 'limited' | null;
+      permissions?: string[];
     };
     tokens: {
       auth: {
@@ -44,6 +46,8 @@ export const authService = {
       email: apiUser.email,
       role: (apiUser.rol_id !== null && ROL_ID_MAP[apiUser.rol_id]) ? ROL_ID_MAP[apiUser.rol_id] : 'paciente',
       phone: apiUser.phone,
+      assistant_access_level: apiUser.assistant_access_level ?? undefined,
+      permissions: apiUser.permissions ?? [],
     };
 
     return {

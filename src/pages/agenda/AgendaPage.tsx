@@ -40,6 +40,7 @@ import { appointmentService } from '../../api/appointmentService';
 import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultationSummary } from '../../types';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
+import { useAuth } from '../../hooks/useAuth';
 
 const FIRST_TIME_BG = 'rgb(195 236 255)';
 const FIRST_TIME_HOVER_BG = 'rgb(176 229 255)';
@@ -240,6 +241,7 @@ function renderEventContent(arg: EventContentArg) {
 export default function AgendaPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { can } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -274,6 +276,7 @@ export default function AgendaPage() {
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
+  const canViewPatientSummary = can('agenda.patient_summary');
   const doctorName = useMemo(() => {
     try {
       const rawUser = localStorage.getItem('user');
@@ -649,6 +652,8 @@ export default function AgendaPage() {
   }, [handleCloseSelectedEvent, navigate, selectedEvent]);
 
   const handleOpenSummary = useCallback(async () => {
+    if (!canViewPatientSummary) return;
+
     const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
     if (!patientId) return;
 
@@ -666,7 +671,7 @@ export default function AgendaPage() {
     } finally {
       setSummaryLoading(false);
     }
-  }, [handleCloseSelectedEvent, selectedEvent]);
+  }, [canViewPatientSummary, handleCloseSelectedEvent, selectedEvent]);
 
   const handleOpenPatientHistoryFromSummary = useCallback(() => {
     const patientId = Number(summaryData?.patient.id ?? selectedEvent?.event.extendedProps.patientId ?? 0);
@@ -1479,17 +1484,19 @@ export default function AgendaPage() {
                   >
                     SALIR
                   </Button>
-                  <Button
-                    variant="contained"
-                    onClick={handleOpenSummary}
-                    sx={{
-                      backgroundColor: '#5bc0eb',
-                      '&:hover': { backgroundColor: '#43b3e0' },
-                      minWidth: 110,
-                    }}
-                  >
-                    RESUMEN
-                  </Button>
+                  {canViewPatientSummary ? (
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenSummary}
+                      sx={{
+                        backgroundColor: '#5bc0eb',
+                        '&:hover': { backgroundColor: '#43b3e0' },
+                        minWidth: 110,
+                      }}
+                    >
+                      RESUMEN
+                    </Button>
+                  ) : null}
                 </Box>
               )}
             </Box>
@@ -1498,7 +1505,7 @@ export default function AgendaPage() {
       </Dialog>
 
       <Dialog
-        open={summaryOpen}
+        open={canViewPatientSummary && summaryOpen}
         onClose={() => setSummaryOpen(false)}
         maxWidth="sm"
         fullWidth

@@ -37,6 +37,7 @@ interface MenuItem {
   icon: React.ReactNode;
   path: string;
   roles: UserRole[];
+  permission?: string;
 }
 
 const menuItems: MenuItem[] = [
@@ -44,63 +45,53 @@ const menuItems: MenuItem[] = [
     text: 'Dashboard',
     icon: <DashboardIcon />,
     path: '/dashboard',
-    roles: [
-      UserRole.MEDICO,
-      UserRole.ASISTENTE,
-    ],
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
   },
   {
     text: 'Agenda Médica',
     icon: <CalendarIcon />,
     path: '/agenda',
-    roles: [
-      UserRole.MEDICO,
-      UserRole.ASISTENTE,
-    ],
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
   },
   {
     text: 'Pacientes',
     icon: <PeopleIcon />,
     path: '/pacientes',
-    roles: [
-      UserRole.MEDICO,
-    ],
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    permission: 'patients.view',
   },
   {
     text: 'Consultas',
     icon: <ConsultationIcon />,
     path: '/consultas',
-    roles: [
-      UserRole.MEDICO,
-    ],
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    permission: 'consultations.view',
   },
   {
     text: 'WhatsApp',
     icon: <WhatsAppIcon />,
     path: '/notificaciones',
-    roles: [
-      UserRole.MEDICO,
-    ],
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    permission: 'notifications.manage',
   },
   {
     text: 'Configuración',
     icon: <SettingsIcon />,
     path: '/configuracion',
-    roles: [
-      UserRole.MEDICO,
-    ],
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    permission: 'settings.profile.self',
   },
 ];
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { hasRole } = useAuth();
+  const { hasRole, can } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const mockWhatsappUrl = 'http://lisa.test/smsmasivos/mock-whatsapp';
 
-  const filteredItems = menuItems.filter((item) => hasRole(item.roles));
+  const filteredItems = menuItems.filter((item) => hasRole(item.roles) && (!item.permission || can(item.permission)));
 
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -140,14 +131,10 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                 }}
                 sx={{
                   borderRadius: 1,
-                  backgroundColor: isActive
-                    ? 'primary.main'
-                    : 'transparent',
+                  backgroundColor: isActive ? 'primary.main' : 'transparent',
                   color: isActive ? 'white' : 'text.primary',
                   '&:hover': {
-                    backgroundColor: isActive
-                      ? 'primary.dark'
-                      : 'action.hover',
+                    backgroundColor: isActive ? 'primary.dark' : 'action.hover',
                   },
                 }}
               >

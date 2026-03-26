@@ -10,6 +10,7 @@ import ConsultationsPage from '../pages/consultations/ConsultationsPage';
 import NotificationsPage from '../pages/notifications/NotificationsPage';
 import SettingsPage from '../pages/settings/SettingsPage';
 import PublicAppointmentPage from '../pages/public/PublicAppointmentPage';
+import PublicAssistantRegisterPage from '../pages/public/PublicAssistantRegisterPage';
 import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
 import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 
@@ -19,6 +20,8 @@ export default function AppRouter() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/asistente" element={<PublicAssistantRegisterPage />} />
+        <Route path="/asistente/:code" element={<PublicAssistantRegisterPage />} />
         <Route path="/cita/:token" element={<PublicAppointmentPage />} />
         <Route path="/nuevacita/:code" element={<PublicAppointmentPage />} />
         <Route path="/historia/:token" element={<PublicHistoryFormPage />} />
@@ -34,11 +37,46 @@ export default function AppRouter() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/agenda" element={<AgendaPage />} />
-          <Route path="/pacientes" element={<PatientsPage />} />
-          <Route path="/pacientes/:id" element={<PatientDetailPage />} />
-          <Route path="/consultas" element={<ConsultationsPage />} />
-          <Route path="/notificaciones" element={<NotificationsPage />} />
-          <Route path="/configuracion" element={<SettingsPage />} />
+          <Route
+            path="/pacientes"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <PatientsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/pacientes/:id"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.detail.view']}>
+                <PatientDetailPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/consultas"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['consultations.view']}>
+                <ConsultationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notificaciones"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['notifications.manage']}>
+                <NotificationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/configuracion"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['settings.profile.self']}>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
         </Route>
 
         {/* Default redirect */}

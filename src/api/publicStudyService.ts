@@ -2,6 +2,8 @@ import axios from 'axios';
 import type {
   AvailableSlot,
   PublicAppLinkResponse,
+  PublicAssistantLinkResponse,
+  PublicAssistantRegisterResponse,
   PublicBookingCandidateResponse,
   PublicRescheduleDateOption,
   PublicRescheduleLinkResponse,
@@ -62,6 +64,36 @@ const publicStudyService = {
     );
 
     return response.data.data;
+  },
+
+  async resolvePublicAssistantCode(code: string): Promise<PublicAssistantLinkResponse> {
+    const response = await publicApiClient.get<{ status: string; data: PublicAssistantLinkResponse }>(
+      `/v2/public/assistant-links/${code}`
+    );
+
+    return response.data.data;
+  },
+
+  async registerAssistant(
+    code: string,
+    payload: {
+      name: string;
+      last_name: string;
+      email: string;
+      phone: string;
+      password: string;
+      password_confirmation: string;
+    }
+  ): Promise<PublicAssistantRegisterResponse> {
+    const response = await publicApiClient.post<{ status: string; message: string; data: PublicAssistantRegisterResponse }>(
+      `/v2/public/assistant-links/${code}/register`,
+      payload
+    );
+
+    return {
+      ...response.data.data,
+      message: response.data.message ?? response.data.data.message,
+    };
   },
 
   async getPublicRescheduleDates(code: string): Promise<PublicRescheduleDateOption[]> {

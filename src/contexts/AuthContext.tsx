@@ -51,6 +51,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const can = useCallback(
+    (permission: string) => {
+      if (!user) return false;
+      if (user.role === 'medico') return true;
+      const permissions = user.permissions ?? [];
+      return permissions.includes('*') || permissions.includes(permission);
+    },
+    [user]
+  );
+
   const updateUser = useCallback((updater: Partial<User> | ((current: User | null) => User | null)) => {
     setUser((current) => {
       const nextUser = typeof updater === 'function'
@@ -75,8 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     login,
     logout,
     hasRole,
+    can,
     updateUser,
-  }), [user, token, login, logout, hasRole, updateUser]);
+  }), [user, token, login, logout, hasRole, can, updateUser]);
 
   return (
     <AuthContext.Provider value={value}>

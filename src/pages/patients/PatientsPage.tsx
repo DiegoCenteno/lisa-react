@@ -10,12 +10,17 @@ import {
   Chip,
   Checkbox,
   Divider,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   InputAdornment,
   List,
   ListItem,
   ListItemAvatar,
   ListItemText,
+  MenuItem,
   Skeleton,
   Table,
   TableBody,
@@ -38,6 +43,7 @@ import {
 import { patientService } from '../../api/patientService';
 import type { Patient, PatientTagControlData } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
+import { useAuth } from '../../hooks/useAuth';
 
 function formatPhone(phone?: string) {
   if (!phone) return '-';
@@ -106,6 +112,7 @@ function getStatusButtonSx(colorClass?: string, active = false) {
 
 export default function PatientsPage() {
   const navigate = useNavigate();
+  const { can } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -133,7 +140,18 @@ export default function PatientsPage() {
   const [newTemplateTitle, setNewTemplateTitle] = useState('');
   const [newTemplateDescription, setNewTemplateDescription] = useState('');
   const [creatingTemplate, setCreatingTemplate] = useState(false);
+  const [quickEditOpen, setQuickEditOpen] = useState(false);
+  const [quickEditPatientId, setQuickEditPatientId] = useState<number | null>(null);
+  const [quickEditName, setQuickEditName] = useState('');
+  const [quickEditLastName, setQuickEditLastName] = useState('');
+  const [quickEditPhone, setQuickEditPhone] = useState('');
+  const [quickEditBirthDate, setQuickEditBirthDate] = useState('');
+  const [quickEditGender, setQuickEditGender] = useState<'M' | 'F' | ''>('');
+  const [quickEditSaving, setQuickEditSaving] = useState(false);
+  const [quickEditError, setQuickEditError] = useState<string | null>(null);
   const attachFileInputRef = useRef<HTMLInputElement | null>(null);
+  const canViewPatientDetail = can('patients.detail.view');
+  const canQuickEditPatient = can('patients.quick_edit');
 
   useEffect(() => {
     const loadPatients = async () => {
@@ -259,6 +277,80 @@ export default function PatientsPage() {
 
       return Array.from(new Set([...current, tagId]));
     });
+  };
+
+  const handleOpenQuickEdit = (patient: Patient) => {
+    if (!canQuickEditPatient) {
+      return;
+    }
+
+    setQuickEditPatientId(patient.id);
+    setQuickEditName(patient.name ?? '');
+    setQuickEditLastName(patient.last_name ?? '');
+    setQuickEditPhone(patient.phone ?? '');
+    setQuickEditBirthDate(patient.birth_date ?? '');
+    setQuickEditGender(
+      patient.gender === 'M' || patient.gender === 'F' ? patient.gender : ''
+    );
+    setQuickEditError(null);
+    setQuickEditOpen(true);
+  };
+
+  const handleCloseQuickEdit = () => {
+    if (quickEditSaving) {
+      return;
+    }
+
+    setQuickEditOpen(false);
+    setQuickEditPatientId(null);
+    setQuickEditError(null);
+  };
+
+  const handleSelectPatient = (patient: Patient) => {
+    if (canViewPatientDetail) {
+      navigate(`/pacientes/${patient.id}`);
+      return;
+    }
+
+    handleOpenQuickEdit(patient);
+  };
+
+  const handleSaveQuickEdit = async () => {
+    if (!quickEditPatientId) {
+      return;
+    }
+
+    const normalizedName = quickEditName.trim();
+    const normalizedLastName = quickEditLastName.trim();
+    const normalizedPhone = quickEditPhone.trim();
+
+    if (!normalizedName || !normalizedLastName) {
+      setQuickEditError('Ingresa nombre y apellidos del paciente.');
+      return;
+    }
+
+    setQuickEditSaving(true);
+    setQuickEditError(null);
+
+    try {
+      const updatedPatient = await patientService.updatePatient(quickEditPatientId, {
+        name: normalizedName,
+        last_name: normalizedLastName,
+        phone: normalizedPhone || undefined,
+        birth: quickEditBirthDate || undefined,
+        gender: quickEditGender || undefined,
+      });
+
+      setPatients((current) =>
+        current.map((patient) => (patient.id === updatedPatient.id ? updatedPatient : patient))
+      );
+      handleCloseQuickEdit();
+    } catch (error) {
+      console.error('Error actualizando paciente:', error);
+      setQuickEditError('No se pudieron guardar los cambios del paciente.');
+    } finally {
+      setQuickEditSaving(false);
+    }
   };
 
   const handleCreateOfficeLabel = async () => {
@@ -975,7 +1067,7 @@ export default function PatientsPage() {
                           <Button
                             size="small"
                             variant="contained"
-                            onClick={() => navigate(`/pacientes/${patient.id}`)}
+                            onClick={() => handleSelectPatient(patient)}
                           >
                             Seleccionar
                           </Button>
@@ -1067,7 +1159,7 @@ export default function PatientsPage() {
                         <Button
                           size="small"
                           variant="contained"
-                          onClick={() => navigate(`/pacientes/${patient.id}`)}
+                          onClick={() => handleSelectPatient(patient)}
                         >
                           Seleccionar
                         </Button>
@@ -1102,6 +1194,81 @@ export default function PatientsPage() {
           </>
         )}
       </Card>
+
+      <Dialog
+        open={quickEditOpen}
+        onClose={handleCloseQuickEdit}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar datos del paciente</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'grid', gap: 2, mt: 0.5 }}>
+            {quickEditError && <Alert severity="error">{quickEditError}</Alert>}
+
+            <TextField
+              label="Nombre"
+              value={quickEditName}
+              onChange={(event) => setQuickEditName(event.target.value)}
+              fullWidth
+              disabled={quickEditSaving}
+            />
+
+            <TextField
+              label="Apellidos"
+              value={quickEditLastName}
+              onChange={(event) => setQuickEditLastName(event.target.value)}
+              fullWidth
+              disabled={quickEditSaving}
+            />
+
+            <TextField
+              label="Teléfono"
+              value={quickEditPhone}
+              onChange={(event) => setQuickEditPhone(event.target.value)}
+              fullWidth
+              disabled={quickEditSaving}
+            />
+
+            <TextField
+              label="Fecha de nacimiento"
+              type="date"
+              value={quickEditBirthDate}
+              onChange={(event) => setQuickEditBirthDate(event.target.value)}
+              fullWidth
+              disabled={quickEditSaving}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+
+            <TextField
+              select
+              label="Género"
+              value={quickEditGender}
+              onChange={(event) =>
+                setQuickEditGender(event.target.value as 'M' | 'F' | '')
+              }
+              fullWidth
+              disabled={quickEditSaving}
+            >
+              <MenuItem value="">Sin especificar</MenuItem>
+              <MenuItem value="F">Femenino</MenuItem>
+              <MenuItem value="M">Masculino</MenuItem>
+            </TextField>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseQuickEdit} disabled={quickEditSaving}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleSaveQuickEdit()}
+            disabled={quickEditSaving}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

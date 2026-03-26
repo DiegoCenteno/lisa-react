@@ -1,4 +1,4 @@
-import { type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -285,7 +285,7 @@ function parseTimeToMinutes(value: string): number | null {
   return hours * 60 + minutes;
 }
 
-function TimeSelect({
+const TimeSelect = memo(function TimeSelect({
   label,
   value,
   onChange,
@@ -315,7 +315,117 @@ function TimeSelect({
       ))}
     </TextField>
   );
-}
+});
+
+const AgendaDayRowEditor = memo(function AgendaDayRowEditor({
+  row,
+  index,
+  saving,
+  onUpdate,
+}: {
+  row: AgendaDayRow;
+  index: number;
+  saving: boolean;
+  onUpdate: (index: number, updater: (row: AgendaDayRow) => AgendaDayRow) => void;
+}) {
+  return (
+    <Box sx={{ border: '1px solid #d8e8ef', borderRadius: 2, px: 2, py: 2 }}>
+      <Grid container spacing={2} alignItems="center">
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Checkbox
+              checked={row.enabled}
+              disabled={saving}
+              onChange={(event) => onUpdate(index, (current) => ({ ...current, enabled: event.target.checked }))}
+            />
+            <Typography
+              sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
+              onClick={() => !saving && onUpdate(index, (current) => ({ ...current, enabled: !current.enabled }))}
+            >
+              {row.label}
+            </Typography>
+          </Box>
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <TimeSelect
+            label="De"
+            value={row.start}
+            disabled={!row.enabled || saving}
+            onChange={(value) => onUpdate(index, (current) => ({ ...current, start: value }))}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <TimeSelect
+            label="Hasta"
+            value={row.end}
+            disabled={!row.enabled || saving}
+            onChange={(value) => onUpdate(index, (current) => ({ ...current, end: value }))}
+          />
+        </Grid>
+      </Grid>
+      <Grid container spacing={2} alignItems="center" sx={{ mt: 0.5 }}>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <Checkbox
+              checked={row.hasBreak}
+              disabled={!row.enabled || saving}
+              onChange={(event) =>
+                onUpdate(index, (current) => ({
+                  ...current,
+                  hasBreak: event.target.checked,
+                  breakstart: event.target.checked ? current.breakstart || '14:00' : '',
+                  breakend: event.target.checked ? current.breakend || '15:00' : '',
+                }))
+              }
+              sx={{ ml: -1 }}
+            />
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ cursor: row.enabled && !saving ? 'pointer' : 'default', userSelect: 'none' }}
+              onClick={() => {
+                if (!row.enabled || saving) return;
+                onUpdate(index, (current) => ({
+                  ...current,
+                  hasBreak: !current.hasBreak,
+                  breakstart: !current.hasBreak ? current.breakstart || '14:00' : '',
+                  breakend: !current.hasBreak ? current.breakend || '15:00' : '',
+                }));
+              }}
+            >
+              Incluir horarios de descanso
+            </Typography>
+          </Box>
+        </Grid>
+        {row.hasBreak ? (
+          <>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TimeSelect
+                label="Inicio"
+                value={row.breakstart || '14:00'}
+                disabled={!row.enabled || !row.hasBreak || saving}
+                onChange={(value) => onUpdate(index, (current) => ({ ...current, breakstart: value }))}
+              />
+            </Grid>
+            <Grid size={{ xs: 12, md: 4 }}>
+              <TimeSelect
+                label="Fin"
+                value={row.breakend || '15:00'}
+                disabled={!row.enabled || !row.hasBreak || saving}
+                onChange={(value) => onUpdate(index, (current) => ({ ...current, breakend: value }))}
+              />
+            </Grid>
+          </>
+        ) : (
+          <>
+            <Grid size={{ xs: 12, md: 4 }} />
+            <Grid size={{ xs: 12, md: 4 }} />
+          </>
+        )}
+      </Grid>
+    </Box>
+  );
+});
 
 function CardShell({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -378,12 +488,14 @@ function ProfilePanel({
   profile,
   saving,
   passwordSaving,
+  showSpecialtyFields,
   onSaveProfile,
   onSavePassword,
 }: {
   profile: SettingsProfileData | null;
   saving: boolean;
   passwordSaving: boolean;
+  showSpecialtyFields: boolean;
   onSaveProfile: (payload: { specialty_id: number | null; name: string; last_name: string; phone: string; cedula_profesional: string; cedula_especialidad: string }) => Promise<void>;
   onSavePassword: (payload: { current_password: string; new_password: string; new_password_confirmation: string }) => Promise<void>;
 }) {
@@ -410,12 +522,14 @@ function ProfilePanel({
     <Grid container spacing={3}>
       <Grid size={{ xs: 12, md: 7 }}>
         <CardShell title="Datos personales">
-          <TextField select label="Especialidad" value={specialtyId} fullWidth variant="standard" onChange={(event) => setSpecialtyId(event.target.value === '' ? '' : Number(event.target.value))} sx={{ mb: 3.5 }}>
-            <MenuItem value="">Selecciona una especialidad</MenuItem>
-            {(profile?.specialties ?? []).map((specialty) => (
-              <MenuItem key={specialty.id} value={specialty.id}>{specialty.title}</MenuItem>
-            ))}
-          </TextField>
+          {showSpecialtyFields ? (
+            <TextField select label="Especialidad" value={specialtyId} fullWidth variant="standard" onChange={(event) => setSpecialtyId(event.target.value === '' ? '' : Number(event.target.value))} sx={{ mb: 3.5 }}>
+              <MenuItem value="">Selecciona una especialidad</MenuItem>
+              {(profile?.specialties ?? []).map((specialty) => (
+                <MenuItem key={specialty.id} value={specialty.id}>{specialty.title}</MenuItem>
+              ))}
+            </TextField>
+          ) : null}
           <TextField label="Nombre(s)" value={firstName} fullWidth variant="standard" onChange={(event) => setFirstName(event.target.value)} sx={{ mb: 3.5 }} />
           <TextField label="Apellidos" value={lastName} fullWidth variant="standard" onChange={(event) => setLastName(event.target.value)} sx={{ mb: 3.5 }} />
           <TextField label="Cédula profesional" value={professionalLicense} fullWidth variant="standard" onChange={(event) => setProfessionalLicense(event.target.value)} sx={{ mb: 3.5 }} />
@@ -1730,6 +1844,7 @@ function AgendaPanel({
   const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
   const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
   const [agendaRows, setAgendaRows] = useState<AgendaDayRow[]>([]);
+  const [savedAgendaRows, setSavedAgendaRows] = useState<AgendaDayRow[]>([]);
   const [firstTime, setFirstTime] = useState('00:50');
   const [recurrent, setRecurrent] = useState('00:50');
   const [formSettings, setFormSettings] = useState<SettingsFormsData | null>(null);
@@ -1748,7 +1863,9 @@ function AgendaPanel({
 
   useEffect(() => {
     const office = ownerOffices.find((item) => item.id === selectedOfficeId);
-    setAgendaRows(createDefaultAgendaRows(office?.opendays));
+    const nextRows = createDefaultAgendaRows(office?.opendays);
+    setAgendaRows(nextRows);
+    setSavedAgendaRows(nextRows);
     setFirstTime(formatMinutesToTime(office?.firsttime));
     setRecurrent(formatMinutesToTime(office?.recurrent));
   }, [ownerOffices, selectedOfficeId]);
@@ -1865,13 +1982,14 @@ function AgendaPanel({
     }
   };
 
-  const updateRows = (updater: (current: AgendaDayRow[]) => AgendaDayRow[]) => {
-    setAgendaRows((current) => {
-      const nextRows = updater(current);
-      void persistAgenda(nextRows);
-      return nextRows;
-    });
+  const updateSingleRow = (index: number, updater: (row: AgendaDayRow) => AgendaDayRow) => {
+    setAgendaRows((current) => current.map((item, itemIndex) => itemIndex === index ? updater(item) : item));
   };
+
+  const scheduleRowsDirty = useMemo(
+    () => JSON.stringify(agendaRows) !== JSON.stringify(savedAgendaRows),
+    [agendaRows, savedAgendaRows]
+  );
 
   if (ownerOffices.length === 0) {
     return <PlaceholderPanel title="Agenda" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para administrar sus horarios." />;
@@ -1966,92 +2084,32 @@ function AgendaPanel({
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               {(formSettings?.consultation_reasons ?? []).map((reason, index) => (
-                <Box key={reason.key} sx={{ border: '1px solid #e2edf2', borderRadius: 2, p: 2 }}>
-                  <Grid container spacing={2}>
-                    <Grid size={{ xs: 12, md: 7 }}>
-                      <TextField
-                        label="Motivo"
-                        value={reason.label}
-                        fullWidth
-                        variant="standard"
-                        disabled={saving || formSaving}
-                        onChange={(event) => {
-                          const nextLabel = event.target.value;
-                          setFormSettings((current) => current ? ({
-                            ...current,
-                            consultation_reasons: current.consultation_reasons.map((item, itemIndex) => itemIndex === index
-                              ? { ...item, label: nextLabel }
-                              : item),
-                          }) : current);
-                        }}
-                      />
-                    </Grid>
-                    <Grid size={{ xs: 12, md: 3 }}>
-                      <TextField
-                        select
-                        label="Minutos"
-                        value={reason.minutes ?? ''}
-                        fullWidth
-                        variant="standard"
-                        disabled={saving || formSaving}
-                        onChange={(event) => {
-                          const rawValue = event.target.value;
-                          setFormSettings((current) => current ? ({
-                            ...current,
-                            consultation_reasons: current.consultation_reasons.map((item, itemIndex) => itemIndex === index
-                              ? { ...item, minutes: rawValue === '' ? null : Number(rawValue) }
-                              : item),
-                          }) : current);
-                        }}
-                      >
-                        {CONSULTATION_REASON_MINUTE_OPTIONS.map((option) => (
-                          <MenuItem key={`agenda_reason_minutes_${String(option.value)}`} value={option.value}>
-                            {option.label}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </Grid>
-                    <Grid size={{ xs: 12, md: 2 }}>
-                      <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', height: '100%' }}>
-                        <Button
-                          variant="contained"
-                          disabled={saving || formSaving || !reason.label.trim()}
-                          onClick={() => {
-                            const nextReasons = formSettings?.consultation_reasons ?? [];
-                            void persistConsultationReasons(nextReasons);
-                          }}
-                        >
-                          Guardar
-                        </Button>
-                      </Box>
-                    </Grid>
-                    <Grid size={{ xs: 12 }}>
-                      <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', mt: 0.5 }}>
-                        <Button
-                          color="error"
-                          disabled={saving || formSaving}
-                          onClick={() => {
-                            const currentReasons = formSettings?.consultation_reasons ?? [];
-                            const nextReasons = currentReasons.filter((_, itemIndex) => itemIndex !== index);
-                            const currentReason = currentReasons[index];
+                <ConsultationReasonRow
+                  key={reason.key}
+                  reason={reason}
+                  disabled={saving || formSaving}
+                  onSave={(updatedReason) => {
+                    const nextReasons = (formSettings?.consultation_reasons ?? []).map((item, itemIndex) => itemIndex === index
+                      ? updatedReason
+                      : item);
+                    void persistConsultationReasons(nextReasons);
+                  }}
+                  onDelete={() => {
+                    const currentReasons = formSettings?.consultation_reasons ?? [];
+                    const nextReasons = currentReasons.filter((_, itemIndex) => itemIndex !== index);
+                    const currentReason = currentReasons[index];
 
-                            if (!currentReason?.label?.trim()) {
-                              setFormSettings((current) => current ? ({
-                                ...current,
-                                consultation_reasons: nextReasons,
-                              }) : current);
-                              return;
-                            }
+                    if (!currentReason?.label?.trim()) {
+                      setFormSettings((current) => current ? ({
+                        ...current,
+                        consultation_reasons: nextReasons,
+                      }) : current);
+                      return;
+                    }
 
-                            void persistConsultationReasons(nextReasons);
-                          }}
-                        >
-                          Eliminar
-                        </Button>
-                      </Box>
-                    </Grid>
-                  </Grid>
-                </Box>
+                    void persistConsultationReasons(nextReasons);
+                  }}
+                />
               ))}
             </Box>
           )}
@@ -2059,143 +2117,33 @@ function AgendaPanel({
       </Grid>
       <Grid size={{ xs: 12 }}>
         <CardShell title="Configuración de días y horarios laborales">
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+            Si requieres guardar los cambios de esta sección, da click en el botón Guardar al final de este panel.
+          </Typography>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {agendaRows.map((row, index) => (
-              <Box key={row.day} sx={{ border: '1px solid #d8e8ef', borderRadius: 2, px: 2, py: 2 }}>
-                <Grid container spacing={2} alignItems="center">
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Checkbox
-                        checked={row.enabled}
-                        disabled={saving}
-                        onChange={(event) =>
-                          updateRows((current) =>
-                            current.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item)
-                          )
-                        }
-                      />
-                      <Typography
-                        sx={{ fontWeight: 700, cursor: 'pointer', userSelect: 'none' }}
-                        onClick={() =>
-                          !saving &&
-                          updateRows((current) =>
-                            current.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: !item.enabled } : item)
-                          )
-                        }
-                      >
-                        {row.label}
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <TimeSelect
-                      label="De"
-                      value={row.start}
-                      disabled={!row.enabled || saving}
-                      onChange={(value) =>
-                        updateRows((current) =>
-                          current.map((item, itemIndex) => itemIndex === index ? { ...item, start: value } : item)
-                        )
-                      }
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <TimeSelect
-                      label="Hasta"
-                      value={row.end}
-                      disabled={!row.enabled || saving}
-                      onChange={(value) =>
-                        updateRows((current) =>
-                          current.map((item, itemIndex) => itemIndex === index ? { ...item, end: value } : item)
-                        )
-                      }
-                    />
-                  </Grid>
-                </Grid>
-                <Grid container spacing={2} alignItems="center" sx={{ mt: 0.5 }}>
-                  <Grid size={{ xs: 12, md: 4 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Checkbox
-                        checked={row.hasBreak}
-                        disabled={!row.enabled || saving}
-                        onChange={(event) =>
-                          updateRows((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? {
-                                    ...item,
-                                    hasBreak: event.target.checked,
-                                    breakstart: event.target.checked ? item.breakstart || '14:00' : '',
-                                    breakend: event.target.checked ? item.breakend || '15:00' : '',
-                                  }
-                                : item
-                            )
-                          )
-                        }
-                        sx={{ ml: -1 }}
-                      />
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ cursor: row.enabled && !saving ? 'pointer' : 'default', userSelect: 'none' }}
-                        onClick={() => {
-                          if (!row.enabled || saving) {
-                            return;
-                          }
-                          updateRows((current) =>
-                            current.map((item, itemIndex) =>
-                              itemIndex === index
-                                ? {
-                                    ...item,
-                                    hasBreak: !item.hasBreak,
-                                    breakstart: !item.hasBreak ? item.breakstart || '14:00' : '',
-                                    breakend: !item.hasBreak ? item.breakend || '15:00' : '',
-                                  }
-                                : item
-                            )
-                          );
-                        }}
-                      >
-                        Incluir horarios de descanso
-                      </Typography>
-                    </Box>
-                  </Grid>
-                  {row.hasBreak ? (
-                    <>
-                      <Grid size={{ xs: 12, md: 4 }}>
-                        <TimeSelect
-                          label="Inicio"
-                          value={row.breakstart || '14:00'}
-                          disabled={!row.enabled || !row.hasBreak || saving}
-                          onChange={(value) =>
-                            updateRows((current) =>
-                              current.map((item, itemIndex) => itemIndex === index ? { ...item, breakstart: value } : item)
-                            )
-                          }
-                        />
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 4 }}>
-                        <TimeSelect
-                          label="Fin"
-                          value={row.breakend || '15:00'}
-                          disabled={!row.enabled || !row.hasBreak || saving}
-                          onChange={(value) =>
-                            updateRows((current) =>
-                              current.map((item, itemIndex) => itemIndex === index ? { ...item, breakend: value } : item)
-                            )
-                          }
-                        />
-                      </Grid>
-                    </>
-                  ) : (
-                    <>
-                      <Grid size={{ xs: 12, md: 4 }} />
-                      <Grid size={{ xs: 12, md: 4 }} />
-                    </>
-                  )}
-                </Grid>
-              </Box>
+              <AgendaDayRowEditor
+                key={row.day}
+                row={row}
+                index={index}
+                saving={saving}
+                onUpdate={updateSingleRow}
+              />
             ))}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2.5 }}>
+            <Button
+              variant="contained"
+              disabled={saving || !scheduleRowsDirty}
+              onClick={() => {
+                void persistAgenda(agendaRows).then(() => {
+                  setSavedAgendaRows(agendaRows);
+                });
+              }}
+              sx={{ minWidth: 132, borderRadius: 1, backgroundColor: '#ea1d63', boxShadow: '0 8px 18px rgba(234, 29, 99, 0.28)', '&:hover': { backgroundColor: '#cf1857' } }}
+            >
+              Guardar
+            </Button>
           </Box>
         </CardShell>
       </Grid>
@@ -3045,6 +2993,91 @@ function createConsultationReason(index: number): ConsultationReasonDefinition {
   };
 }
 
+function ConsultationReasonRow({
+  reason,
+  disabled,
+  onSave,
+  onDelete,
+}: {
+  reason: ConsultationReasonDefinition;
+  disabled: boolean;
+  onSave: (reason: ConsultationReasonDefinition) => void;
+  onDelete: () => void;
+}) {
+  const [label, setLabel] = useState(reason.label);
+  const [minutes, setMinutes] = useState<number | ''>(reason.minutes ?? '');
+
+  useEffect(() => {
+    setLabel(reason.label);
+    setMinutes(reason.minutes ?? '');
+  }, [reason.key, reason.label, reason.minutes]);
+
+  const trimmedLabel = label.trim();
+  const hasChanges = trimmedLabel !== reason.label || (minutes === '' ? null : Number(minutes)) !== (reason.minutes ?? null);
+
+  return (
+    <Box sx={{ border: '1px solid #e2edf2', borderRadius: 2, p: 2 }}>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 7 }}>
+          <TextField
+            label="Motivo"
+            value={label}
+            fullWidth
+            variant="standard"
+            disabled={disabled}
+            onChange={(event) => setLabel(event.target.value)}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            select
+            label="Minutos"
+            value={minutes}
+            fullWidth
+            variant="standard"
+            disabled={disabled}
+            onChange={(event) => setMinutes(event.target.value === '' ? '' : Number(event.target.value))}
+          >
+            {CONSULTATION_REASON_MINUTE_OPTIONS.map((option) => (
+              <MenuItem key={`agenda_reason_minutes_${reason.key}_${String(option.value)}`} value={option.value}>
+                {option.label}
+              </MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+        <Grid size={{ xs: 12, md: 2 }}>
+          <Box sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' }, alignItems: 'center', height: '100%' }}>
+            <Button
+              variant="contained"
+              disabled={disabled || !trimmedLabel || !hasChanges}
+              onClick={() => {
+                onSave({
+                  ...reason,
+                  label: trimmedLabel,
+                  minutes: minutes === '' ? null : Number(minutes),
+                });
+              }}
+            >
+              Guardar
+            </Button>
+          </Box>
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', mt: 0.5 }}>
+            <Button
+              color="error"
+              disabled={disabled}
+              onClick={onDelete}
+            >
+              Eliminar
+            </Button>
+          </Box>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+}
+
 function normalizeCatalogName(value: string): string {
   return value
     .trim()
@@ -3066,7 +3099,7 @@ function normalizeCustomFieldLabelToKey(module: CustomHistoryModule, label: stri
 }
 
 export default function SettingsPage() {
-  const { updateUser } = useAuth();
+  const { updateUser, can, user } = useAuth();
   const location = useLocation();
   const [activeTab, setActiveTab] = useState<SettingsTab>('perfil');
   const [loading, setLoading] = useState(true);
@@ -3078,6 +3111,37 @@ export default function SettingsPage() {
   const [companySaving, setCompanySaving] = useState(false);
   const [agendaSaving, setAgendaSaving] = useState(false);
   const [passwordSaving, setPasswordSaving] = useState(false);
+  const isAssistant = user?.role === 'asistente';
+  const availableTabs = useMemo(() => {
+    if (!isAssistant) {
+      return SETTINGS_TABS;
+    }
+
+    return SETTINGS_TABS.filter((tab) => {
+      switch (tab.value) {
+        case 'perfil':
+          return can('settings.profile.self');
+        case 'empresa':
+          return can('settings.company');
+        case 'agenda':
+          return can('settings.agenda');
+        case 'dias_inhabiles':
+          return can('settings.unavailable_days');
+        case 'impresion':
+          return can('settings.print');
+        case 'asistentes':
+          return false;
+        case 'herramientas':
+          return can('settings.forms');
+        case 'reportes':
+          return can('settings.reports');
+        case 'etiquetas':
+          return can('settings.labels');
+        default:
+          return false;
+      }
+    });
+  }, [can, isAssistant]);
 
   useEffect(() => {
     let mounted = true;
@@ -3113,6 +3177,12 @@ export default function SettingsPage() {
     }
   }, [location.search]);
 
+  useEffect(() => {
+    if (!availableTabs.some((tab) => tab.value === activeTab)) {
+      setActiveTab(availableTabs[0]?.value ?? 'perfil');
+    }
+  }, [activeTab, availableTabs]);
+
   const currentPanel = useMemo(() => {
     switch (activeTab) {
       case 'perfil':
@@ -3121,6 +3191,7 @@ export default function SettingsPage() {
             profile={profile}
             saving={profileSaving}
             passwordSaving={passwordSaving}
+            showSpecialtyFields={!isAssistant}
             onSaveProfile={async (payload) => {
               setProfileSaving(true);
               setError(null);
@@ -3228,7 +3299,7 @@ export default function SettingsPage() {
       default:
         return null;
     }
-  }, [activeTab, agendaSaving, companySaving, offices, passwordSaving, profile, profileSaving, updateUser]);
+  }, [activeTab, agendaSaving, can, companySaving, isAssistant, offices, passwordSaving, profile, profileSaving, updateUser]);
 
   const resolvedPanel = activeTab === 'herramientas'
     ? (
@@ -3287,7 +3358,7 @@ export default function SettingsPage() {
             },
           }}
         >
-          {SETTINGS_TABS.map((tab) => (
+          {availableTabs.map((tab) => (
             <Tab key={tab.value} value={tab.value} label={tab.label} sx={{ minHeight: 44, px: 2, py: 1, borderRadius: 1, color: 'rgba(255,255,255,0.95)', fontSize: 13, fontWeight: 700, '&.Mui-selected': { color: '#fff', backgroundColor: 'rgba(255,255,255,0.14)' } }} />
           ))}
         </Tabs>
