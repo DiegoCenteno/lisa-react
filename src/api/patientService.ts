@@ -372,12 +372,17 @@ export const patientService = {
       file?: File | null;
       notifyPatient?: boolean;
       templateId?: number | null;
+      officeLabelIds?: number[];
     }
   ): Promise<PatientTagControlData> {
     const officeId = await resolveOfficeId();
     const payload = new FormData();
     payload.append('office_id', String(officeId));
     payload.append('updates', JSON.stringify(updates));
+
+    if (options?.officeLabelIds && options.officeLabelIds.length > 0) {
+      payload.append('office_label_ids', JSON.stringify(options.officeLabelIds));
+    }
 
     if (options?.file) {
       payload.append('file', options.file);

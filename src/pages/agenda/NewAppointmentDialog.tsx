@@ -24,6 +24,7 @@ import {
   ArrowBack as BackIcon,
   CalendarMonth as CalendarMonthIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import type { AvailableSlot, PatientSimple, NewPatientData, PatientSearchResult } from '../../types';
 import { appointmentService } from '../../api/appointmentService';
 import dayjs from 'dayjs';
@@ -76,6 +77,13 @@ interface Props {
   initialPatient?: PatientSimple | null;
   initialReason?: string;
   initialNotifyPatient?: boolean;
+  initialGenderDefault?: 'M' | 'F' | '';
+  consultationReasons?: Array<{
+    key: string;
+    label: string;
+    minutes: number | null;
+  }>;
+  defaultAvailabilityMinutes?: number;
 }
 
 type WizardStep = 'dates' | 'patient' | 'summary';
@@ -91,7 +99,11 @@ export default function NewAppointmentDialog({
   initialPatient = null,
   initialReason = '',
   initialNotifyPatient = true,
+  initialGenderDefault = '',
+  consultationReasons = [],
+  defaultAvailabilityMinutes = 50,
 }: Props) {
+  const navigate = useNavigate();
   // ── Wizard state ──
   const [step, setStep] = useState<WizardStep>('dates');
 
@@ -104,6 +116,8 @@ export default function NewAppointmentDialog({
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<AvailableSlot | null>(null);
+  const [showConsultationReasonPicker, setShowConsultationReasonPicker] = useState(false);
+  const [selectedConsultationReasonKey, setSelectedConsultationReasonKey] = useState('');
 
   // ── Step 2: patient ──
   const [patients, setPatients] = useState<PatientSimple[]>([]);
@@ -158,18 +172,20 @@ export default function NewAppointmentDialog({
       setExpandedDate(null);
       setSlots([]);
       setSelectedSlot(null);
+      setShowConsultationReasonPicker(false);
+      setSelectedConsultationReasonKey('');
       setPatients([]);
       setPatientSearch('');
       setSelectedPatient(initialPatient);
       setShowNewPatientForm(false);
-      setNewPatient({
-        phone_code: '+52',
-        phone: '',
-        name: '',
-        last_name: '',
-        gender: '',
-        birth_date: '',
-      });
+        setNewPatient({
+          phone_code: '+52',
+          phone: '',
+          name: '',
+          last_name: '',
+          gender: initialGenderDefault,
+          birth_date: '',
+        });
       setNewPatientErrors({});
       setDuplicatePatients([]);
       setDuplicateSource(null);
@@ -193,7 +209,7 @@ export default function NewAppointmentDialog({
       loadAvailableDates();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialNotifyPatient, open]);
+  }, [initialGenderDefault, initialNotifyPatient, open]);
 
   // Phone duplicate detection: search when 10 digits
   useEffect(() => {
@@ -239,11 +255,40 @@ export default function NewAppointmentDialog({
   }, [newPatient.name, newPatient.last_name, showNewPatientForm, selectedExistingPatient, duplicateSource]);
 
   // Load available dates
-  const loadAvailableDates = useCallback(async () => {
+  const availableConsultationReasons = useMemo(
+    () => consultationReasons.filter((reason) => Number(reason.minutes || 0) > 0),
+    [consultationReasons]
+  );
+
+  const consultationReasonPickerOptions = useMemo(
+    () => availableConsultationReasons.length > 0
+      ? [
+          {
+            key: '__default__',
+            label: 'Cita normal',
+            minutes: defaultAvailabilityMinutes,
+          },
+          ...availableConsultationReasons,
+        ]
+      : [],
+    [availableConsultationReasons, defaultAvailabilityMinutes]
+  );
+
+  const selectedConsultationReason = useMemo(
+    () => consultationReasonPickerOptions.find((reason) => reason.key === selectedConsultationReasonKey) ?? null,
+    [consultationReasonPickerOptions, selectedConsultationReasonKey]
+  );
+
+  const effectiveAvailabilityMinutes = useMemo(
+    () => selectedConsultationReason?.minutes ?? defaultAvailabilityMinutes,
+    [defaultAvailabilityMinutes, selectedConsultationReason]
+  );
+
+  const loadAvailableDates = useCallback(async (minutesOverride?: number) => {
     if (!officeId) return;
     setDatesLoading(true);
     try {
-      const res = await appointmentService.getAvailableDates(officeId, 50);
+      const res = await appointmentService.getAvailableDates(officeId, minutesOverride ?? effectiveAvailabilityMinutes);
       setAvailableDates(res.dates);
       setAvailableTxt(res.txt);
     } catch (err) {
@@ -251,15 +296,15 @@ export default function NewAppointmentDialog({
     } finally {
       setDatesLoading(false);
     }
-  }, [officeId]);
+  }, [effectiveAvailabilityMinutes, officeId]);
 
   // Load slots for a date (filter out break/descanso slots with estatus === 2)
   const loadSlots = useCallback(
-    async (date: string) => {
+    async (date: string, minutesOverride?: number) => {
       if (!officeId) return;
       setSlotsLoading(true);
       try {
-        const data = await appointmentService.getAvailableSlots(officeId, date, 50);
+        const data = await appointmentService.getAvailableSlots(officeId, date, minutesOverride ?? effectiveAvailabilityMinutes);
         setSlots(data.filter((s) => !s.is_past && s.estatus !== 2));
       } catch (err) {
         console.error('Error loading slots:', err);
@@ -267,7 +312,7 @@ export default function NewAppointmentDialog({
         setSlotsLoading(false);
       }
     },
-    [officeId]
+    [effectiveAvailabilityMinutes, officeId]
   );
 
   // ── Load patients ──
@@ -880,7 +925,71 @@ export default function NewAppointmentDialog({
   // ═══════════════════════════════════════════════
   const renderDatesStep = () => showManualForm ? renderManualForm() : (
     <Box>
-      {datesLoading ? (
+      {consultationReasonPickerOptions.length > 0 && (
+        <Box
+          onClick={() => {
+            setShowConsultationReasonPicker((current) => !current);
+            setExpandedDate(null);
+            setSlots([]);
+          }}
+          sx={{
+            py: 1.5,
+            px: 2,
+            mb: 1,
+            textAlign: 'center',
+            cursor: 'pointer',
+            backgroundColor: '#e4f4ff',
+            border: '1px solid #b8def7',
+            borderRadius: 2,
+            fontWeight: 600,
+            color: '#175b8c',
+            fontSize: '0.95rem',
+            '&:hover': {
+              backgroundColor: '#d6eeff',
+            },
+          }}
+        >
+          {selectedConsultationReason
+            ? `Motivo de la consulta: ${selectedConsultationReason.label}`
+            : 'Motivos de consulta'}
+        </Box>
+      )}
+      {showConsultationReasonPicker && consultationReasonPickerOptions.length > 0 ? (
+        <Box sx={{ mb: 1 }}>
+          {consultationReasonPickerOptions.map((consultationReason) => (
+            <Box
+              key={consultationReason.key}
+              onClick={() => {
+                setSelectedConsultationReasonKey(consultationReason.key);
+                setReason(consultationReason.label);
+                setShowConsultationReasonPicker(false);
+                setExpandedDate(null);
+                setSlots([]);
+                void loadAvailableDates(consultationReason.minutes ?? defaultAvailabilityMinutes);
+              }}
+              sx={{
+                py: 1.35,
+                px: 2,
+                textAlign: 'center',
+                cursor: 'pointer',
+                backgroundColor: selectedConsultationReasonKey === consultationReason.key ? '#cfe9ff' : '#f4fbff',
+                borderBottom: '1px solid #d7eafb',
+                fontWeight: selectedConsultationReasonKey === consultationReason.key ? 600 : 500,
+                color: '#215e8a',
+                fontSize: '0.93rem',
+                '&:hover': {
+                  backgroundColor: '#e7f5ff',
+                },
+              }}
+            >
+              {consultationReason.label}
+              <span style={{ marginLeft: 8, color: '#4f7da0', fontSize: '0.82rem' }}>
+                {consultationReason.minutes} min.
+              </span>
+            </Box>
+          ))}
+        </Box>
+      ) : datesLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
           <CircularProgress size={32} />
         </Box>
@@ -1101,7 +1210,7 @@ export default function NewAppointmentDialog({
             disabled={!!selectedExistingPatient}
           />
 
-          <FormControl size="small" fullWidth disabled={!!selectedExistingPatient}>
+          <FormControl size="small" fullWidth disabled={!!selectedExistingPatient} sx={{ display: 'none' }}>
             <InputLabel>Género</InputLabel>
             <Select
               value={newPatient.gender}
@@ -1133,6 +1242,23 @@ export default function NewAppointmentDialog({
             slotProps={{ inputLabel: { shrink: true } }}
             disabled={!!selectedExistingPatient}
           />
+          <FormControl size="small" fullWidth disabled={!!selectedExistingPatient}>
+            <InputLabel>GÃ©nero</InputLabel>
+            <Select
+              value={newPatient.gender}
+              label="GÃ©nero"
+              onChange={(e) =>
+                setNewPatient({
+                  ...newPatient,
+                  gender: e.target.value as 'M' | 'F' | '',
+                })
+              }
+            >
+              <MenuItem value="">Ninguno</MenuItem>
+              <MenuItem value="M">Masculino</MenuItem>
+              <MenuItem value="F">Femenino</MenuItem>
+            </Select>
+          </FormControl>
         </Box>
       ) : (
         // ── Patient List ──
@@ -1271,11 +1397,39 @@ export default function NewAppointmentDialog({
       if (showManualForm) {
         return null;
       }
-      return (
-        <DialogActions sx={{ justifyContent: 'flex-end', px: 3, pb: 2 }}>
-          <Button
-            variant="outlined"
-            size="small"
+        return (
+          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2, gap: 2 }}>
+            {availableConsultationReasons.length === 0 ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                <Typography sx={{ fontSize: '0.78rem', color: '#6a7d88', lineHeight: 1.35 }}>
+                  Configura motivos de consulta con minutos preestablecidos
+                </Typography>
+                <Button
+                  variant="text"
+                  size="small"
+                  onClick={() => {
+                    onClose();
+                    navigate('/configuracion?tab=agenda#agenda-consultation-reasons');
+                  }}
+                  sx={{
+                    minWidth: 'auto',
+                    px: 0.4,
+                    py: 0,
+                    textTransform: 'none',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  aquí
+                </Button>
+              </Box>
+            ) : (
+              <Box />
+            )}
+            <Button
+              variant="outlined"
+              size="small"
             onClick={() => setShowManualForm(true)}
             sx={{
               borderColor: TEAL,

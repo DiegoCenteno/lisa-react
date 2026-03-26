@@ -123,6 +123,8 @@ export default function PatientsPage() {
   const [templateMessage, setTemplateMessage] = useState<string | null>(null);
   const [activeTagIds, setActiveTagIds] = useState<number[]>([]);
   const [pendingStatuses, setPendingStatuses] = useState<Record<number, number>>({});
+  const [newOfficeLabelName, setNewOfficeLabelName] = useState('');
+  const [savingOfficeLabel, setSavingOfficeLabel] = useState(false);
   const [attachSelectedFile, setAttachSelectedFile] = useState<File | null>(null);
   const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
   const [sendResultToPatient, setSendResultToPatient] = useState(false);
@@ -222,6 +224,7 @@ export default function PatientsPage() {
     setTemplateMessage(null);
     setActiveTagIds([]);
     setPendingStatuses({});
+    setNewOfficeLabelName('');
     setAttachSelectedFile(null);
     setAttachPreviewUrl(null);
     setSendResultToPatient(false);
@@ -256,6 +259,30 @@ export default function PatientsPage() {
 
       return Array.from(new Set([...current, tagId]));
     });
+  };
+
+  const handleCreateOfficeLabel = async () => {
+    const code = newOfficeLabelName.trim();
+    if (!code || !attachPatientId) return;
+
+    setSavingOfficeLabel(true);
+    setAttachError(null);
+    setAttachMessage(null);
+
+    try {
+      const createdLabel = await patientService.createOfficeLabel(code);
+      const refreshed = await patientService.updatePatientTagStatuses(attachPatientId, [], {
+        officeLabelIds: [createdLabel.id],
+      });
+      setAttachControl(refreshed);
+      setNewOfficeLabelName('');
+      setAttachMessage('Etiqueta creada y asignada correctamente.');
+    } catch (error) {
+      console.error('Error creando etiqueta:', error);
+      setAttachError('No se pudo crear la etiqueta.');
+    } finally {
+      setSavingOfficeLabel(false);
+    }
   };
 
   const handleSelectStatus = (tagId: number, statusId: number) => {
@@ -706,6 +733,52 @@ export default function PatientsPage() {
                   Selecciona un nuevo estado de la etiqueta
                 </Typography>
 
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 500, color: '#5b6772' }}>
+                    Nueva etiqueta
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', width: { xs: '100%', md: 'auto' } }}>
+                    <TextField
+                      size="small"
+                      placeholder="Nueva etiqueta"
+                      value={newOfficeLabelName}
+                      onChange={(e) => setNewOfficeLabelName(e.target.value)}
+                      sx={{ minWidth: { xs: '100%', sm: 240 } }}
+                      disabled={savingOfficeLabel}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleCreateOfficeLabel();
+                        }
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void handleCreateOfficeLabel()}
+                      disabled={savingOfficeLabel || !newOfficeLabelName.trim()}
+                    >
+                      {savingOfficeLabel ? 'Creando...' : 'Agregar'}
+                    </Button>
+                  </Box>
+                </Box>
+
+                {attachControl.statuses.length === 0 ? (
+                  <Alert
+                    severity="warning"
+                    sx={{
+                      mb: 2,
+                      alignItems: 'flex-start',
+                      '& .MuiAlert-message': {
+                        width: '100%',
+                      },
+                    }}
+                  >
+                    Aún no hay estados configurados para las etiquetas. Los estados te permiten indicar en qué etapa se
+                    encuentra cada etiqueta, por ejemplo: pendiente, en proceso o concluido.
+                  </Alert>
+                ) : null}
+
                 {attachError ? (
                   <Alert severity="error" sx={{ mb: 2 }}>
                     {attachError}
@@ -897,7 +970,7 @@ export default function PatientsPage() {
                             startIcon={<AttachmentIcon />}
                             onClick={() => void handleOpenAttach(patient.id)}
                           >
-                            Adjuntar
+                            Más opciones
                           </Button>
                           <Button
                             size="small"
@@ -943,7 +1016,7 @@ export default function PatientsPage() {
                     <TableCell>Paciente</TableCell>
                     <TableCell>{'Tel\u00e9fono'}</TableCell>
                     <TableCell>Fecha de Nacimiento</TableCell>
-                    <TableCell align="center">Adjuntar</TableCell>
+                    <TableCell align="center">Más opciones</TableCell>
                     <TableCell align="center">Seleccionar</TableCell>
                   </TableRow>
                 </TableHead>
@@ -987,7 +1060,7 @@ export default function PatientsPage() {
                           startIcon={<AttachmentIcon />}
                           onClick={() => void handleOpenAttach(patient.id)}
                         >
-                          Adjuntar
+                          Más opciones
                         </Button>
                       </TableCell>
                       <TableCell align="center">

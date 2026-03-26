@@ -309,6 +309,20 @@ export default function AgendaPage() {
   const newAppointmentNotificationDefault = Boolean(
     selectedOfficeNotificationPreferences.nueva_cita
   );
+  const newAppointmentDefaultGender = useMemo(() => {
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    return selectedOffice?.new_appointment_default_gender ?? '';
+  }, [officeId, offices]);
+  const newAppointmentConsultationReasons = useMemo(() => {
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    return selectedOffice?.consultation_reasons ?? [];
+  }, [officeId, offices]);
+  const newAppointmentBaseMinutes = useMemo(() => {
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    const firsttime = selectedOffice?.firsttime ?? 0;
+    const recurrent = selectedOffice?.recurrent ?? 0;
+    return Math.max(firsttime, recurrent, 50);
+  }, [officeId, offices]);
 
   useEffect(() => {
     const resetToken = (location.state as { sidebarResetAt?: number } | null)?.sidebarResetAt;
@@ -653,6 +667,22 @@ export default function AgendaPage() {
       setSummaryLoading(false);
     }
   }, [handleCloseSelectedEvent, selectedEvent]);
+
+  const handleOpenPatientHistoryFromSummary = useCallback(() => {
+    const patientId = Number(summaryData?.patient.id ?? selectedEvent?.event.extendedProps.patientId ?? 0);
+    if (!patientId) return;
+
+    setSummaryOpen(false);
+    navigate(`/pacientes/${patientId}?tab=history`);
+  }, [navigate, selectedEvent, summaryData]);
+
+  const handleOpenNewConsultationFromSummary = useCallback(() => {
+    const patientId = Number(summaryData?.patient.id ?? selectedEvent?.event.extendedProps.patientId ?? 0);
+    if (!patientId) return;
+
+    setSummaryOpen(false);
+    navigate(`/pacientes/${patientId}?tab=soap`);
+  }, [navigate, selectedEvent, summaryData]);
 
   const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
@@ -1568,7 +1598,7 @@ export default function AgendaPage() {
                   </Alert>
                 )}
 
-                <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1.5, pt: 1, flexWrap: 'wrap' }}>
                   <Button
                     variant="contained"
                     onClick={() => setSummaryOpen(false)}
@@ -1580,6 +1610,30 @@ export default function AgendaPage() {
                   >
                     CERRAR
                   </Button>
+                  <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', justifyContent: 'flex-end', flex: 1 }}>
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenPatientHistoryFromSummary}
+                      sx={{
+                        backgroundColor: '#ef3b87',
+                        '&:hover': { backgroundColor: '#df2c78' },
+                        minWidth: 150,
+                      }}
+                    >
+                      HISTORIA CLÍNICA
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenNewConsultationFromSummary}
+                      sx={{
+                        backgroundColor: '#ef3b87',
+                        '&:hover': { backgroundColor: '#df2c78' },
+                        minWidth: 150,
+                      }}
+                    >
+                      NUEVA CONSULTA
+                    </Button>
+                  </Box>
                 </Box>
               </Box>
             ) : (
@@ -1623,6 +1677,9 @@ export default function AgendaPage() {
         officeId={officeId}
         onAppointmentCreated={handleAppointmentCreated}
         initialNotifyPatient={newAppointmentNotificationDefault}
+        initialGenderDefault={newAppointmentDefaultGender}
+        consultationReasons={newAppointmentConsultationReasons}
+        defaultAvailabilityMinutes={newAppointmentBaseMinutes}
       />
       <NewAppointmentDialog
         open={rescheduleDialogOpen}
@@ -1641,6 +1698,9 @@ export default function AgendaPage() {
         initialPatient={rescheduleAppointment?.patient ?? null}
         initialReason={rescheduleAppointment?.reason ?? ''}
         initialNotifyPatient={newAppointmentNotificationDefault}
+        initialGenderDefault={newAppointmentDefaultGender}
+        consultationReasons={newAppointmentConsultationReasons}
+        defaultAvailabilityMinutes={newAppointmentBaseMinutes}
       />
       <NewAppointmentDialog
         open={assignDialogOpen}
@@ -1658,6 +1718,9 @@ export default function AgendaPage() {
         initialPatient={assignAppointment?.patient ?? null}
         initialReason={assignAppointment?.reason ?? ''}
         initialNotifyPatient={newAppointmentNotificationDefault}
+        initialGenderDefault={newAppointmentDefaultGender}
+        consultationReasons={newAppointmentConsultationReasons}
+        defaultAvailabilityMinutes={newAppointmentBaseMinutes}
       />
     </Box>
   );

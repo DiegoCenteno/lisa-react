@@ -96,6 +96,12 @@ export interface Office {
   }>;
   role: 'owner' | 'assistant';
   notification_preferences?: Record<string, boolean>;
+  new_appointment_default_gender?: 'M' | 'F' | '';
+  consultation_reasons?: Array<{
+    key: string;
+    label: string;
+    minutes: number | null;
+  }>;
 }
 
 export interface ClinicalHistory {
@@ -627,17 +633,29 @@ export interface NotificationLegacyRecipient {
   enabled: boolean;
 }
 
+export interface NotificationPreassistantItem {
+  id: number;
+  name: string;
+  phone: string;
+  code: string;
+  link: string;
+  template_pending: boolean;
+}
+
 export interface NotificationAssistantRecipientsData {
   office: {
     id: number;
     title: string;
   };
   assistants: NotificationAssistantItem[];
+  preassistants: NotificationPreassistantItem[];
   legacy_recipients: NotificationLegacyRecipient[];
   limits: {
     legacy_max: number;
     total_max: number;
+    assistant_max: number;
     registered_assistants: number;
+    registered_preassistants: number;
     registered_legacy: number;
     registered_total: number;
     enabled_assistants: number;

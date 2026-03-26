@@ -1,4 +1,5 @@
 import apiClient from './client';
+import type { OfficeLabelItem } from '../types';
 
 export interface SettingsProfileData {
   id: number;
@@ -9,6 +10,8 @@ export interface SettingsProfileData {
   email: string;
   phone: string;
   phone_code: string;
+  cedula_profesional: string;
+  cedula_especialidad: string;
   specialties: Array<{
     id: number;
     title: string;
@@ -57,6 +60,60 @@ export interface SettingsAvailableDayItem {
   end_label: string;
 }
 
+export interface SettingsPrintData {
+  office_id: number;
+  print_type: number;
+  prescriptionsex: boolean;
+  prescriptionbirthdate: boolean;
+  prescriptionsignosvitales: boolean;
+  prescriptionindicaciones: boolean;
+  prescriptiondiagnostico: boolean;
+}
+
+export interface SettingsFormsData {
+  office_id: number;
+  clinical_history: Record<string, boolean>;
+  daily_note: Record<string, boolean>;
+  new_appointment: {
+    default_gender: 'M' | 'F' | '';
+  };
+  consultation_reasons: Array<{
+    key: string;
+    label: string;
+    minutes: number | null;
+  }>;
+  custom_history_fields: Record<
+    'heredofamiliares' | 'personales_no_patologicos' | 'personales_patologicos' | 'ginecologicos',
+    Array<{
+      key: string;
+      label: string;
+      input_type: 'checkbox' | 'text' | 'textarea' | 'select' | 'checkbox_with_text';
+      enabled: boolean;
+      required: boolean;
+      sort_order: number;
+      options: string[];
+    }>
+  >;
+}
+
+export interface SettingsReportsData {
+  office_id: number;
+  reports: Array<{
+    key: string;
+    label: string;
+    enabled: boolean;
+  }>;
+  show_in_new_appointment: boolean;
+}
+
+export interface SettingsLabelStatusItem {
+  id: number;
+  code: string;
+  identify: number;
+  status?: number | null;
+  created_at?: string;
+}
+
 const settingsService = {
   async getProfile(): Promise<SettingsProfileData> {
     const response = await apiClient.get<{ status: string; data: SettingsProfileData }>(
@@ -72,6 +129,8 @@ const settingsService = {
     last_name: string;
     phone: string;
     phone_code?: string;
+    cedula_profesional?: string;
+    cedula_especialidad?: string;
   }): Promise<SettingsProfileData> {
     const response = await apiClient.put<{ status: string; data: SettingsProfileData }>(
       '/v2/settings/profile',
@@ -143,6 +202,140 @@ const settingsService = {
         recurrent: number | null;
       };
     }>('/v2/settings/agenda', payload);
+
+    return response.data.data;
+  },
+
+  async getPrintSettings(officeId: number): Promise<SettingsPrintData> {
+    const response = await apiClient.get<{ status: string; data: SettingsPrintData }>(
+      '/v2/settings/print',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async updatePrintSettings(payload: SettingsPrintData): Promise<SettingsPrintData> {
+    const response = await apiClient.put<{ status: string; data: SettingsPrintData }>(
+      '/v2/settings/print',
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async getFormSettings(officeId: number): Promise<SettingsFormsData> {
+    const response = await apiClient.get<{ status: string; data: SettingsFormsData }>(
+      '/v2/settings/forms',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async updateFormSettings(payload: SettingsFormsData): Promise<SettingsFormsData> {
+    const response = await apiClient.put<{ status: string; data: SettingsFormsData }>(
+      '/v2/settings/forms',
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async getReportSettings(officeId: number): Promise<SettingsReportsData> {
+    const response = await apiClient.get<{ status: string; data: SettingsReportsData }>(
+      '/v2/settings/reports',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async getOfficeLabels(officeId: number): Promise<OfficeLabelItem[]> {
+    const response = await apiClient.get<{ status: string; data: OfficeLabelItem[] }>(
+      '/v2/datahelp/office-labels',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data ?? [];
+  },
+
+  async createOfficeLabel(payload: {
+    office_id: number;
+    code: string;
+    identify?: string;
+    status?: number;
+  }): Promise<OfficeLabelItem> {
+    const response = await apiClient.post<{ status: string; data: OfficeLabelItem }>(
+      '/v2/datahelp/office-labels',
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async updateOfficeLabel(
+    id: number,
+    payload: {
+      office_id: number;
+      code?: string;
+      identify?: string;
+      status?: number;
+    }
+  ): Promise<OfficeLabelItem> {
+    const response = await apiClient.put<{ status: string; data: OfficeLabelItem }>(
+      `/v2/datahelp/office-labels/${id}`,
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async getOfficeLabelStatuses(officeId: number): Promise<SettingsLabelStatusItem[]> {
+    const response = await apiClient.get<{ status: string; data: SettingsLabelStatusItem[] }>(
+      '/v2/datahelp/office-label-statuses',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data ?? [];
+  },
+
+  async createOfficeLabelStatus(payload: {
+    office_id: number;
+    code: string;
+    identify: number;
+    status?: number;
+  }): Promise<SettingsLabelStatusItem> {
+    const response = await apiClient.post<{ status: string; data: SettingsLabelStatusItem }>(
+      '/v2/datahelp/office-label-statuses',
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async updateOfficeLabelStatus(
+    id: number,
+    payload: {
+      office_id: number;
+      code?: string;
+      identify?: number;
+      status?: number;
+    }
+  ): Promise<SettingsLabelStatusItem> {
+    const response = await apiClient.put<{ status: string; data: SettingsLabelStatusItem }>(
+      `/v2/datahelp/office-label-statuses/${id}`,
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async updateReportSettings(payload: SettingsReportsData): Promise<SettingsReportsData> {
+    const response = await apiClient.put<{ status: string; data: SettingsReportsData }>(
+      '/v2/settings/reports',
+      payload
+    );
 
     return response.data.data;
   },

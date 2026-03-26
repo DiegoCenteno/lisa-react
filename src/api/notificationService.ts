@@ -70,6 +70,23 @@ const notificationService = {
 
     return response.data.data;
   },
+
+  async addPreassistant(officeId: number, name: string, phone: string): Promise<NotificationAssistantRecipientsData> {
+    const response = await apiClient.post<{ status: string; data: NotificationAssistantRecipientsData }>(
+      '/v2/notifications/preassistants',
+      { office_id: officeId, name, phone }
+    );
+
+    return response.data.data;
+  },
+
+  async removePreassistant(id: number): Promise<NotificationAssistantRecipientsData> {
+    const response = await apiClient.delete<{ status: string; data: NotificationAssistantRecipientsData }>(
+      `/v2/notifications/preassistants/${id}`
+    );
+
+    return response.data.data;
+  },
 };
 
 export default notificationService;
