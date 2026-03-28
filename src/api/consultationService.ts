@@ -32,6 +32,23 @@ interface DailyNotePayload {
   office_label_ids?: number[];
 }
 
+interface DownloadPrescriptionPayload {
+  patient_id: number;
+  office_id?: number;
+  height?: string;
+  weight?: string;
+  ta?: string;
+  temp?: string;
+  fc?: string;
+  os?: string;
+  diagnostics?: string[];
+  medications?: Array<{
+    medicament?: string;
+    prescription?: string;
+  }>;
+  indicaciones?: string;
+}
+
 async function resolveOfficeId(): Promise<number> {
   const userRaw = localStorage.getItem('user');
   if (userRaw) {
@@ -79,6 +96,30 @@ export const consultationService = {
     const response = await apiClient.put(`/v2/consultations/${consultationId}`, {
       ...payload,
       office_id: officeId,
+    });
+
+    return response.data;
+  },
+
+  async downloadPrescription(payload: DownloadPrescriptionPayload): Promise<Blob> {
+    const officeId = payload.office_id ?? (await resolveOfficeId());
+    const response = await apiClient.post('/v2/consultations/download-prescription', {
+      ...payload,
+      office_id: officeId,
+    }, {
+      responseType: 'blob',
+    });
+
+    return response.data;
+  },
+
+  async downloadPrescriptionPdf(payload: DownloadPrescriptionPayload): Promise<Blob> {
+    const officeId = payload.office_id ?? (await resolveOfficeId());
+    const response = await apiClient.post('/v2/consultations/download-prescription-pdf', {
+      ...payload,
+      office_id: officeId,
+    }, {
+      responseType: 'blob',
     });
 
     return response.data;

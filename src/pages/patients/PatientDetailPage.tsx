@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Box,
@@ -27,7 +27,7 @@ import {
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
 import { useAuth } from '../../hooks/useAuth';
-import type { Patient, ClinicalHistory, SOAPNote, PatientFile, PatientSoapContext, MedicamentHistoryItem, OfficeLabelItem, PatientTagControlData, ActivityLogItem } from '../../types';
+import type { Patient, SOAPNote, PatientFile, PatientTagControlData, ActivityLogItem } from '../../types';
 import ClinicalHistoryTab from './ClinicalHistoryTab';
 import PatientDailyNoteTab from './PatientDailyNoteTab';
 import PatientProfileTab from './PatientProfileTab';
@@ -59,11 +59,7 @@ export default function PatientDetailPage() {
   const canEditConsultationHistory = can('consultations.history_edit');
   const [tab, setTab] = useState(0);
   const [patient, setPatient] = useState<Patient | null>(null);
-  const [clinicalHistory, setClinicalHistory] = useState<ClinicalHistory | null>(null);
   const [soapNotes, setSoapNotes] = useState<SOAPNote[]>([]);
-  const [soapContext, setSoapContext] = useState<PatientSoapContext | null>(null);
-  const [medicamentHistory, setMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
-  const [officeLabels, setOfficeLabels] = useState<OfficeLabelItem[]>([]);
   const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
   const [patientActivityLogs, setPatientActivityLogs] = useState<ActivityLogItem[]>([]);
   const [files, setFiles] = useState<PatientFile[]>([]);
@@ -73,6 +69,8 @@ export default function PatientDetailPage() {
   const [dailyNoteMessage, setDailyNoteMessage] = useState<string | null>(null);
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [dailyNoteEditRequest, setDailyNoteEditRequest] = useState<SOAPNote | null>(null);
+  const [showCompactSticky, setShowCompactSticky] = useState(false);
+  const headerSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
@@ -119,23 +117,15 @@ export default function PatientDetailPage() {
       if (!id) return;
       const patientId = parseInt(id, 10);
       try {
-        const [patientData, historyData, notesData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData, patientActivityLogsData, filesData] = await Promise.all([
+        const [patientData, notesData, tagControlData, patientActivityLogsData, filesData] = await Promise.all([
           patientService.getPatient(patientId),
-          patientService.getClinicalHistory(patientId),
           patientService.getSOAPNotes(patientId),
-          patientService.getPatientSoapContext(patientId),
-          patientService.getMedicamentHistory(),
-          patientService.getOfficeLabels(),
           patientService.getPatientTagControl(patientId),
           patientService.getPatientActivityLogs(patientId),
           patientService.getFiles(patientId),
         ]);
         setPatient(patientData);
-        setClinicalHistory(historyData);
         setSoapNotes(notesData);
-        setSoapContext(soapContextData);
-        setMedicamentHistory(medicamentHistoryData);
-        setOfficeLabels(officeLabelsData);
         setPatientTagControl(tagControlData);
         setPatientActivityLogs(patientActivityLogsData);
         setFiles(
@@ -164,10 +154,10 @@ export default function PatientDetailPage() {
     if (!patient?.phone) return;
     try {
       await navigator.clipboard.writeText(patient.phone);
-      setCopyMessage('Tel\u00e9fono copiado');
+      setCopyMessage('Teléfono copiado');
     } catch (error) {
-      console.error('Error copiando tel\u00e9fono:', error);
-      setCopyError('No se pudo copiar el tel\u00e9fono');
+      console.error('Error copiando teléfono:', error);
+      setCopyError('No se pudo copiar el teléfono');
     }
   };
 
@@ -179,6 +169,36 @@ export default function PatientDetailPage() {
     setDailyNoteEditRequest(note);
     setTab(2);
   };
+
+  useEffect(() => {
+    const stickyTabs = new Set([1, 2, 3, 5]);
+
+    if (!stickyTabs.has(tab)) {
+      setShowCompactSticky(false);
+      return;
+    }
+
+    const evaluateStickyVisibility = () => {
+      const headerElement = headerSectionRef.current;
+      if (!headerElement) {
+        setShowCompactSticky(false);
+        return;
+      }
+
+      const rect = headerElement.getBoundingClientRect();
+      const stickyTop = window.innerWidth < theme.breakpoints.values.md ? 64 : 72;
+      setShowCompactSticky(rect.bottom <= stickyTop + 12);
+    };
+
+    evaluateStickyVisibility();
+    window.addEventListener('scroll', evaluateStickyVisibility, { passive: true });
+    window.addEventListener('resize', evaluateStickyVisibility);
+
+    return () => {
+      window.removeEventListener('scroll', evaluateStickyVisibility);
+      window.removeEventListener('resize', evaluateStickyVisibility);
+    };
+  }, [tab, theme.breakpoints.values.md]);
 
 
   if (loading) {
@@ -204,7 +224,62 @@ export default function PatientDetailPage() {
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 3, flexWrap: 'wrap' }}>
+{showCompactSticky && (
+        <Box
+          sx={{
+            position: 'fixed',
+            top: { xs: 64, md: 72 },
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: theme.zIndex.appBar - 1,
+            width: 'min(720px, calc(100vw - 32px))',
+            pointerEvents: 'none',
+          }}
+        >
+        <Box
+          sx={{
+            backgroundColor: 'rgba(75, 208, 72, 0.96)',
+            color: '#14351a',
+            borderRadius: 1.5,
+            px: { xs: 1.5, md: 2 },
+            py: 1,
+            boxShadow: '0 6px 16px rgba(20, 96, 120, 0.10)',
+            backdropFilter: 'blur(6px)',
+          }}
+        >
+          <Typography
+            variant="h6"
+            sx={{
+              fontSize: { xs: '1rem', md: '1.1rem' },
+              lineHeight: 1.2,
+              fontWeight: 500,
+            }}
+          >
+            Paciente: {patient.name} {patient.last_name}
+            {patient.age ? ` - ${patient.age} años` : ''}
+          </Typography>
+        </Box>
+        </Box>
+      )}
+
+      <Box
+        ref={headerSectionRef}
+        sx={{
+          mb: 2,
+        }}
+      >
+      <Box
+        sx={{
+          backgroundColor: 'rgba(255,255,255,0.96)',
+          backdropFilter: 'blur(10px)',
+          borderRadius: 2,
+          border: '1px solid rgba(210, 227, 233, 0.95)',
+          boxShadow: '0 8px 22px rgba(20, 96, 120, 0.08)',
+          px: { xs: 1.5, md: 2 },
+          pt: 1.5,
+        }}
+      >
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
           <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48, fontSize: 18 }}>
             {patient.name[0]}
@@ -255,7 +330,6 @@ export default function PatientDetailPage() {
         variant="scrollable"
         scrollButtons="auto"
         sx={{
-          mb: 1,
           borderBottom: 1,
           borderColor: 'divider',
           '& .MuiTabs-flexContainer': {
@@ -275,6 +349,8 @@ export default function PatientDetailPage() {
         <Tab value={7} icon={<HistoryIcon />} label={'Hist\u00f3rico'} iconPosition="start" />
         <Tab value={2} icon={<NoteIcon />} label="Nota Diaria" iconPosition="start" />
       </Tabs>
+      </Box>
+      </Box>
 
       {/* Tab 0: Perfil */}
       <TabPanel value={tab} index={0}>
@@ -283,26 +359,23 @@ export default function PatientDetailPage() {
 
       {/* Tab 1: Historia Cl\u00ednica */}
       <TabPanel value={tab} index={1}>
-        <ClinicalHistoryTab patientId={patient.id} onHistoryLoaded={setClinicalHistory} />
+        <ClinicalHistoryTab patientId={patient.id} />
       </TabPanel>
 
       {/* Tab 2: Nota Diaria (SOAP) */}
       <TabPanel value={tab} index={2}>
         <PatientDailyNoteTab
           patient={patient}
-          clinicalHistory={clinicalHistory}
-          soapContext={soapContext}
-          medicamentHistory={medicamentHistory}
-          officeLabels={officeLabels}
-          patientTagControl={patientTagControl}
           canCreateDailyNote={canCreateDailyNote}
           canEditConsultationHistory={canEditConsultationHistory}
           editRequestNote={dailyNoteEditRequest}
           onEditRequestHandled={() => setDailyNoteEditRequest(null)}
-          onRefreshAfterSave={({ patient: nextPatient, clinicalHistory: nextHistory, soapContext: nextSoapContext, soapNotes: nextSoapNotes }) => {
+          onOpenColposcopy={() => {
+            setTab(4);
+            setSearchParams({ tab: 'colposcopy' }, { replace: true });
+          }}
+          onRefreshAfterSave={({ patient: nextPatient, soapNotes: nextSoapNotes }) => {
             setPatient(nextPatient);
-            setClinicalHistory(nextHistory);
-            setSoapContext(nextSoapContext);
             setSoapNotes(nextSoapNotes);
           }}
         />
@@ -320,7 +393,7 @@ export default function PatientDetailPage() {
 
       {/* Tab 5: Etiquetas */}
       <TabPanel value={tab} index={5}>
-        <PatientTagsTab patientTagControl={patientTagControl} />
+        <PatientTagsTab patientId={patient.id} patientTagControl={patientTagControl} />
       </TabPanel>
 
       {/* Tab 6: Bit\u00e1cora */}

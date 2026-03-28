@@ -139,9 +139,9 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField label="Tel\u00e9fono" fullWidth value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <TextField label="Teléfono" fullWidth value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               ) : (
-                <InfoRow label="Tel\u00e9fono" value={formatPhoneNumber(patient.phone)} />
+                <InfoRow label="Teléfono" value={formatPhoneNumber(patient.phone)} />
               )}
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>

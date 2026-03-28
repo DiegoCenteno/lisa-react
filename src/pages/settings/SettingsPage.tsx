@@ -3172,10 +3172,11 @@ export default function SettingsPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tabParam = params.get('tab');
-    if (tabParam === 'agenda') {
-      setActiveTab('agenda');
+    const requestedTab = availableTabs.find((tab) => tab.value === tabParam);
+    if (requestedTab) {
+      setActiveTab(requestedTab.value);
     }
-  }, [location.search]);
+  }, [availableTabs, location.search]);
 
   useEffect(() => {
     if (!availableTabs.some((tab) => tab.value === activeTab)) {

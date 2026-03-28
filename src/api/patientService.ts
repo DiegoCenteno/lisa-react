@@ -185,12 +185,8 @@ export const patientService = {
   },
 
   async getPatient(id: number): Promise<Patient> {
-    const patients = await this.getPatients();
-    const patient = patients.find((item) => item.id === id);
-    if (!patient) {
-      throw new Error('Paciente no encontrado');
-    }
-    return patient;
+    const response = await apiClient.get<{ status: string; data: ApiPatientRecord }>(`/v2/patients/${id}`);
+    return normalizePatient(response.data.data);
   },
 
   async updatePatient(
@@ -399,6 +395,18 @@ export const patientService = {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
+      }
+    );
+
+    return response.data.data;
+  },
+
+  async finalizePatientTag(patientId: number, tagId: number): Promise<PatientTagControlData> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.post<ApiPatientTagControlResponse>(
+      `/v2/patients/${patientId}/tag-control/tags/${tagId}/finalize`,
+      {
+        office_id: officeId,
       }
     );
 

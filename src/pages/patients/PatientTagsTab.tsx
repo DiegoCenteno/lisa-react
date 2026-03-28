@@ -1,8 +1,12 @@
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
+  Alert,
   Box,
+  Button,
   Card,
   CardContent,
+  Link,
   Paper,
   Table,
   TableBody,
@@ -10,11 +14,14 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Typography,
 } from '@mui/material';
+import { patientService } from '../../api/patientService';
 import type { PatientTagControlData } from '../../types';
 
 interface Props {
+  patientId: number;
   patientTagControl: PatientTagControlData | null;
 }
 
@@ -65,24 +72,121 @@ function getTagHistoryBadgeSx(colorClass?: string) {
 }
 
 function getTagHistoryActorLabel(roleId?: number) {
-  if (roleId === 1) return 'Observaciones del m\u00e9dico';
+  if (roleId === 1) return 'Observaciones del médico';
   if (roleId === 2) return 'Observaciones del asistente';
   return 'Observaciones';
 }
 
-function PatientTagsTabInner({ patientTagControl }: Props) {
+function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
+  const navigate = useNavigate();
+  const [tagControl, setTagControl] = useState<PatientTagControlData | null>(patientTagControl);
+  const [newLabel, setNewLabel] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [localSuccess, setLocalSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTagControl(patientTagControl);
+  }, [patientTagControl]);
+
+  const handleGoToSettings = () => {
+    navigate('/configuracion?tab=etiquetas');
+  };
+
+  const refreshTagControl = async () => {
+    const refreshed = await patientService.getPatientTagControl(patientId);
+    setTagControl(refreshed);
+  };
+
+  const handleCreateLabel = async () => {
+    const trimmedLabel = newLabel.trim();
+    if (!trimmedLabel) return;
+
+    setSaving(true);
+    setLocalError(null);
+    setLocalSuccess(null);
+
+    try {
+      const createdLabel = await patientService.createOfficeLabel(trimmedLabel);
+      const updated = await patientService.updatePatientTagStatuses(
+        patientId,
+        [],
+        { officeLabelIds: [createdLabel.id] }
+      );
+      setTagControl(updated);
+      setNewLabel('');
+      setLocalSuccess('Etiqueta agregada correctamente.');
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : 'No fue posible agregar la etiqueta.');
+      try {
+        await refreshTagControl();
+      } catch {
+        // noop
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Card>
       <CardContent>
-        <Typography variant="h6" sx={{ mb: 2.5 }}>
+        <Typography variant="h6" sx={{ mb: 1.5 }}>
           Etiquetas
         </Typography>
 
-        {!patientTagControl ? (
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
+          Para agregar estados a las etiquetas puedes configurarlos desde{' '}
+          <Link
+            component="button"
+            type="button"
+            underline="always"
+            onClick={handleGoToSettings}
+            sx={{ color: '#d32f2f', fontWeight: 700 }}
+          >
+            aquí
+          </Link>.
+        </Typography>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
+            gap: 2,
+            alignItems: 'end',
+            mb: 3,
+          }}
+        >
+          <TextField
+            fullWidth
+            label="Nueva etiqueta"
+            value={newLabel}
+            disabled={saving}
+            onChange={(event) => setNewLabel(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void handleCreateLabel();
+              }
+            }}
+          />
+          <Button
+            variant="contained"
+            onClick={() => void handleCreateLabel()}
+            disabled={saving || !newLabel.trim()}
+          >
+            Agregar etiqueta
+          </Button>
+        </Box>
+
+        {localError ? <Alert severity="error" sx={{ mb: 2 }}>{localError}</Alert> : null}
+        {localSuccess ? <Alert severity="success" sx={{ mb: 2 }}>{localSuccess}</Alert> : null}
+
+        {!tagControl ? (
           <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-            No se pudo cargar el hist\u00f3rico de etiquetas.
+            No se pudo cargar el histórico de etiquetas.
           </Typography>
-        ) : patientTagControl.tags.length === 0 ? (
+        ) : tagControl.tags.length === 0 ? (
           <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
             Este paciente no tiene etiquetas registradas.
           </Typography>
@@ -92,11 +196,11 @@ function PatientTagsTabInner({ patientTagControl }: Props) {
               <TableHead>
                 <TableRow>
                   <TableCell sx={{ width: 72 }}>#</TableCell>
-                  <TableCell>Informaci\u00f3n</TableCell>
+                  <TableCell>Información</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {patientTagControl.tags.map((tag, index) => {
+                {tagControl.tags.map((tag, index) => {
                   const tagHistory = [...(tag.history ?? [])].reverse();
 
                   return (
@@ -132,7 +236,7 @@ function PatientTagsTabInner({ patientTagControl }: Props) {
                           </Box>
 
                           <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700 }}>
-                            Hist\u00f3ricos de cambio de estatus de las etiquetas:
+                            Históricos de cambio de estatus de las etiquetas:
                           </Typography>
 
                           {tagHistory.length === 0 ? (

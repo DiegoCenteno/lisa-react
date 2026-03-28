@@ -8,6 +8,10 @@ import {
   Checkbox,
   CircularProgress,
   Collapse,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   FormControlLabel,
   Grid,
   IconButton,
@@ -37,23 +41,17 @@ import { formatDisplayDate } from '../../utils/date';
 
 type RefreshPayload = {
   patient: Patient;
-  clinicalHistory: ClinicalHistory | null;
-  soapContext: PatientSoapContext | null;
   soapNotes: SOAPNote[];
 };
 
 type Props = {
   patient: Patient;
-  clinicalHistory: ClinicalHistory | null;
-  soapContext: PatientSoapContext | null;
-  medicamentHistory: MedicamentHistoryItem[];
-  officeLabels: OfficeLabelItem[];
-  patientTagControl: PatientTagControlData | null;
   canCreateDailyNote: boolean;
   canEditConsultationHistory: boolean;
   editRequestNote: SOAPNote | null;
   onEditRequestHandled: () => void;
   onRefreshAfterSave: (payload: RefreshPayload) => void;
+  onOpenColposcopy: () => void;
 };
 
 type SubjectiveFormData = { illnessStartDate: string; currentCondition: string };
@@ -120,6 +118,41 @@ function clearDraft(patientId: number): void {
   }
 }
 
+function SoapSectionTitle({
+  initial,
+  title,
+}: {
+  initial: string;
+  title: string;
+}) {
+  const remainder = title.startsWith(initial) ? title.slice(1) : title;
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 2 }}>
+      <Typography
+        component="span"
+        sx={{
+          color: '#177b26',
+          fontWeight: 800,
+          fontSize: { xs: '2rem', md: '2.5rem' },
+          lineHeight: 1,
+        }}
+      >
+        {initial}
+      </Typography>
+      <Typography
+        variant="h6"
+        sx={{
+          color: '#177b26',
+          fontWeight: 700,
+        }}
+      >
+        {remainder}
+      </Typography>
+    </Box>
+  );
+}
+
 // --- Memoized sub-components ---
 
 const SubjectiveSection = memo(function SubjectiveSection({
@@ -130,6 +163,7 @@ const SubjectiveSection = memo(function SubjectiveSection({
 }) {
   return (
     <Card><CardContent>
+      <SoapSectionTitle initial="S" title="Subjetivo" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Fecha de inicio del padecimiento</Typography>
@@ -152,6 +186,7 @@ const ObjectiveSection = memo(function ObjectiveSection({
 }) {
   return (
     <Card><CardContent>
+      <SoapSectionTitle initial="O" title="Objetivo" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Estatura" value={form.height} onChange={(e) => onChange({ ...form, height: e.target.value })} /></Grid>
         <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Peso" value={form.weight} onChange={(e) => onChange({ ...form, weight: e.target.value })} /></Grid>
@@ -175,6 +210,7 @@ const AnalysisSection = memo(function AnalysisSection({
 }) {
   return (
     <Card><CardContent>
+      <SoapSectionTitle initial="A" title="Análisis" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -201,11 +237,13 @@ const AnalysisSection = memo(function AnalysisSection({
 });
 
 const PlanSection = memo(function PlanSection({
-  form, onChange, medicamentHistory,
+  form, onChange, medicamentHistory, onOpenColposcopy, onOpenPrescription,
 }: {
   form: PlanFormData;
   onChange: (next: PlanFormData) => void;
   medicamentHistory: MedicamentHistoryItem[];
+  onOpenColposcopy: () => void;
+  onOpenPrescription: () => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState('');
@@ -225,6 +263,7 @@ const PlanSection = memo(function PlanSection({
 
   return (
     <Card><CardContent>
+      <SoapSectionTitle initial="P" title="Plan" />
       <Button variant="text" onClick={() => setShowHistory((c) => !c)} endIcon={showHistory ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ color: '#E53935', textTransform: 'none', px: 0, mb: 2 }}>
         {`Enlista el hist\u00f3rico de tus medicamentos`}
       </Button>
@@ -256,6 +295,30 @@ const PlanSection = memo(function PlanSection({
           </Grid>
         ))}
         <Grid size={{ xs: 12 }}><TextField multiline minRows={2} fullWidth label="Indicaciones adicionales" value={form.additionalInstructions} onChange={(e) => onChange({ ...form, additionalInstructions: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mt: 0.5 }}>
+            <Button
+              variant="contained"
+              onClick={onOpenColposcopy}
+              sx={{
+                backgroundColor: '#16b8d4',
+                '&:hover': { backgroundColor: '#1099b1' },
+              }}
+            >
+              Colposcopia
+            </Button>
+            <Button
+              variant="contained"
+              onClick={onOpenPrescription}
+              sx={{
+                backgroundColor: '#16b8d4',
+                '&:hover': { backgroundColor: '#1099b1' },
+              }}
+            >
+              Receta
+            </Button>
+          </Box>
+        </Grid>
       </Grid>
     </CardContent></Card>
   );
@@ -303,17 +366,19 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
 
 function PatientDailyNoteTab({
   patient,
-  clinicalHistory,
-  soapContext,
-  medicamentHistory,
-  officeLabels,
-  patientTagControl,
   canCreateDailyNote,
   canEditConsultationHistory,
   editRequestNote,
   onEditRequestHandled,
   onRefreshAfterSave,
+  onOpenColposcopy,
 }: Props) {
+  const [clinicalHistory, setClinicalHistory] = useState<ClinicalHistory | null>(null);
+  const [soapContext, setSoapContext] = useState<PatientSoapContext | null>(null);
+  const [medicamentHistory, setMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
+  const [officeLabels, setOfficeLabels] = useState<OfficeLabelItem[]>([]);
+  const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
+  const [tabLoading, setTabLoading] = useState(true);
   const [subjectiveForm, setSubjectiveForm] = useState<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
   const [objectiveForm, setObjectiveForm] = useState<ObjectiveFormData>({ height: '', weight: '', ta: '', temp: '', fc: '', os: '', studies: '', lastMenstruationDate: '', pregnant: false });
   const [analysisForm, setAnalysisForm] = useState<AnalysisFormData>({ examination: '', diagnostics: [''] });
@@ -323,11 +388,51 @@ function PatientDailyNoteTab({
   const [savingDailyNote, setSavingDailyNote] = useState(false);
   const [dailyNoteMessage, setDailyNoteMessage] = useState<string | null>(null);
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
+  const [prescriptionFormatOpen, setPrescriptionFormatOpen] = useState(false);
   const [editingConsultation, setEditingConsultation] = useState<SOAPNote | null>(null);
   const draftRestoredRef = useRef(false);
 
   const lastConsultation = soapContext?.last_consultation ?? null;
   const lastConsultationDateLabel = lastConsultation?.created_at ? formatDisplayDate(lastConsultation.created_at) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTabData = async () => {
+      setTabLoading(true);
+      try {
+        const [historyData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData] = await Promise.all([
+          patientService.getClinicalHistory(patient.id),
+          patientService.getPatientSoapContext(patient.id),
+          patientService.getMedicamentHistory(),
+          patientService.getOfficeLabels(),
+          patientService.getPatientTagControl(patient.id),
+        ]);
+
+        if (cancelled) return;
+
+        setClinicalHistory(historyData);
+        setSoapContext(soapContextData);
+        setMedicamentHistory(medicamentHistoryData);
+        setOfficeLabels(officeLabelsData);
+        setPatientTagControl(tagControlData);
+      } catch (error) {
+        if (cancelled) return;
+        console.error('Error cargando datos de nota diaria:', error);
+        setDailyNoteError('No se pudo cargar la información de nota diaria.');
+      } finally {
+        if (!cancelled) {
+          setTabLoading(false);
+        }
+      }
+    };
+
+    loadTabData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.id]);
 
   // Restore draft from localStorage on mount
   useEffect(() => {
@@ -365,8 +470,9 @@ function PatientDailyNoteTab({
   }, [patient.id, subjectiveForm, objectiveForm, analysisForm, planForm, personalNotes, selectedOfficeLabels, editingConsultation]);
 
   useEffect(() => {
+    if (tabLoading) return;
     setSelectedOfficeLabels((current) => (current.length > 0 ? current : officeLabels.slice(0, 1).map((label) => label.id)));
-  }, [officeLabels]);
+  }, [officeLabels, tabLoading]);
 
   useEffect(() => {
     setObjectiveForm((current) => ({
@@ -446,7 +552,10 @@ function PatientDailyNoteTab({
         patientService.getPatientSoapContext(patient.id),
         patientService.getSOAPNotes(patient.id),
       ]);
-      onRefreshAfterSave({ patient: nextPatient, clinicalHistory: nextClinicalHistory, soapContext: nextSoapContext, soapNotes: nextSoapNotes });
+      setClinicalHistory(nextClinicalHistory);
+      setSoapContext(nextSoapContext);
+      setPatientTagControl(await patientService.getPatientTagControl(patient.id));
+      onRefreshAfterSave({ patient: nextPatient, soapNotes: nextSoapNotes });
       setEditingConsultation(null);
       clearDraft(patient.id);
       setDailyNoteMessage(editingConsultation?.consultation_id ? 'Consulta actualizada' : 'Nota diaria guardada');
@@ -486,6 +595,90 @@ function PatientDailyNoteTab({
   const handlePlanChange = useCallback((next: PlanFormData) => setPlanForm(next), []);
   const handleNotesChange = useCallback((next: string) => setPersonalNotes(next), []);
   const handleLabelsChange = useCallback((next: number[]) => setSelectedOfficeLabels(next), []);
+  const buildPrescriptionPayload = useCallback(() => ({
+    patient_id: patient.id,
+    height: objectiveForm.height.trim() || undefined,
+    weight: objectiveForm.weight.trim() || undefined,
+    ta: objectiveForm.ta.trim() || undefined,
+    temp: objectiveForm.temp.trim() || undefined,
+    fc: objectiveForm.fc.trim() || undefined,
+    os: objectiveForm.os.trim() || undefined,
+    diagnostics: analysisForm.diagnostics.map((value) => value.trim()).filter(Boolean),
+    medications: planForm.medications
+      .map((row) => ({
+        medicament: row.medicament.trim(),
+        prescription: row.prescription.trim(),
+      }))
+      .filter((row) => row.medicament || row.prescription),
+    indicaciones: planForm.additionalInstructions.trim() || undefined,
+  }), [
+    analysisForm.diagnostics,
+    objectiveForm.fc,
+    objectiveForm.height,
+    objectiveForm.os,
+    objectiveForm.ta,
+    objectiveForm.temp,
+    objectiveForm.weight,
+    patient.id,
+    planForm.additionalInstructions,
+    planForm.medications,
+  ]);
+
+  const downloadPrescriptionBlob = useCallback((blob: Blob, extension: 'docx' | 'pdf') => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeName = `${patient.name}_${patient.last_name}`.replace(/[^A-Za-z0-9_-]/g, '_');
+    link.href = url;
+    link.download = `${safeName || 'Receta'}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }, [patient.last_name, patient.name]);
+
+  const handleDownloadPrescriptionWord = useCallback(async () => {
+    try {
+      setDailyNoteError(null);
+      const blob = await consultationService.downloadPrescription(buildPrescriptionPayload());
+      downloadPrescriptionBlob(blob, 'docx');
+    } catch (error) {
+      console.error('Error descargando receta:', error);
+      setDailyNoteError('No se pudo descargar la receta.');
+    }
+  }, [buildPrescriptionPayload, downloadPrescriptionBlob]);
+
+  const handleDownloadPrescriptionPdf = useCallback(async () => {
+    try {
+      setDailyNoteError(null);
+      const blob = await consultationService.downloadPrescriptionPdf(buildPrescriptionPayload());
+      downloadPrescriptionBlob(blob, 'pdf');
+    } catch (error) {
+      console.error('Error descargando receta en PDF:', error);
+      setDailyNoteError('No se pudo descargar la receta en PDF.');
+    }
+  }, [buildPrescriptionPayload, downloadPrescriptionBlob]);
+
+  const handleOpenPrescription = useCallback(() => {
+    setPrescriptionFormatOpen(true);
+  }, []);
+
+  const handleSelectPrescriptionWord = useCallback(async () => {
+    setPrescriptionFormatOpen(false);
+    await handleDownloadPrescriptionWord();
+  }, [handleDownloadPrescriptionWord]);
+
+  const handleSelectPrescriptionPdf = useCallback(async () => {
+    setPrescriptionFormatOpen(false);
+    await handleDownloadPrescriptionPdf();
+  }, [handleDownloadPrescriptionPdf]);
+
+  if (tabLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <>
@@ -503,7 +696,13 @@ function PatientDailyNoteTab({
         <SubjectiveSection form={subjectiveForm} onChange={handleSubjectiveChange} />
         <ObjectiveSection form={objectiveForm} onChange={handleObjectiveChange} />
         <AnalysisSection form={analysisForm} onChange={handleAnalysisChange} />
-        <PlanSection form={planForm} onChange={handlePlanChange} medicamentHistory={medicamentHistory} />
+        <PlanSection
+          form={planForm}
+          onChange={handlePlanChange}
+          medicamentHistory={medicamentHistory}
+          onOpenColposcopy={onOpenColposcopy}
+          onOpenPrescription={handleOpenPrescription}
+        />
         <PersonalNotesSection
           notes={personalNotes}
           onNotesChange={handleNotesChange}
@@ -526,6 +725,31 @@ function PatientDailyNoteTab({
       <Snackbar open={Boolean(dailyNoteError)} autoHideDuration={3000} onClose={() => setDailyNoteError(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert onClose={() => setDailyNoteError(null)} severity="error" sx={{ width: '100%' }}>{dailyNoteError}</Alert>
       </Snackbar>
+
+      <Dialog
+        open={prescriptionFormatOpen}
+        onClose={() => setPrescriptionFormatOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Descargar receta</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            ¿En qué formato deseas descargar la receta?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPrescriptionFormatOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Button onClick={() => void handleSelectPrescriptionPdf()}>
+            PDF
+          </Button>
+          <Button variant="contained" onClick={() => void handleSelectPrescriptionWord()}>
+            Word
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 }
