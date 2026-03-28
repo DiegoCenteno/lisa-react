@@ -287,28 +287,26 @@ export default function PatientDetailPage() {
       </TabPanel>
 
       {/* Tab 2: Nota Diaria (SOAP) */}
-      <Box sx={{ display: tab === 2 ? 'block' : 'none', py: 2 }}>
-        {patient && (
-          <PatientDailyNoteTab
-            patient={patient}
-            clinicalHistory={clinicalHistory}
-            soapContext={soapContext}
-            medicamentHistory={medicamentHistory}
-            officeLabels={officeLabels}
-            patientTagControl={patientTagControl}
-            canCreateDailyNote={canCreateDailyNote}
-            canEditConsultationHistory={canEditConsultationHistory}
-            editRequestNote={dailyNoteEditRequest}
-            onEditRequestHandled={() => setDailyNoteEditRequest(null)}
-            onRefreshAfterSave={({ patient: nextPatient, clinicalHistory: nextHistory, soapContext: nextSoapContext, soapNotes: nextSoapNotes }) => {
-              setPatient(nextPatient);
-              setClinicalHistory(nextHistory);
-              setSoapContext(nextSoapContext);
-              setSoapNotes(nextSoapNotes);
-            }}
-          />
-        )}
-      </Box>
+      <TabPanel value={tab} index={2}>
+        <PatientDailyNoteTab
+          patient={patient}
+          clinicalHistory={clinicalHistory}
+          soapContext={soapContext}
+          medicamentHistory={medicamentHistory}
+          officeLabels={officeLabels}
+          patientTagControl={patientTagControl}
+          canCreateDailyNote={canCreateDailyNote}
+          canEditConsultationHistory={canEditConsultationHistory}
+          editRequestNote={dailyNoteEditRequest}
+          onEditRequestHandled={() => setDailyNoteEditRequest(null)}
+          onRefreshAfterSave={({ patient: nextPatient, clinicalHistory: nextHistory, soapContext: nextSoapContext, soapNotes: nextSoapNotes }) => {
+            setPatient(nextPatient);
+            setClinicalHistory(nextHistory);
+            setSoapContext(nextSoapContext);
+            setSoapNotes(nextSoapNotes);
+          }}
+        />
+      </TabPanel>
 
       {/* Tab 3: Archivos */}
       <TabPanel value={tab} index={3}>
