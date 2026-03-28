@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -56,6 +56,22 @@ type Props = {
   onRefreshAfterSave: (payload: RefreshPayload) => void;
 };
 
+type SubjectiveFormData = { illnessStartDate: string; currentCondition: string };
+type ObjectiveFormData = { height: string; weight: string; ta: string; temp: string; fc: string; os: string; studies: string; lastMenstruationDate: string; pregnant: boolean };
+type AnalysisFormData = { examination: string; diagnostics: string[] };
+type PlanFormData = { medications: Array<{ medicament: string; prescription: string }>; additionalInstructions: string };
+
+type DraftData = {
+  subjectiveForm: SubjectiveFormData;
+  objectiveForm: ObjectiveFormData;
+  analysisForm: AnalysisFormData;
+  planForm: PlanFormData;
+  personalNotes: string;
+  selectedOfficeLabels: number[];
+  editingConsultationId: number | null;
+  savedAt: number;
+};
+
 function normalizeDateInputValue(value?: string | null): string {
   const raw = String(value ?? '').trim();
   if (!raw) return '';
@@ -67,6 +83,223 @@ function normalizeDateInputValue(value?: string | null): string {
   }
   return raw;
 }
+
+function getDraftKey(patientId: number): string {
+  return `soap-draft-${patientId}`;
+}
+
+function loadDraft(patientId: number): DraftData | null {
+  try {
+    const raw = localStorage.getItem(getDraftKey(patientId));
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as DraftData;
+    const oneDay = 24 * 60 * 60 * 1000;
+    if (Date.now() - draft.savedAt > oneDay) {
+      localStorage.removeItem(getDraftKey(patientId));
+      return null;
+    }
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(patientId: number, data: Omit<DraftData, 'savedAt'>): void {
+  try {
+    localStorage.setItem(getDraftKey(patientId), JSON.stringify({ ...data, savedAt: Date.now() }));
+  } catch {
+    // localStorage full or unavailable
+  }
+}
+
+function clearDraft(patientId: number): void {
+  try {
+    localStorage.removeItem(getDraftKey(patientId));
+  } catch {
+    // ignore
+  }
+}
+
+// --- Memoized sub-components ---
+
+const SubjectiveSection = memo(function SubjectiveSection({
+  form, onChange,
+}: {
+  form: SubjectiveFormData;
+  onChange: (next: SubjectiveFormData) => void;
+}) {
+  return (
+    <Card><CardContent>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Fecha de inicio del padecimiento</Typography>
+          <TextField type="date" fullWidth size="small" value={form.illnessStartDate} onChange={(e) => onChange({ ...form, illnessStartDate: e.target.value })} InputLabelProps={{ shrink: true }} />
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Motivo de consulta</Typography>
+          <TextField multiline minRows={4} fullWidth value={form.currentCondition} onChange={(e) => onChange({ ...form, currentCondition: e.target.value })} />
+        </Grid>
+      </Grid>
+    </CardContent></Card>
+  );
+});
+
+const ObjectiveSection = memo(function ObjectiveSection({
+  form, onChange,
+}: {
+  form: ObjectiveFormData;
+  onChange: (next: ObjectiveFormData) => void;
+}) {
+  return (
+    <Card><CardContent>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Estatura" value={form.height} onChange={(e) => onChange({ ...form, height: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Peso" value={form.weight} onChange={(e) => onChange({ ...form, weight: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="T. A." value={form.ta} onChange={(e) => onChange({ ...form, ta: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label={`Temp (\u00b0C)`} value={form.temp} onChange={(e) => onChange({ ...form, temp: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="F.C." value={form.fc} onChange={(e) => onChange({ ...form, fc: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="O2 (%)" value={form.os} onChange={(e) => onChange({ ...form, os: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12 }}><TextField multiline minRows={3} fullWidth label={`Exploraci\u00f3n f\u00edsica`} value={form.studies} onChange={(e) => onChange({ ...form, studies: e.target.value })} /></Grid>
+        <Grid size={{ xs: 12, md: 6 }}><TextField type="date" fullWidth size="small" label={`Fecha de \u00faltima menstruaci\u00f3n`} value={form.lastMenstruationDate} onChange={(e) => onChange({ ...form, lastMenstruationDate: e.target.value })} InputLabelProps={{ shrink: true }} /></Grid>
+        <Grid size={{ xs: 12 }}><FormControlLabel control={<Checkbox checked={form.pregnant} onChange={(e) => onChange({ ...form, pregnant: e.target.checked })} />} label="Embarazada" /></Grid>
+      </Grid>
+    </CardContent></Card>
+  );
+});
+
+const AnalysisSection = memo(function AnalysisSection({
+  form, onChange,
+}: {
+  form: AnalysisFormData;
+  onChange: (next: AnalysisFormData) => void;
+}) {
+  return (
+    <Card><CardContent>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>{`An\u00e1lisis`}</Typography>
+          </Box>
+          <TextField fullWidth size="small" value={form.examination} onChange={(e) => onChange({ ...form, examination: e.target.value })} />
+        </Grid>
+        {form.diagnostics.map((diagnostic, index) => (
+          <Grid key={`diagnostic-${index}`} size={{ xs: 12 }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <TextField fullWidth size="small" label={`Diagn\u00f3stico ${index + 1}`} value={diagnostic} onChange={(e) => onChange({ ...form, diagnostics: form.diagnostics.map((item, i) => i === index ? e.target.value : item) })} />
+              {index === 0 ? (
+                <IconButton color="primary" onClick={() => onChange({ ...form, diagnostics: form.diagnostics.length >= 5 ? form.diagnostics : [...form.diagnostics, ''] })}><AddIcon /></IconButton>
+              ) : (
+                <IconButton color="error" onClick={() => onChange({ ...form, diagnostics: form.diagnostics.filter((_, i) => i !== index) })}><CancelIcon /></IconButton>
+              )}
+            </Box>
+          </Grid>
+        ))}
+      </Grid>
+    </CardContent></Card>
+  );
+});
+
+const PlanSection = memo(function PlanSection({
+  form, onChange, medicamentHistory,
+}: {
+  form: PlanFormData;
+  onChange: (next: PlanFormData) => void;
+  medicamentHistory: MedicamentHistoryItem[];
+}) {
+  const [showHistory, setShowHistory] = useState(false);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(5);
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    if (!q) return medicamentHistory;
+    return medicamentHistory.filter((item) => item.title.toLowerCase().includes(q));
+  }, [medicamentHistory, search]);
+
+  const paginated = useMemo(
+    () => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [filtered, page, rowsPerPage]
+  );
+
+  return (
+    <Card><CardContent>
+      <Button variant="text" onClick={() => setShowHistory((c) => !c)} endIcon={showHistory ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ color: '#E53935', textTransform: 'none', px: 0, mb: 2 }}>
+        {`Enlista el hist\u00f3rico de tus medicamentos`}
+      </Button>
+      <Collapse in={showHistory}>
+        <Box sx={{ mb: 3 }}>
+          <TextField fullWidth size="small" label="Buscar medicamentos" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} sx={{ mb: 2 }} />
+          <TableContainer component={Paper} variant="outlined">
+            <Table size="small"><TableBody>
+              {paginated.map((item) => <TableRow key={item.title}><TableCell>{item.title}</TableCell></TableRow>)}
+              {paginated.length === 0 && <TableRow><TableCell>No se encontraron medicamentos</TableCell></TableRow>}
+            </TableBody></Table>
+          </TableContainer>
+          <TablePagination component="div" count={filtered.length} page={page} onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[5, 10, 20]} labelRowsPerPage="Filas" />
+        </Box>
+      </Collapse>
+
+      <Grid container spacing={2}>
+        {form.medications.map((row, index) => (
+          <Grid key={`medication-${index}`} size={{ xs: 12 }}>
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+              <TextField fullWidth size="small" label={`Medicamento ${index + 1}`} value={row.medicament} onChange={(e) => onChange({ ...form, medications: form.medications.map((item, i) => i === index ? { ...item, medicament: e.target.value } : item) })} />
+              {index === 0 ? (
+                <IconButton color="primary" onClick={() => onChange({ ...form, medications: form.medications.length >= 6 ? form.medications : [...form.medications, { medicament: '', prescription: '' }] })}><AddIcon /></IconButton>
+              ) : (
+                <IconButton color="error" onClick={() => onChange({ ...form, medications: form.medications.filter((_, i) => i !== index) })}><CancelIcon /></IconButton>
+              )}
+            </Box>
+            <TextField fullWidth size="small" label={`Prescripci\u00f3n`} value={row.prescription} onChange={(e) => onChange({ ...form, medications: form.medications.map((item, i) => i === index ? { ...item, prescription: e.target.value } : item) })} sx={{ mt: 1 }} />
+          </Grid>
+        ))}
+        <Grid size={{ xs: 12 }}><TextField multiline minRows={2} fullWidth label="Indicaciones adicionales" value={form.additionalInstructions} onChange={(e) => onChange({ ...form, additionalInstructions: e.target.value })} /></Grid>
+      </Grid>
+    </CardContent></Card>
+  );
+});
+
+const PersonalNotesSection = memo(function PersonalNotesSection({
+  notes, onNotesChange, selectedLabels, onLabelsChange, officeLabels, patientTagControl,
+}: {
+  notes: string;
+  onNotesChange: (next: string) => void;
+  selectedLabels: number[];
+  onLabelsChange: (next: number[]) => void;
+  officeLabels: OfficeLabelItem[];
+  patientTagControl: PatientTagControlData | null;
+}) {
+  return (
+    <Card><CardContent>
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>Anotaciones personales</Typography>
+          </Box>
+          <TextField multiline minRows={3} fullWidth value={notes} onChange={(e) => onNotesChange(e.target.value)} helperText="Tus notas en este campo son privadas" />
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Etiquetas</Typography>
+          {patientTagControl && patientTagControl.statuses.length === 0 ? <Alert severity="warning" sx={{ mb: 1.5 }}>{`A\u00fan no hay estados configurados para las etiquetas.`}</Alert> : null}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
+            {officeLabels.map((label) => (
+              <FormControlLabel
+                key={label.id}
+                control={<Checkbox checked={selectedLabels.includes(label.id)} onChange={() => onLabelsChange(selectedLabels.includes(label.id) ? selectedLabels.filter((id) => id !== label.id) : [...selectedLabels, label.id])} />}
+                label={label.code?.trim() || label.identify?.trim() || `Etiqueta ${label.id}`}
+              />
+            ))}
+          </Box>
+        </Grid>
+      </Grid>
+    </CardContent></Card>
+  );
+});
+
+// --- Main component ---
 
 function PatientDailyNoteTab({
   patient,
@@ -81,31 +314,55 @@ function PatientDailyNoteTab({
   onEditRequestHandled,
   onRefreshAfterSave,
 }: Props) {
-  const [subjectiveForm, setSubjectiveForm] = useState({ illnessStartDate: '', currentCondition: '' });
-  const [objectiveForm, setObjectiveForm] = useState({ height: '', weight: '', ta: '', temp: '', fc: '', os: '', studies: '', lastMenstruationDate: '', pregnant: false });
-  const [analysisForm, setAnalysisForm] = useState({ examination: '', diagnostics: [''] });
-  const [planForm, setPlanForm] = useState({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
+  const [subjectiveForm, setSubjectiveForm] = useState<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
+  const [objectiveForm, setObjectiveForm] = useState<ObjectiveFormData>({ height: '', weight: '', ta: '', temp: '', fc: '', os: '', studies: '', lastMenstruationDate: '', pregnant: false });
+  const [analysisForm, setAnalysisForm] = useState<AnalysisFormData>({ examination: '', diagnostics: [''] });
+  const [planForm, setPlanForm] = useState<PlanFormData>({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
   const [personalNotes, setPersonalNotes] = useState('');
   const [selectedOfficeLabels, setSelectedOfficeLabels] = useState<number[]>([]);
   const [savingDailyNote, setSavingDailyNote] = useState(false);
   const [dailyNoteMessage, setDailyNoteMessage] = useState<string | null>(null);
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [editingConsultation, setEditingConsultation] = useState<SOAPNote | null>(null);
-  const [showMedicamentHistory, setShowMedicamentHistory] = useState(false);
-  const [medicamentSearch, setMedicamentSearch] = useState('');
-  const [medicamentHistoryPage, setMedicamentHistoryPage] = useState(0);
-  const [medicamentHistoryRowsPerPage, setMedicamentHistoryRowsPerPage] = useState(5);
+  const draftRestoredRef = useRef(false);
 
   const lastConsultation = soapContext?.last_consultation ?? null;
   const lastConsultationDateLabel = lastConsultation?.created_at ? formatDisplayDate(lastConsultation.created_at) : null;
 
-  const filteredMedicamentHistory = useMemo(() => {
-    const query = medicamentSearch.toLowerCase().trim();
-    if (!query) return medicamentHistory;
-    return medicamentHistory.filter((item) => item.title.toLowerCase().includes(query));
-  }, [medicamentHistory, medicamentSearch]);
+  // Restore draft from localStorage on mount
+  useEffect(() => {
+    if (draftRestoredRef.current) return;
+    draftRestoredRef.current = true;
+    const draft = loadDraft(patient.id);
+    if (!draft) return;
+    setSubjectiveForm(draft.subjectiveForm);
+    setObjectiveForm(draft.objectiveForm);
+    setAnalysisForm(draft.analysisForm);
+    setPlanForm(draft.planForm);
+    setPersonalNotes(draft.personalNotes);
+    setSelectedOfficeLabels(draft.selectedOfficeLabels);
+  }, [patient.id]);
 
-  const paginatedMedicamentHistory = useMemo(() => filteredMedicamentHistory.slice(medicamentHistoryPage * medicamentHistoryRowsPerPage, medicamentHistoryPage * medicamentHistoryRowsPerPage + medicamentHistoryRowsPerPage), [filteredMedicamentHistory, medicamentHistoryPage, medicamentHistoryRowsPerPage]);
+  // Save draft to localStorage on changes (debounced)
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!draftRestoredRef.current) return;
+    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    draftTimerRef.current = setTimeout(() => {
+      saveDraft(patient.id, {
+        subjectiveForm,
+        objectiveForm,
+        analysisForm,
+        planForm,
+        personalNotes,
+        selectedOfficeLabels,
+        editingConsultationId: editingConsultation?.consultation_id ?? null,
+      });
+    }, 500);
+    return () => {
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    };
+  }, [patient.id, subjectiveForm, objectiveForm, analysisForm, planForm, personalNotes, selectedOfficeLabels, editingConsultation]);
 
   useEffect(() => {
     setSelectedOfficeLabels((current) => (current.length > 0 ? current : officeLabels.slice(0, 1).map((label) => label.id)));
@@ -191,7 +448,15 @@ function PatientDailyNoteTab({
       ]);
       onRefreshAfterSave({ patient: nextPatient, clinicalHistory: nextClinicalHistory, soapContext: nextSoapContext, soapNotes: nextSoapNotes });
       setEditingConsultation(null);
+      clearDraft(patient.id);
       setDailyNoteMessage(editingConsultation?.consultation_id ? 'Consulta actualizada' : 'Nota diaria guardada');
+      // Reset form after successful save
+      setSubjectiveForm({ illnessStartDate: '', currentCondition: '' });
+      setObjectiveForm({ height: '', weight: '', ta: '', temp: '', fc: '', os: '', studies: '', lastMenstruationDate: normalizeDateInputValue(clinicalHistory?.gynecological?.last_menstruation_date) || '', pregnant: Boolean(clinicalHistory?.gynecological?.pregnant) });
+      setAnalysisForm({ examination: '', diagnostics: [''] });
+      setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
+      setPersonalNotes('');
+      setSelectedOfficeLabels(officeLabels.slice(0, 1).map((label) => label.id));
     } catch (error) {
       console.error('Error guardando nota diaria:', error);
       setDailyNoteError(editingConsultation?.consultation_id ? 'No se pudo actualizar la consulta' : 'No se pudo guardar la nota diaria');
@@ -212,7 +477,15 @@ function PatientDailyNoteTab({
     setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
     setPersonalNotes('');
     setSelectedOfficeLabels(officeLabels.slice(0, 1).map((label) => label.id));
+    clearDraft(patient.id);
   };
+
+  const handleSubjectiveChange = useCallback((next: SubjectiveFormData) => setSubjectiveForm(next), []);
+  const handleObjectiveChange = useCallback((next: ObjectiveFormData) => setObjectiveForm(next), []);
+  const handleAnalysisChange = useCallback((next: AnalysisFormData) => setAnalysisForm(next), []);
+  const handlePlanChange = useCallback((next: PlanFormData) => setPlanForm(next), []);
+  const handleNotesChange = useCallback((next: string) => setPersonalNotes(next), []);
+  const handleLabelsChange = useCallback((next: number[]) => setSelectedOfficeLabels(next), []);
 
   return (
     <>
@@ -224,115 +497,21 @@ function PatientDailyNoteTab({
         )}
 
         <Typography variant="body2" sx={{ color: '#2f2f2f' }}>
-          {lastConsultationDateLabel ? `Última consulta: ${lastConsultationDateLabel}` : 'Última consulta: Sin consultas previas'}
+          {lastConsultationDateLabel ? `\u00daltima consulta: ${lastConsultationDateLabel}` : '\u00daltima consulta: Sin consultas previas'}
         </Typography>
 
-        <Card><CardContent>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 6 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Fecha de inicio del padecimiento</Typography>
-              <TextField type="date" fullWidth size="small" value={subjectiveForm.illnessStartDate} onChange={(e) => setSubjectiveForm((current) => ({ ...current, illnessStartDate: e.target.value }))} InputLabelProps={{ shrink: true }} />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Motivo de consulta</Typography>
-              <TextField multiline minRows={4} fullWidth value={subjectiveForm.currentCondition} onChange={(e) => setSubjectiveForm((current) => ({ ...current, currentCondition: e.target.value }))} />
-            </Grid>
-          </Grid>
-        </CardContent></Card>
-
-        <Card><CardContent>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Estatura" value={objectiveForm.height} onChange={(e) => setObjectiveForm((current) => ({ ...current, height: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Peso" value={objectiveForm.weight} onChange={(e) => setObjectiveForm((current) => ({ ...current, weight: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="T. A." value={objectiveForm.ta} onChange={(e) => setObjectiveForm((current) => ({ ...current, ta: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="Temp (°C)" value={objectiveForm.temp} onChange={(e) => setObjectiveForm((current) => ({ ...current, temp: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="F.C." value={objectiveForm.fc} onChange={(e) => setObjectiveForm((current) => ({ ...current, fc: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="O2 (%)" value={objectiveForm.os} onChange={(e) => setObjectiveForm((current) => ({ ...current, os: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12 }}><TextField multiline minRows={3} fullWidth label="Exploración física" value={objectiveForm.studies} onChange={(e) => setObjectiveForm((current) => ({ ...current, studies: e.target.value }))} /></Grid>
-            <Grid size={{ xs: 12, md: 6 }}><TextField type="date" fullWidth size="small" label="Fecha de última menstruación" value={objectiveForm.lastMenstruationDate} onChange={(e) => setObjectiveForm((current) => ({ ...current, lastMenstruationDate: e.target.value }))} InputLabelProps={{ shrink: true }} /></Grid>
-            <Grid size={{ xs: 12 }}><FormControlLabel control={<Checkbox checked={objectiveForm.pregnant} onChange={(e) => setObjectiveForm((current) => ({ ...current, pregnant: e.target.checked }))} />} label="Embarazada" /></Grid>
-          </Grid>
-        </CardContent></Card>
-
-        <Card><CardContent>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>Análisis</Typography>
-              </Box>
-              <TextField fullWidth size="small" value={analysisForm.examination} onChange={(e) => setAnalysisForm((current) => ({ ...current, examination: e.target.value }))} />
-            </Grid>
-            {analysisForm.diagnostics.map((diagnostic, index) => (
-              <Grid key={`diagnostic-${index}`} size={{ xs: 12 }}>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <TextField fullWidth size="small" label={`Diagnóstico ${index + 1}`} value={diagnostic} onChange={(e) => setAnalysisForm((current) => ({ ...current, diagnostics: current.diagnostics.map((item, itemIndex) => itemIndex === index ? e.target.value : item) }))} />
-                  {index === 0 ? (
-                    <IconButton color="primary" onClick={() => setAnalysisForm((current) => ({ ...current, diagnostics: current.diagnostics.length >= 5 ? current.diagnostics : [...current.diagnostics, ''] }))}><AddIcon /></IconButton>
-                  ) : (
-                    <IconButton color="error" onClick={() => setAnalysisForm((current) => ({ ...current, diagnostics: current.diagnostics.filter((_, itemIndex) => itemIndex !== index) || [''] }))}><CancelIcon /></IconButton>
-                  )}
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        </CardContent></Card>
-
-        <Card><CardContent>
-          <Button variant="text" onClick={() => setShowMedicamentHistory((current) => !current)} endIcon={showMedicamentHistory ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ color: '#E53935', textTransform: 'none', px: 0, mb: 2 }}>
-            Enlista el histórico de tus medicamentos
-          </Button>
-          <Collapse in={showMedicamentHistory}>
-            <Box sx={{ mb: 3 }}>
-              <TextField fullWidth size="small" label="Buscar medicamentos" value={medicamentSearch} onChange={(e) => { setMedicamentSearch(e.target.value); setMedicamentHistoryPage(0); }} sx={{ mb: 2 }} />
-              <TableContainer component={Paper} variant="outlined">
-                <Table size="small"><TableBody>
-                  {paginatedMedicamentHistory.map((item) => <TableRow key={item.title}><TableCell>{item.title}</TableCell></TableRow>)}
-                  {paginatedMedicamentHistory.length === 0 && <TableRow><TableCell>No se encontraron medicamentos</TableCell></TableRow>}
-                </TableBody></Table>
-              </TableContainer>
-              <TablePagination component="div" count={filteredMedicamentHistory.length} page={medicamentHistoryPage} onPageChange={(_, page) => setMedicamentHistoryPage(page)} rowsPerPage={medicamentHistoryRowsPerPage} onRowsPerPageChange={(e) => { setMedicamentHistoryRowsPerPage(parseInt(e.target.value, 10)); setMedicamentHistoryPage(0); }} rowsPerPageOptions={[5, 10, 20]} labelRowsPerPage="Filas" />
-            </Box>
-          </Collapse>
-
-          <Grid container spacing={2}>
-            {planForm.medications.map((row, index) => (
-              <Grid key={`medication-${index}`} size={{ xs: 12 }}>
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                  <TextField fullWidth size="small" label={`Medicamento ${index + 1}`} value={row.medicament} onChange={(e) => setPlanForm((current) => ({ ...current, medications: current.medications.map((item, itemIndex) => itemIndex === index ? { ...item, medicament: e.target.value } : item) }))} />
-                  {index === 0 ? (
-                    <IconButton color="primary" onClick={() => setPlanForm((current) => ({ ...current, medications: current.medications.length >= 6 ? current.medications : [...current.medications, { medicament: '', prescription: '' }] }))}><AddIcon /></IconButton>
-                  ) : (
-                    <IconButton color="error" onClick={() => setPlanForm((current) => ({ ...current, medications: current.medications.filter((_, itemIndex) => itemIndex !== index) }))}><CancelIcon /></IconButton>
-                  )}
-                </Box>
-                <TextField fullWidth size="small" label="Prescripción" value={row.prescription} onChange={(e) => setPlanForm((current) => ({ ...current, medications: current.medications.map((item, itemIndex) => itemIndex === index ? { ...item, prescription: e.target.value } : item) }))} sx={{ mt: 1 }} />
-              </Grid>
-            ))}
-            <Grid size={{ xs: 12 }}><TextField multiline minRows={2} fullWidth label="Indicaciones adicionales" value={planForm.additionalInstructions} onChange={(e) => setPlanForm((current) => ({ ...current, additionalInstructions: e.target.value }))} /></Grid>
-          </Grid>
-        </CardContent></Card>
-
-        <Card><CardContent>
-          <Grid container spacing={2}>
-            <Grid size={{ xs: 12 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>Anotaciones personales</Typography>
-              </Box>
-              <TextField multiline minRows={3} fullWidth value={personalNotes} onChange={(e) => setPersonalNotes(e.target.value)} helperText="Tus notas en este campo son privadas" />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Etiquetas</Typography>
-              {patientTagControl && patientTagControl.statuses.length === 0 ? <Alert severity="warning" sx={{ mb: 1.5 }}>Aún no hay estados configurados para las etiquetas.</Alert> : null}
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
-                {officeLabels.map((label) => (
-                  <FormControlLabel key={label.id} control={<Checkbox checked={selectedOfficeLabels.includes(label.id)} onChange={() => setSelectedOfficeLabels((current) => current.includes(label.id) ? current.filter((id) => id !== label.id) : [...current, label.id])} />} label={label.code?.trim() || label.identify?.trim() || `Etiqueta ${label.id}`} />
-                ))}
-              </Box>
-            </Grid>
-          </Grid>
-        </CardContent></Card>
+        <SubjectiveSection form={subjectiveForm} onChange={handleSubjectiveChange} />
+        <ObjectiveSection form={objectiveForm} onChange={handleObjectiveChange} />
+        <AnalysisSection form={analysisForm} onChange={handleAnalysisChange} />
+        <PlanSection form={planForm} onChange={handlePlanChange} medicamentHistory={medicamentHistory} />
+        <PersonalNotesSection
+          notes={personalNotes}
+          onNotesChange={handleNotesChange}
+          selectedLabels={selectedOfficeLabels}
+          onLabelsChange={handleLabelsChange}
+          officeLabels={officeLabels}
+          patientTagControl={patientTagControl}
+        />
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button variant="contained" color="primary" startIcon={savingDailyNote ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />} onClick={handleSaveDailyNote} disabled={savingDailyNote || (!editingConsultation && !canCreateDailyNote) || (Boolean(editingConsultation) && !canEditConsultationHistory)} sx={{ minWidth: 180 }}>
