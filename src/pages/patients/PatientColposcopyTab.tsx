@@ -27,9 +27,10 @@ import { formatDisplayDateTimeLongEs } from '../../utils/date';
 
 interface Props {
   patientId: number;
+  onCaptureSaved?: (file: PatientFile) => void;
 }
 
-function PatientColposcopyTabInner({ patientId }: Props) {
+function PatientColposcopyTabInner({ patientId, onCaptureSaved }: Props) {
   const [colposcopyFiles, setColposcopyFiles] = useState<PatientFile[]>([]);
   const [loadingColposcopy, setLoadingColposcopy] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -148,6 +149,7 @@ function PatientColposcopyTabInner({ patientId }: Props) {
       const createdFile = await patientService.captureColposcopy(patientId, image);
 
       setColposcopyFiles((current) => [createdFile, ...current.filter((file) => file.id !== createdFile.id)]);
+      onCaptureSaved?.(createdFile);
       setMessage('Captura realizada');
     } catch (err) {
       console.error('Error capturando imagen de colposcop\u00eda:', err);
@@ -169,21 +171,26 @@ function PatientColposcopyTabInner({ patientId }: Props) {
   const handlePreviewImage = async (selectedFile: PatientFile) => {
     try {
       const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
+      const missingFiles = colposcopyFiles.filter((file) => !nextPreviewUrls[file.id]);
 
-      if (!nextPreviewUrls[selectedFile.id]) {
-        nextPreviewUrls[selectedFile.id] = window.URL.createObjectURL(
-          await patientService.getFileBlob(selectedFile.id)
+      if (missingFiles.length > 0) {
+        const loadedPreviews = await Promise.all(
+          missingFiles.map(async (file) => ({
+            fileId: file.id,
+            url: window.URL.createObjectURL(await patientService.getFileBlob(file.id)),
+          }))
         );
+
+        loadedPreviews.forEach(({ fileId, url }) => {
+          nextPreviewUrls[fileId] = url;
+        });
         setImagePreviewUrls(nextPreviewUrls);
       }
 
-      const slides = colposcopyFiles
-        .map((file) => {
-          const src = nextPreviewUrls[file.id] ?? imagePreviewUrlsRef.current[file.id];
-          if (!src) return null;
-          return { src, alt: file.name };
-        })
-        .filter((slide): slide is { src: string; alt: string } => Boolean(slide));
+      const slides = colposcopyFiles.map((file) => ({
+        src: nextPreviewUrls[file.id],
+        alt: file.name,
+      }));
 
       setLightboxSlides(slides);
       const selectedIndex = colposcopyFiles.findIndex((file) => file.id === selectedFile.id);

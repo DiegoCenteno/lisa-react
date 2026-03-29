@@ -1160,6 +1160,8 @@ function FormSettingsPanel({
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<SettingsFormsData | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [cameraMenuDirty, setCameraMenuDirty] = useState(false);
+  const cameraMenuTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (ownerOffices.length === 0) {
@@ -1186,6 +1188,7 @@ function FormSettingsPanel({
         const response = await settingsService.getFormSettings(selectedOfficeId);
         if (mounted) {
           setData(response);
+          setCameraMenuDirty(false);
         }
       } catch (err) {
         if (mounted) {
@@ -1276,6 +1279,71 @@ function FormSettingsPanel({
     }).finally(() => {
       setSaving(false);
     });
+  };
+
+  const persistPatientDetailCameraMenu = (payload: SettingsFormsData['patient_detail']) => {
+    if (!data) return;
+
+    const previousData = data;
+    const nextData: SettingsFormsData = {
+      ...data,
+      patient_detail: {
+        camera_menu_enabled: payload.camera_menu_enabled,
+        camera_menu_title: payload.camera_menu_title.trim() || 'Camara',
+      },
+    };
+
+    setData(nextData);
+    setSaving(true);
+    setLocalError(null);
+
+    void settingsService.updateFormSettings(nextData).then((updated) => {
+      setData(updated);
+      setCameraMenuDirty(false);
+      onSuccess('Configuracion de formularios actualizada correctamente.');
+    }).catch((err) => {
+      const backendMessage =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === 'string'
+          ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message ?? '')
+          : '';
+
+      setData(previousData);
+      setLocalError(backendMessage || (err instanceof Error ? err.message : 'No fue posible actualizar la configuracion de formularios.'));
+    }).finally(() => {
+      setSaving(false);
+    });
+  };
+
+  const handlePatientDetailCameraToggle = (checked: boolean) => {
+    setData((current) => {
+      if (!current) return current;
+
+      const nextTitle = checked
+        ? ((current.patient_detail.camera_menu_enabled && current.patient_detail.camera_menu_title.trim())
+            ? current.patient_detail.camera_menu_title
+            : 'colposcopio')
+        : current.patient_detail.camera_menu_title;
+
+      return {
+        ...current,
+        patient_detail: {
+          camera_menu_enabled: checked,
+          camera_menu_title: nextTitle,
+        },
+      };
+    });
+
+    setCameraMenuDirty(true);
+
+    if (checked) {
+      setTimeout(() => {
+        cameraMenuTitleInputRef.current?.focus();
+        cameraMenuTitleInputRef.current?.select();
+      }, 0);
+    }
   };
 
   const persistCustomFields = (customHistoryFields: SettingsFormsData['custom_history_fields']) => {
@@ -1609,6 +1677,52 @@ function FormSettingsPanel({
                     <MenuItem value="M">Masculino</MenuItem>
                   </TextField>
                 </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
+                    Menú del detalle del paciente
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Activa el acceso al módulo de cámara dentro del submenú del detalle del paciente y personaliza su título.
+                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Checkbox
+                      checked={data.patient_detail.camera_menu_enabled}
+                      disabled={saving}
+                      onChange={(event) => handlePatientDetailCameraToggle(event.target.checked)}
+                    />
+                    <Typography>Mostrar menú de cámara</Typography>
+                  </Box>
+                  {data.patient_detail.camera_menu_enabled ? (
+                    <TextField
+                      inputRef={cameraMenuTitleInputRef}
+                      label="Título del menú"
+                      value={data.patient_detail.camera_menu_title}
+                      fullWidth
+                      variant="standard"
+                      disabled={saving}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        setData((current) => current ? ({
+                          ...current,
+                          patient_detail: {
+                            ...current.patient_detail,
+                            camera_menu_title: nextValue,
+                          },
+                        }) : current);
+                        setCameraMenuDirty(true);
+                      }}
+                    />
+                  ) : null}
+                  <Box>
+                    <Button
+                      variant="contained"
+                      disabled={saving || !cameraMenuDirty}
+                      onClick={() => persistPatientDetailCameraMenu(data.patient_detail)}
+                    >
+                      Guardar
+                    </Button>
+                  </Box>
+                </Box>
               </Box>
             </Grid>
           </>
@@ -1705,6 +1819,24 @@ function ReportsPanel({
     });
   };
 
+  const buildNextReportsState = (
+    currentData: SettingsReportsData,
+    reportKey: string,
+    enabled: boolean
+  ): SettingsReportsData => {
+    const nextEnabledKeys = enabled
+      ? Array.from(new Set([...currentData.enabled_report_keys, reportKey]))
+      : currentData.enabled_report_keys.filter((key) => key !== reportKey);
+
+    return {
+      ...currentData,
+      enabled_report_keys: nextEnabledKeys,
+      reports: currentData.reports.map((item) =>
+        item.key === reportKey ? { ...item, enabled } : item
+      ),
+    };
+  };
+
   return (
     <CardShell title="Tipos de reportes">
       <Grid container spacing={3}>
@@ -1744,10 +1876,7 @@ function ReportsPanel({
                 {data.reports.map((report) => (
                   <Box
                     key={report.key}
-                    onClick={() => persist({
-                      ...data,
-                      reports: data.reports.map((item) => item.key === report.key ? { ...item, enabled: !item.enabled } : item),
-                    })}
+                    onClick={() => persist(buildNextReportsState(data, report.key, !report.enabled))}
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1770,10 +1899,7 @@ function ReportsPanel({
                       disabled={saving}
                       onChange={(event) => {
                         event.stopPropagation();
-                        persist({
-                          ...data,
-                          reports: data.reports.map((item) => item.key === report.key ? { ...item, enabled: event.target.checked } : item),
-                        });
+                        persist(buildNextReportsState(data, report.key, event.target.checked));
                       }}
                       onClick={(event) => event.stopPropagation()}
                       sx={{ p: 0.5 }}

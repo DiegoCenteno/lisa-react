@@ -39,6 +39,10 @@ export interface Patient {
   age?: number | string;
   allergy?: string;
   datahc?: unknown;
+  detail_menu?: {
+    camera_menu_enabled: boolean;
+    camera_menu_title: string;
+  };
   effective_consultations_count?: number;
   is_first_time?: boolean;
   created_at?: string;
@@ -320,6 +324,10 @@ export interface PatientFile {
   size: number;
   uploaded_at: string;
   description?: string;
+  capture_source?: string;
+  capture_session_id?: number | null;
+  capture_session_key?: string | null;
+  capture_session_title?: string | null;
 }
 
 export interface DashboardStats {

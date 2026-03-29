@@ -4,6 +4,8 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
+  CircularProgress,
   Dialog,
   DialogContent,
   DialogTitle,
@@ -30,7 +32,8 @@ import { patientService } from '../../api/patientService';
 import { formatDisplayDateTimeLongEs } from '../../utils/date';
 
 interface Props {
-  files: PatientFile[];
+  patientId: number;
+  refreshKey?: number;
   onError: (message: string) => void;
 }
 
@@ -48,7 +51,44 @@ function isPdfFile(type?: string) {
   return type === 'application/pdf';
 }
 
-function PatientFilesTabInner({ files, onError }: Props) {
+const captureSessionChipColors = [
+  { bg: '#E3F2FD', color: '#1565C0' },
+  { bg: '#E8F5E9', color: '#2E7D32' },
+  { bg: '#FFF3E0', color: '#EF6C00' },
+  { bg: '#F3E5F5', color: '#7B1FA2' },
+  { bg: '#FCE4EC', color: '#C2185B' },
+];
+
+function resolveFileChip(file: PatientFile) {
+  if (file.capture_source === 'colposcopy_camera') {
+    const paletteIndex = Math.abs(Number(file.capture_session_id ?? 0)) % captureSessionChipColors.length;
+    const palette = captureSessionChipColors[paletteIndex];
+
+    return {
+      label: file.capture_session_title?.trim() || `Colposcopia ${formatDisplayDateTimeLongEs(file.uploaded_at)}`,
+      sx: {
+        backgroundColor: palette.bg,
+        color: palette.color,
+        fontWeight: 700,
+        height: 28,
+      },
+    };
+  }
+
+  return {
+    label: 'AGREGADO MANUALMENTE',
+    sx: {
+      backgroundColor: '#ECEFF1',
+      color: '#455A64',
+      fontWeight: 700,
+      height: 28,
+    },
+  };
+}
+
+function PatientFilesTabInner({ patientId, refreshKey = 0, onError }: Props) {
+  const [files, setFiles] = useState<PatientFile[]>([]);
+  const [loading, setLoading] = useState(false);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<number, string>>({});
   const imagePreviewUrlsRef = useRef<Record<number, string>>({});
   const [lightboxSlides, setLightboxSlides] = useState<Array<{ src: string; alt: string }>>([]);
@@ -56,10 +96,36 @@ function PatientFilesTabInner({ files, onError }: Props) {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewName, setPdfPreviewName] = useState('');
+  const onErrorRef = useRef(onError);
 
   useEffect(() => {
     imagePreviewUrlsRef.current = imagePreviewUrls;
   }, [imagePreviewUrls]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    const loadFiles = async () => {
+      setLoading(true);
+      try {
+        const nextFiles = await patientService.getFiles(patientId);
+        setFiles(
+          [...nextFiles].sort(
+            (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+          )
+        );
+      } catch (err) {
+        console.error('Error cargando archivos del paciente:', err);
+        onErrorRef.current('No se pudieron cargar los archivos');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    void loadFiles();
+  }, [patientId, refreshKey]);
 
   useEffect(() => {
     return () => {
@@ -79,28 +145,33 @@ function PatientFilesTabInner({ files, onError }: Props) {
       await patientService.downloadFile(file.id, file.name);
     } catch (err) {
       console.error('Error descargando archivo:', err);
-      onError('No se pudo descargar el archivo');
+      onErrorRef.current('No se pudo descargar el archivo');
     }
   };
 
   const handlePreviewImage = async (selectedFile: PatientFile) => {
     try {
       const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
+      const missingFiles = imageFiles.filter((file) => !nextPreviewUrls[file.id]);
 
-      if (!nextPreviewUrls[selectedFile.id]) {
-        nextPreviewUrls[selectedFile.id] = window.URL.createObjectURL(
-          await patientService.getFileBlob(selectedFile.id)
+      if (missingFiles.length > 0) {
+        const loadedPreviews = await Promise.all(
+          missingFiles.map(async (file) => ({
+            fileId: file.id,
+            url: window.URL.createObjectURL(await patientService.getFileBlob(file.id)),
+          }))
         );
+
+        loadedPreviews.forEach(({ fileId, url }) => {
+          nextPreviewUrls[fileId] = url;
+        });
         setImagePreviewUrls(nextPreviewUrls);
       }
 
-      const slides = imageFiles
-        .map((file) => {
-          const src = nextPreviewUrls[file.id] ?? imagePreviewUrlsRef.current[file.id];
-          if (!src) return null;
-          return { src, alt: file.name };
-        })
-        .filter((slide): slide is { src: string; alt: string } => Boolean(slide));
+      const slides = imageFiles.map((file) => ({
+        src: nextPreviewUrls[file.id],
+        alt: file.name,
+      }));
 
       setLightboxSlides(slides);
       const selectedIndex = imageFiles.findIndex((file) => file.id === selectedFile.id);
@@ -108,7 +179,7 @@ function PatientFilesTabInner({ files, onError }: Props) {
       setLightboxOpen(true);
     } catch (err) {
       console.error('Error visualizando imagen:', err);
-      onError('No se pudo abrir la imagen');
+      onErrorRef.current('No se pudo abrir la imagen');
     }
   };
 
@@ -123,7 +194,7 @@ function PatientFilesTabInner({ files, onError }: Props) {
       setPdfPreviewName(file.name);
     } catch (err) {
       console.error('Error visualizando PDF:', err);
-      onError('No se pudo abrir el PDF');
+      onErrorRef.current('No se pudo abrir el PDF');
     }
   };
 
@@ -145,6 +216,11 @@ function PatientFilesTabInner({ files, onError }: Props) {
               Subir Archivo
             </Button>
           </Box>
+          {loading && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
           {files.length === 0 ? (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
               No hay archivos almacenados
@@ -158,7 +234,18 @@ function PatientFilesTabInner({ files, onError }: Props) {
                   </ListItemIcon>
                   <ListItemText
                     primary={file.name}
-                    secondary={`${Math.round(Number(file.size) || 0)} KB | Subido: ${formatDisplayDateTimeLongEs(file.uploaded_at)}`}
+                    secondary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
+                        <Box component="span">
+                          {`${Math.round(Number(file.size) || 0)} KB | Subido: ${formatDisplayDateTimeLongEs(file.uploaded_at)}`}
+                        </Box>
+                        <Chip
+                          size="small"
+                          label={resolveFileChip(file).label}
+                          sx={resolveFileChip(file).sx}
+                        />
+                      </Box>
+                    }
                   />
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     {isImageFile(file.type) && (

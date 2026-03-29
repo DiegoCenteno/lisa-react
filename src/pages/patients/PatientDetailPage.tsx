@@ -16,18 +16,19 @@ import {
 } from '@mui/material';
 import {
   Person as PersonIcon,
-  MedicalServices as MedicalIcon,
-  Description as FileIcon,
+  EventNoteOutlined as MedicalIcon,
+  AttachFileOutlined as FileIcon,
   Note as NoteIcon,
   History as HistoryIcon,
-  ArticleOutlined as LogbookIcon,
+  PictureAsPdfOutlined as AssessmentIcon,
+  ChecklistRtlOutlined as LogbookIcon,
   LocalOfferOutlined as TagIcon,
   ContentCopy as ContentCopyIcon,
   CameraAlt as CameraAltIcon,
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
 import { useAuth } from '../../hooks/useAuth';
-import type { Patient, SOAPNote, PatientFile, PatientTagControlData, ActivityLogItem } from '../../types';
+import type { Patient, SOAPNote, PatientTagControlData, ActivityLogItem } from '../../types';
 import ClinicalHistoryTab from './ClinicalHistoryTab';
 import PatientDailyNoteTab from './PatientDailyNoteTab';
 import PatientProfileTab from './PatientProfileTab';
@@ -36,6 +37,7 @@ import PatientColposcopyTab from './PatientColposcopyTab';
 import PatientTagsTab from './PatientTagsTab';
 import PatientActivityLogTab from './PatientActivityLogTab';
 import ConsultationHistoryTab from './ConsultationHistoryTab';
+import PatientReportsTab from './PatientReportsTab';
 
 interface TabPanelProps {
   children: React.ReactNode;
@@ -51,6 +53,9 @@ function TabPanel({ children, value, index }: TabPanelProps) {
 export default function PatientDetailPage() {
   const theme = useTheme();
   const compactPatientTabs = useMediaQuery(theme.breakpoints.down(1400));
+  const veryCompactPatientTabs = useMediaQuery(theme.breakpoints.down(1200));
+  const iconOnlyPatientTabs = useMediaQuery(theme.breakpoints.down(1000));
+  const ultraCompactPatientTabs = useMediaQuery(theme.breakpoints.down(800));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { can } = useAuth();
@@ -62,7 +67,6 @@ export default function PatientDetailPage() {
   const [soapNotes, setSoapNotes] = useState<SOAPNote[]>([]);
   const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
   const [patientActivityLogs, setPatientActivityLogs] = useState<ActivityLogItem[]>([]);
-  const [files, setFiles] = useState<PatientFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -70,25 +74,41 @@ export default function PatientDetailPage() {
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [dailyNoteEditRequest, setDailyNoteEditRequest] = useState<SOAPNote | null>(null);
   const [showCompactSticky, setShowCompactSticky] = useState(false);
+  const [filesRefreshKey, setFilesRefreshKey] = useState(0);
   const headerSectionRef = useRef<HTMLDivElement | null>(null);
+  const cameraMenuEnabled = Boolean(patient?.detail_menu?.camera_menu_enabled) && !iconOnlyPatientTabs;
+  const cameraMenuTitle = (patient?.detail_menu?.camera_menu_title?.trim() || 'Camara');
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
-    const tabMap: Record<string, number> = {
-      general: 0,
-      history: 1,
-      soap: 2,
-      files: 3,
-      colposcopy: 4,
-      tags: 5,
-      bitacora: 6,
-      historical: 7,
-    };
+      const tabMap: Record<string, number> = {
+        general: 0,
+        history: 1,
+        soap: 2,
+        files: 3,
+        colposcopy: 4,
+        tags: 5,
+        bitacora: 6,
+        historical: 7,
+        reports: 8,
+      };
 
     if (requestedTab && requestedTab in tabMap) {
+      if (tabMap[requestedTab] === 4 && !patient?.detail_menu?.camera_menu_enabled) {
+        setTab(0);
+        setSearchParams({ tab: 'general' }, { replace: true });
+        return;
+      }
       setTab(tabMap[requestedTab]);
     }
-  }, [searchParams]);
+  }, [searchParams, patient?.detail_menu?.camera_menu_enabled, setSearchParams]);
+
+  useEffect(() => {
+    if (tab === 4 && !patient?.detail_menu?.camera_menu_enabled) {
+      setTab(0);
+      setSearchParams({ tab: 'general' }, { replace: true });
+    }
+  }, [tab, patient?.detail_menu?.camera_menu_enabled, setSearchParams]);
 
   const handleTabChange = (_event: React.SyntheticEvent, nextTab: number) => {
     setTab(nextTab);
@@ -102,6 +122,7 @@ export default function PatientDetailPage() {
       5: 'tags',
       6: 'bitacora',
       7: 'historical',
+      8: 'reports',
     };
 
     setSearchParams({ tab: queryTabMap[nextTab] ?? 'general' }, { replace: true });
@@ -112,27 +133,25 @@ export default function PatientDetailPage() {
     setSearchParams({ tab: 'soap' }, { replace: true });
   };
 
+  const refreshPatientFiles = () => {
+    setFilesRefreshKey((current) => current + 1);
+  };
+
   useEffect(() => {
     const loadData = async () => {
       if (!id) return;
       const patientId = parseInt(id, 10);
       try {
-        const [patientData, notesData, tagControlData, patientActivityLogsData, filesData] = await Promise.all([
+        const [patientData, notesData, tagControlData, patientActivityLogsData] = await Promise.all([
           patientService.getPatient(patientId),
           patientService.getSOAPNotes(patientId),
           patientService.getPatientTagControl(patientId),
           patientService.getPatientActivityLogs(patientId),
-          patientService.getFiles(patientId),
         ]);
         setPatient(patientData);
         setSoapNotes(notesData);
         setPatientTagControl(tagControlData);
         setPatientActivityLogs(patientActivityLogsData);
-        setFiles(
-          [...filesData].sort(
-            (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
-          )
-        );
       } catch (err) {
         console.error('Error cargando datos del paciente:', err);
       } finally {
@@ -154,10 +173,10 @@ export default function PatientDetailPage() {
     if (!patient?.phone) return;
     try {
       await navigator.clipboard.writeText(patient.phone);
-      setCopyMessage('Teléfono copiado');
+      setCopyMessage('Telefono copiado');
     } catch (error) {
-      console.error('Error copiando teléfono:', error);
-      setCopyError('No se pudo copiar el teléfono');
+      console.error('Error copiando telefono:', error);
+      setCopyError('No se pudo copiar el telefono');
     }
   };
 
@@ -171,7 +190,7 @@ export default function PatientDetailPage() {
   };
 
   useEffect(() => {
-    const stickyTabs = new Set([1, 2, 3, 5]);
+    const stickyTabs = new Set([1, 2, 3, 5, 8]);
 
     if (!stickyTabs.has(tab)) {
       setShowCompactSticky(false);
@@ -223,17 +242,22 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <Box>
-{showCompactSticky && (
+      <Box>
         <Box
           sx={{
             position: 'fixed',
             top: { xs: 64, md: 72 },
             left: '50%',
-            transform: 'translateX(-50%)',
+            transform: showCompactSticky
+              ? 'translateX(-50%) translateY(0)'
+              : 'translateX(-50%) translateY(-8px)',
+            opacity: showCompactSticky ? 1 : 0,
+            visibility: showCompactSticky ? 'visible' : 'hidden',
+            transition: 'opacity 160ms ease, transform 160ms ease, visibility 160ms ease',
             zIndex: theme.zIndex.appBar - 1,
             width: 'min(720px, calc(100vw - 32px))',
             pointerEvents: 'none',
+            willChange: 'opacity, transform',
           }}
         >
         <Box
@@ -256,11 +280,10 @@ export default function PatientDetailPage() {
             }}
           >
             Paciente: {patient.name} {patient.last_name}
-            {patient.age ? ` - ${patient.age} años` : ''}
+            {patient.age ? ` - ${patient.age} anos` : ''}
           </Typography>
         </Box>
         </Box>
-      )}
 
       <Box
         ref={headerSectionRef}
@@ -288,7 +311,7 @@ export default function PatientDetailPage() {
           <Box>
             <Typography variant="h5">
               {patient.name} {patient.last_name}
-              {patient.age ? ` (${patient.age} años)` : ""}
+              {patient.age ? ` (${patient.age} anos)` : ""}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', color: 'text.secondary' }}>
               <Typography variant="body2" color="inherit">
@@ -334,20 +357,28 @@ export default function PatientDetailPage() {
           borderColor: 'divider',
           '& .MuiTabs-flexContainer': {
             alignItems: 'center',
+            gap: ultraCompactPatientTabs ? 0.25 : 0,
           },
           '& .MuiTab-root:nth-of-type(6)': {
             display: 'none',
           },
+          '& .MuiTab-root': {
+            minWidth: ultraCompactPatientTabs ? 44 : undefined,
+            px: ultraCompactPatientTabs ? 0.5 : undefined,
+          },
         }}
       >
         <Tab value={0} icon={<PersonIcon />} label={compactPatientTabs ? '' : 'Perfil'} iconPosition="start" />
-        <Tab value={1} icon={<MedicalIcon />} label={'Historia cl\u00ednica'} iconPosition="start" />
-        <Tab value={3} icon={<FileIcon />} label="Archivos" iconPosition="start" />
-        <Tab value={4} icon={<CameraAltIcon />} label="Colposcopia" iconPosition="start" />
-        <Tab value={5} icon={<TagIcon />} label="Etiquetas" iconPosition="start" />
-        <Tab value={6} icon={<LogbookIcon />} label="Bit\u00e1cora" iconPosition="start" />
-        <Tab value={7} icon={<HistoryIcon />} label={'Hist\u00f3rico'} iconPosition="start" />
-        <Tab value={2} icon={<NoteIcon />} label="Nota Diaria" iconPosition="start" />
+        <Tab value={1} icon={<MedicalIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'HC' : compactPatientTabs ? 'H. Clinica' : 'Historia clinica'} iconPosition="start" />
+        <Tab value={8} icon={<AssessmentIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'REPO' : 'Reportes'} iconPosition="start" />
+        <Tab value={3} icon={<FileIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'ARCH' : 'Archivos'} iconPosition="start" />
+        {cameraMenuEnabled && (
+          <Tab value={4} icon={<CameraAltIcon />} label={cameraMenuTitle} iconPosition="start" />
+        )}
+        <Tab value={5} icon={<TagIcon />} label={iconOnlyPatientTabs ? '' : 'Etiquetas'} iconPosition="start" />
+        <Tab value={6} icon={<LogbookIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Bitacora'} iconPosition="start" />
+        <Tab value={7} icon={<HistoryIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Historico'} iconPosition="start" />
+        <Tab value={2} icon={<NoteIcon />} label={iconOnlyPatientTabs ? '' : 'Nota Diaria'} iconPosition="start" />
       </Tabs>
       </Box>
       </Box>
@@ -371,6 +402,7 @@ export default function PatientDetailPage() {
           editRequestNote={dailyNoteEditRequest}
           onEditRequestHandled={() => setDailyNoteEditRequest(null)}
           onOpenColposcopy={() => {
+            if (!patient?.detail_menu?.camera_menu_enabled) return;
             setTab(4);
             setSearchParams({ tab: 'colposcopy' }, { replace: true });
           }}
@@ -383,13 +415,27 @@ export default function PatientDetailPage() {
 
       {/* Tab 3: Archivos */}
       <TabPanel value={tab} index={3}>
-        <PatientFilesTab files={files} onError={(msg) => setCopyError(msg)} />
+        <PatientFilesTab patientId={patient.id} refreshKey={filesRefreshKey} onError={(msg) => setCopyError(msg)} />
+      </TabPanel>
+
+      {/* Tab 8: Reportes */}
+      <TabPanel value={tab} index={8}>
+        <PatientReportsTab
+          patientId={patient.id}
+          onOpenColposcopy={() => {
+            if (!patient?.detail_menu?.camera_menu_enabled) return;
+            setTab(4);
+            setSearchParams({ tab: 'colposcopy' }, { replace: true });
+          }}
+        />
       </TabPanel>
 
       {/* Tab 4: Colposcop\u00eda */}
-      <TabPanel value={tab} index={4}>
-        <PatientColposcopyTab patientId={patient.id} />
-      </TabPanel>
+      {patient.detail_menu?.camera_menu_enabled ? (
+        <TabPanel value={tab} index={4}>
+          <PatientColposcopyTab patientId={patient.id} onCaptureSaved={refreshPatientFiles} />
+        </TabPanel>
+      ) : null}
 
       {/* Tab 5: Etiquetas */}
       <TabPanel value={tab} index={5}>
@@ -466,3 +512,4 @@ export default function PatientDetailPage() {
     </Box>
   );
 }
+

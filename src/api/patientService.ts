@@ -32,6 +32,10 @@ type ApiPatientRecord = {
   gender?: string;
   allergy?: string | null;
   datahc?: unknown;
+  detail_menu?: {
+    camera_menu_enabled?: boolean;
+    camera_menu_title?: string;
+  };
   effective_consultations_count?: number;
   is_first_time?: boolean;
 };
@@ -137,6 +141,10 @@ function normalizePatient(record: ApiPatientRecord): Patient {
     age: record.age,
     allergy: record.allergy ?? undefined,
     datahc: record.datahc,
+    detail_menu: {
+      camera_menu_enabled: Boolean(record.detail_menu?.camera_menu_enabled),
+      camera_menu_title: record.detail_menu?.camera_menu_title?.trim() || 'Camara',
+    },
     effective_consultations_count: record.effective_consultations_count ?? 0,
     is_first_time: record.is_first_time ?? (record.effective_consultations_count ?? 0) === 0,
   };
@@ -185,7 +193,10 @@ export const patientService = {
   },
 
   async getPatient(id: number): Promise<Patient> {
-    const response = await apiClient.get<{ status: string; data: ApiPatientRecord }>(`/v2/patients/${id}`);
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.get<{ status: string; data: ApiPatientRecord }>(`/v2/patients/${id}`, {
+      params: { office_id: officeId },
+    });
     return normalizePatient(response.data.data);
   },
 
@@ -201,7 +212,11 @@ export const patientService = {
       datahc?: Record<string, unknown>;
     }
   ): Promise<Patient> {
-    const response = await apiClient.put<{ status: string; data: ApiPatientRecord }>(`/v2/patients/${id}`, data);
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.put<{ status: string; data: ApiPatientRecord }>(`/v2/patients/${id}`, {
+      ...data,
+      office_id: officeId,
+    });
     return normalizePatient(response.data.data);
   },
 

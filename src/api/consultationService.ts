@@ -49,6 +49,28 @@ interface DownloadPrescriptionPayload {
   indicaciones?: string;
 }
 
+export interface PatientReportItem {
+  id: number;
+  created_at?: string | null;
+  created_at_label: string;
+  type_key: string;
+  type_label: string;
+  editor_url?: string | null;
+}
+
+export interface PatientReportsData {
+  patient_id: number;
+  office_id: number;
+  reports_enabled: Array<{
+    key: string;
+    label: string;
+  }>;
+  last_report_type_key?: string | null;
+  last_report_type_label?: string | null;
+  last_report_date_label?: string | null;
+  items: PatientReportItem[];
+}
+
 async function resolveOfficeId(): Promise<number> {
   const userRaw = localStorage.getItem('user');
   if (userRaw) {
@@ -123,5 +145,49 @@ export const consultationService = {
     });
 
     return response.data;
+  },
+
+  async getPatientReports(patientId: number, officeId?: number): Promise<PatientReportsData> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.get<{ status: string; data: PatientReportsData }>(
+      `/v2/patients/${patientId}/reports`,
+      { params: { office_id: resolvedOfficeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async createPatientReport(
+    patientId: number,
+    reportKey: string,
+    officeId?: number
+  ): Promise<{
+    id: number;
+    type_key: string;
+    type_label: string;
+    created_at?: string | null;
+    created_at_label: string;
+    next_view: 'colposcopy' | 'legacy_report_editor';
+    editor_url?: string | null;
+  }> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.post<{
+      status: string;
+      message: string;
+      data: {
+        id: number;
+        type_key: string;
+        type_label: string;
+        created_at?: string | null;
+        created_at_label: string;
+        next_view: 'colposcopy' | 'legacy_report_editor';
+        editor_url?: string | null;
+      };
+    }>(`/v2/patients/${patientId}/reports`, {
+      office_id: resolvedOfficeId,
+      report_key: reportKey,
+    });
+
+    return response.data.data;
   },
 };

@@ -4,7 +4,7 @@ import { Box, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 
-const DRAWER_WIDTH = 260;
+const MINI_DRAWER_WIDTH = 76;
 
 export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -22,7 +22,7 @@ export default function MainLayout() {
         component="main"
         sx={{
           flexGrow: 1,
-          width: isMobile ? '100%' : `calc(100% - ${DRAWER_WIDTH}px)`,
+          width: isMobile ? '100%' : `calc(100% - ${MINI_DRAWER_WIDTH}px)`,
           backgroundColor: 'background.default',
         }}
       >

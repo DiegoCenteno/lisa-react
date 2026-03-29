@@ -43,7 +43,7 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
-import type { Patient, PatientTagControlData } from '../../types';
+import type { Patient, PatientFile, PatientTagControlData } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -129,6 +129,7 @@ export default function PatientsPage() {
   const [attachSaving, setAttachSaving] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachMessage, setAttachMessage] = useState<string | null>(null);
+  const [attachFiles, setAttachFiles] = useState<PatientFile[]>([]);
   const [templateMessage, setTemplateMessage] = useState<string | null>(null);
   const [openTagIds, setOpenTagIds] = useState<number[]>([]);
   const [newOfficeLabelName, setNewOfficeLabelName] = useState('');
@@ -154,6 +155,10 @@ export default function PatientsPage() {
   const [quickEditGender, setQuickEditGender] = useState<'M' | 'F' | ''>('');
   const [quickEditSaving, setQuickEditSaving] = useState(false);
   const [quickEditError, setQuickEditError] = useState<string | null>(null);
+  const [previewFileName, setPreviewFileName] = useState('');
+  const [previewFileType, setPreviewFileType] = useState('');
+  const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const attachFileInputRef = useRef<HTMLInputElement | null>(null);
   const attachSectionRef = useRef<HTMLDivElement | null>(null);
   const canViewPatientDetail = can('patients.detail.view');
@@ -211,6 +216,14 @@ export default function PatientsPage() {
   }, [attachSelectedFile]);
 
   useEffect(() => {
+    return () => {
+      if (previewFileUrl) {
+        window.URL.revokeObjectURL(previewFileUrl);
+      }
+    };
+  }, [previewFileUrl]);
+
+  useEffect(() => {
     if (attachPatientId === null && !attachLoading) {
       return;
     }
@@ -260,6 +273,7 @@ export default function PatientsPage() {
     setAttachError(null);
     setAttachMessage(null);
     setTemplateMessage(null);
+    setAttachFiles([]);
     setNewOfficeLabelName('');
     setShowNewLabelInput(false);
     setAttachSelectedFile(null);
@@ -275,8 +289,16 @@ export default function PatientsPage() {
     setFinalizingTagId(null);
 
     try {
-      const data = await patientService.getPatientTagControl(patientId);
+      const [data, files] = await Promise.all([
+        patientService.getPatientTagControl(patientId),
+        patientService.getFiles(patientId),
+      ]);
       setAttachControl(data);
+      setAttachFiles(
+        [...files].sort(
+          (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+        )
+      );
     } catch (error) {
       console.error('Error cargando control de etiquetas:', error);
       setAttachControl(null);
@@ -357,6 +379,51 @@ export default function PatientsPage() {
       setQuickEditError('No se pudieron guardar los cambios del paciente.');
     } finally {
       setQuickEditSaving(false);
+    }
+  };
+
+  const handleClosePreview = () => {
+    if (previewFileUrl) {
+      window.URL.revokeObjectURL(previewFileUrl);
+    }
+    setPreviewFileUrl(null);
+    setPreviewFileName('');
+    setPreviewFileType('');
+    setPreviewLoading(false);
+  };
+
+  const handleOpenLastFilePreview = async () => {
+    const lastStoredFile = attachFiles[0];
+    if (!lastStoredFile) return;
+
+    const isPreviewable =
+      lastStoredFile.type === 'application/pdf' ||
+      lastStoredFile.type.startsWith('image/');
+
+    if (!isPreviewable) {
+      setAttachError('Solo es posible previsualizar archivos en imagen o PDF.');
+      return;
+    }
+
+    setPreviewLoading(true);
+    setAttachError(null);
+
+    try {
+      const blob = await patientService.getFileBlob(lastStoredFile.id);
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      if (previewFileUrl) {
+        window.URL.revokeObjectURL(previewFileUrl);
+      }
+
+      setPreviewFileUrl(blobUrl);
+      setPreviewFileName(lastStoredFile.name);
+      setPreviewFileType(lastStoredFile.type);
+    } catch (error) {
+      console.error('Error cargando vista previa del archivo:', error);
+      setAttachError('No se pudo cargar la vista previa del archivo.');
+    } finally {
+      setPreviewLoading(false);
     }
   };
 
@@ -637,9 +704,28 @@ export default function PatientsPage() {
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
                       {'\u00daltimo archivo/estudio almacenado:'}{' '}
-                      <Box component="span" sx={{ color: '#d32f2f', fontWeight: 700 }}>
-                        {attachControl.patient.last_file_name || '-'}
-                      </Box>
+                      {attachControl.patient.last_file_name && attachFiles[0] ? (
+                        <Link
+                          component="button"
+                          type="button"
+                          underline="hover"
+                          onClick={() => {
+                            void handleOpenLastFilePreview();
+                          }}
+                          sx={{
+                            color: '#d32f2f',
+                            fontWeight: 700,
+                            verticalAlign: 'baseline',
+                            textAlign: 'left',
+                          }}
+                        >
+                          {attachControl.patient.last_file_name}
+                        </Link>
+                      ) : (
+                        <Box component="span" sx={{ color: '#d32f2f', fontWeight: 700 }}>
+                          {attachControl.patient.last_file_name || '-'}
+                        </Box>
+                      )}
                       {attachControl.patient.last_file_text ? (
                         <Box component="span" sx={{ ml: 0.75, color: 'text.secondary' }}>
                           {attachControl.patient.last_file_text}
@@ -1349,6 +1435,47 @@ export default function PatientsPage() {
           >
             {finalizingTagId ? 'Finalizando...' : 'Sí, finalizar'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(previewFileUrl) || previewLoading}
+        onClose={handleClosePreview}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>{previewFileName || 'Vista previa del documento'}</DialogTitle>
+        <DialogContent dividers>
+          {previewLoading ? (
+            <Box sx={{ py: 8, textAlign: 'center' }}>
+              <Skeleton variant="rectangular" height={360} />
+            </Box>
+          ) : previewFileUrl ? (
+            previewFileType === 'application/pdf' ? (
+              <Box
+                component="iframe"
+                src={`${previewFileUrl}#toolbar=0&navpanes=0&pagemode=none&view=FitH`}
+                title={previewFileName || 'Vista previa del PDF'}
+                sx={{ width: '100%', height: '75vh', border: 0 }}
+              />
+            ) : (
+              <Box
+                component="img"
+                src={previewFileUrl}
+                alt={previewFileName || 'Vista previa del archivo'}
+                sx={{
+                  display: 'block',
+                  maxWidth: '100%',
+                  maxHeight: '75vh',
+                  mx: 'auto',
+                  objectFit: 'contain',
+                }}
+              />
+            )
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePreview}>Cerrar</Button>
         </DialogActions>
       </Dialog>
 

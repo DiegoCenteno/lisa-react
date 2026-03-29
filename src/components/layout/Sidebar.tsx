@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Drawer,
@@ -26,6 +27,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
 
 const DRAWER_WIDTH = 260;
+const MINI_DRAWER_WIDTH = 76;
 
 interface SidebarProps {
   open: boolean;
@@ -89,22 +91,33 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const { hasRole, can } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const [isHovered, setIsHovered] = useState(false);
   const mockWhatsappUrl = 'http://lisa.test/smsmasivos/mock-whatsapp';
+  const desktopDrawerWidth = isHovered ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
   const filteredItems = menuItems.filter((item) => hasRole(item.roles) && (!item.permission || can(item.permission)));
 
   const drawerContent = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>
       <Box
         sx={{
           p: 2.5,
           display: 'flex',
           alignItems: 'center',
           gap: 1.5,
+          justifyContent: isMobile || isHovered ? 'flex-start' : 'center',
         }}
       >
         <HospitalIcon sx={{ color: 'primary.main', fontSize: 32 }} />
-        <Box>
+        <Box
+          sx={{
+            opacity: isMobile || isHovered ? 1 : 0,
+            width: isMobile || isHovered ? 'auto' : 0,
+            overflow: 'hidden',
+            transition: 'opacity 180ms ease',
+            whiteSpace: 'nowrap',
+          }}
+        >
           <Typography
             variant="h6"
             sx={{ color: 'primary.main', fontWeight: 700, lineHeight: 1.2 }}
@@ -133,6 +146,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                   borderRadius: 1,
                   backgroundColor: isActive ? 'primary.main' : 'transparent',
                   color: isActive ? 'white' : 'text.primary',
+                  minHeight: 48,
+                  justifyContent: isMobile || isHovered ? 'initial' : 'center',
+                  px: isMobile || isHovered ? 2 : 1.5,
                   '&:hover': {
                     backgroundColor: isActive ? 'primary.dark' : 'action.hover',
                   },
@@ -142,12 +158,21 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
                   sx={{
                     color: isActive ? 'white' : 'primary.main',
                     minWidth: 40,
+                    mr: isMobile || isHovered ? 1 : 0,
+                    justifyContent: 'center',
                   }}
                 >
                   {item.icon}
                 </ListItemIcon>
                 <ListItemText
                   primary={item.text}
+                  sx={{
+                    opacity: isMobile || isHovered ? 1 : 0,
+                    width: isMobile || isHovered ? 'auto' : 0,
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    transition: 'opacity 180ms ease',
+                  }}
                   primaryTypographyProps={{ fontWeight: isActive ? 600 : 400 }}
                 />
               </ListItemButton>
@@ -167,6 +192,9 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               borderRadius: 1,
               backgroundColor: 'rgba(76, 175, 80, 0.08)',
               color: 'text.primary',
+              minHeight: 48,
+              justifyContent: isMobile || isHovered ? 'initial' : 'center',
+              px: isMobile || isHovered ? 2 : 1.5,
               '&:hover': {
                 backgroundColor: 'rgba(76, 175, 80, 0.14)',
               },
@@ -176,6 +204,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
               sx={{
                 color: 'success.main',
                 minWidth: 40,
+                mr: isMobile || isHovered ? 1 : 0,
+                justifyContent: 'center',
               }}
             >
               <SmsIcon />
@@ -183,6 +213,13 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             <ListItemText
               primary="Mock WhatsApp"
               secondary="Temporal"
+              sx={{
+                opacity: isMobile || isHovered ? 1 : 0,
+                width: isMobile || isHovered ? 'auto' : 0,
+                overflow: 'hidden',
+                whiteSpace: 'nowrap',
+                transition: 'opacity 180ms ease',
+              }}
               secondaryTypographyProps={{ sx: { lineHeight: 1.1 } }}
             />
           </ListItemButton>
@@ -213,12 +250,19 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   return (
     <Drawer
       variant="permanent"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       sx={{
-        width: DRAWER_WIDTH,
+        width: MINI_DRAWER_WIDTH,
         flexShrink: 0,
         '& .MuiDrawer-paper': {
-          width: DRAWER_WIDTH,
+          width: desktopDrawerWidth,
           boxSizing: 'border-box',
+          overflowX: 'hidden',
+          transition: theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.shorter,
+          }),
         },
       }}
     >

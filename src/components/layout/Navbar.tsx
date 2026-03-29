@@ -18,7 +18,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 
-const DRAWER_WIDTH = 260;
+const MINI_DRAWER_WIDTH = 76;
 
 interface NavbarProps {
   onMenuClick: () => void;
@@ -54,8 +54,8 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
       position="fixed"
       color="inherit"
       sx={{
-        width: isMobile ? '100%' : `calc(100% - ${DRAWER_WIDTH}px)`,
-        ml: isMobile ? 0 : `${DRAWER_WIDTH}px`,
+        width: isMobile ? '100%' : `calc(100% - ${MINI_DRAWER_WIDTH}px)`,
+        ml: isMobile ? 0 : `${MINI_DRAWER_WIDTH}px`,
       }}
     >
       <Toolbar>

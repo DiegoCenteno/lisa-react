@@ -74,6 +74,10 @@ export interface SettingsFormsData {
   office_id: number;
   clinical_history: Record<string, boolean>;
   daily_note: Record<string, boolean>;
+  patient_detail: {
+    camera_menu_enabled: boolean;
+    camera_menu_title: string;
+  };
   new_appointment: {
     default_gender: 'M' | 'F' | '';
   };
@@ -98,6 +102,7 @@ export interface SettingsFormsData {
 
 export interface SettingsReportsData {
   office_id: number;
+  enabled_report_keys: string[];
   reports: Array<{
     key: string;
     label: string;
