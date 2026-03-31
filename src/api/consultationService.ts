@@ -1,4 +1,4 @@
-import type { ConsultationListItem } from '../types';
+import type { ConsultationListItem, PatientFile } from '../types';
 import apiClient from './client';
 import { appointmentService } from './appointmentService';
 
@@ -49,6 +49,309 @@ interface DownloadPrescriptionPayload {
   indicaciones?: string;
 }
 
+export interface BasicObstetricMeasurementPayload {
+  value: string;
+  sdg: string;
+}
+
+export interface BasicObstetricFetusPayload {
+  fetus_number: number;
+  growth_screening: {
+    dbp: BasicObstetricMeasurementPayload;
+    cc: BasicObstetricMeasurementPayload;
+    ca: BasicObstetricMeasurementPayload;
+    lf: BasicObstetricMeasurementPayload;
+    average_fetometry: string;
+    estimated_weight: string;
+    percentile: string;
+  };
+  basic_screening: {
+    presentation: string;
+    situation: string;
+    back: string;
+    fetal_heart_rate: string;
+    placenta_cervix_relation: string;
+    rhythm: string;
+    fetal_movements: string;
+    placenta_location: string;
+    placenta_characteristics: string;
+    amniotic_fluid: string;
+    cvm: string;
+    phelan: string;
+    uterus_and_adnexa: string;
+    cervical_length: string;
+    internal_cervical_os: string;
+  };
+}
+
+export interface BasicObstetricInterpretationUltrasoundPayload {
+  enabled: boolean;
+  study_date: string;
+  fetometry_weeks: string;
+  fetometry_days: string;
+  notes: string;
+}
+
+export interface BasicObstetricConclusionPayload {
+  fetus_count_risk: string;
+  growth_risk: string;
+  frequency_risk: string;
+  placenta_risk: string;
+  amniotic_fluid_risk: string;
+  uterus_and_adnexa_risk: string;
+  preterm_birth_risk: string;
+  comments: string;
+  recommended_next_study: string;
+  recommended_start_date: string;
+  recommended_end_date: string;
+}
+
+export interface BasicObstetricReportPayload {
+  study_context: {
+    reference_physician: string;
+    fetus_count: number;
+    selected_fetus: number;
+  };
+  fetuses: BasicObstetricFetusPayload[];
+  interpretation_ultrasounds: BasicObstetricInterpretationUltrasoundPayload[];
+  conclusion: BasicObstetricConclusionPayload;
+}
+
+export interface NuchalTranslucencyFetusPayload {
+  fetus_number: number;
+  growth_screening: {
+    lcc: BasicObstetricMeasurementPayload;
+    dbp: BasicObstetricMeasurementPayload;
+    cc: BasicObstetricMeasurementPayload;
+    ca: BasicObstetricMeasurementPayload;
+    lf: BasicObstetricMeasurementPayload;
+    average_fetometry: string;
+    estimated_weight: string;
+  };
+  basic_screening: {
+    fetal_heart_rate: string;
+    rhythm: string;
+    fetal_movements: string;
+    placenta_location: string;
+    placenta_characteristics: string;
+    amniotic_fluid: string;
+    cvm: string;
+    phelan: string;
+    uterus_and_adnexa: string;
+    cervical_length: string;
+    internal_cervical_os: string;
+    umbilical_cord: string;
+  };
+  anatomical_screening: {
+    central_nervous_system: {
+      skull: string;
+      midline: string;
+      choroid_plexuses: string;
+    };
+    face: {
+      orbits: string;
+      profile: string;
+      nose_and_lips: string;
+    };
+    spine_and_neck: {
+      spine: string;
+      neck: string;
+    };
+    thorax: {
+      situs: string;
+      axis: string;
+      thoracic_wall: string;
+      diaphragm: string;
+      lung_area: string;
+    };
+    heart: {
+      size: string;
+      position: string;
+      rate: string;
+      rhythm: string;
+    };
+    abdomen: {
+      abdominal_wall: string;
+      stomach: string;
+      liver: string;
+      intestine: string;
+      kidneys: string;
+      bladder: string;
+      cord_insertion: string;
+      umbilical_vessels: string;
+    };
+    extremities: {
+      upper_right: string;
+      upper_left: string;
+      lower_right: string;
+      lower_left: string;
+      genitalia: string;
+    };
+  };
+  screenings: {
+    preeclampsia: {
+      uterine_right_ip: string;
+      uterine_left_ip: string;
+      average_ip: string;
+      percentile: string;
+      early_risk: string;
+    };
+    cardiopathy: {
+      ductus_venosus: string;
+    };
+    chromosomopathies: {
+      nuchal_translucency: string;
+      nasal_bone: string;
+      ductus_venosus: string;
+      ductus_venosus_ip: string;
+      tricuspid_flow: string;
+      down_syndrome_previous_risk: string;
+      down_syndrome_posterior_risk: string;
+      trisomy18_previous_risk: string;
+      trisomy18_posterior_risk: string;
+    };
+  };
+}
+
+export interface NuchalTranslucencyConclusionPayload {
+  fetus_count_risk: string;
+  growth_risk: string;
+  frequency_risk: string;
+  placenta_risk: string;
+  amniotic_fluid_risk: string;
+  uterus_and_adnexa_risk: string;
+  preterm_birth_risk: string;
+  structural_risk: string;
+  cardiopathy_risk: string;
+  preeclampsia_risk: string;
+  chromosomopathies_risk: string;
+  comments: string;
+  recommended_next_study: string;
+  recommended_start_date: string;
+  recommended_end_date: string;
+}
+
+export interface NuchalTranslucencyReportPayload {
+  study_context: {
+    reference_physician: string;
+    fetus_count: number;
+    selected_fetus: number;
+  };
+  fetuses: NuchalTranslucencyFetusPayload[];
+  interpretation_ultrasounds: BasicObstetricInterpretationUltrasoundPayload[];
+  conclusion: NuchalTranslucencyConclusionPayload;
+}
+
+export interface GeneticStructuralScreeningPayload {
+  central_nervous_system: {
+    skull: string;
+    midline: string;
+    thalami: string;
+    cavum_septum_pellucidum: string;
+    lateral_ventricle: string;
+    lateral_ventricle_mm: string;
+    choroid_plexuses: string;
+    cerebral_peduncles: string;
+    cerebral_hemispheres: string;
+    cerebellum: string;
+    cisterna_magna: string;
+    cisterna_magna_mm: string;
+  };
+  face: {
+    orbits_and_lenses: string;
+    nose_and_upper_lip: string;
+    profile: string;
+  };
+  spine_and_neck: {
+    spine: string;
+    neck: string;
+  };
+  thorax: {
+    thoracic_wall: string;
+    lung_area: string;
+    diaphragm: string;
+  };
+  heart: {
+    size: string;
+    axis: string;
+    situs: string;
+    fetal_heart_rate: string;
+    rhythm: string;
+    atrial_ventricular_chambers: string;
+    valvular_apparatus: string;
+    interventricular_septum: string;
+    interatrial_septum_foramen_ovale: string;
+    pulmonary_veins: string;
+    aortic_outflow: string;
+    pulmonary_outflow: string;
+    three_vessel_view: string;
+    three_vessel_trachea_view: string;
+  };
+  abdomen: {
+    abdominal_wall: string;
+    stomach: string;
+    liver: string;
+    intestine: string;
+    kidneys: string;
+    bladder: string;
+    cord_insertion: string;
+    umbilical_vessels: string;
+  };
+  extremities: {
+    upper_right: string;
+    upper_left: string;
+    lower_right: string;
+    lower_left: string;
+    genitalia: string;
+  };
+}
+
+export interface GeneticFetusPayload {
+  fetus_number: number;
+  growth_screening: {
+    dbp: BasicObstetricMeasurementPayload;
+    cc: BasicObstetricMeasurementPayload;
+    ca: BasicObstetricMeasurementPayload;
+    lf: BasicObstetricMeasurementPayload;
+    lt: BasicObstetricMeasurementPayload;
+    lh: BasicObstetricMeasurementPayload;
+    lc: BasicObstetricMeasurementPayload;
+    cerebellum: BasicObstetricMeasurementPayload;
+    average_fetometry: string;
+    estimated_weight: string;
+    percentile: string;
+  };
+  basic_screening: {
+    presentation: string;
+    situation: string;
+    back: string;
+    fetal_heart_rate: string;
+    rhythm: string;
+    fetal_movements: string;
+    placenta_location: string;
+    placenta_characteristics: string;
+    placenta_cervix_relation: string;
+    amniotic_fluid: string;
+    cvm: string;
+    phelan: string;
+    uterus_and_adnexa: string;
+    cervical_length: string;
+    internal_cervical_os: string;
+  };
+  structural_screening: GeneticStructuralScreeningPayload;
+}
+
+export interface GeneticReportPayload {
+  study_context: {
+    reference_physician: string;
+    fetus_count: number;
+    selected_fetus: number;
+  };
+  fetuses: GeneticFetusPayload[];
+  interpretation_ultrasounds: BasicObstetricInterpretationUltrasoundPayload[];
+  conclusion: BasicObstetricConclusionPayload;
+}
+
 export interface PatientReportItem {
   id: number;
   created_at?: string | null;
@@ -56,6 +359,23 @@ export interface PatientReportItem {
   type_key: string;
   type_label: string;
   editor_url?: string | null;
+}
+
+export interface PatientReportRecord<TPayload = unknown> {
+  id: number;
+  office_id: number;
+  patient_id: number;
+  report_type_key: string;
+  title?: string | null;
+  report_date?: string | null;
+  status: number;
+  report_payload?: TPayload | null;
+  form_config?: {
+    hidden_fields?: string[];
+  };
+  created_by?: number | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 export interface PatientReportsData {
@@ -69,6 +389,26 @@ export interface PatientReportsData {
   last_report_type_label?: string | null;
   last_report_date_label?: string | null;
   items: PatientReportItem[];
+}
+
+export interface ColposcopyReportBuilderData {
+  report: {
+    id: number;
+    title?: string | null;
+    report_type_key: string;
+    report_date?: string | null;
+  };
+  selected_file_ids: number[];
+  is_locked: boolean;
+  can_download: boolean;
+  sessions: Array<{
+    id: number;
+    title: string;
+    captured_on?: string | null;
+    captured_on_label?: string | null;
+    files_count: number;
+    files: PatientFile[];
+  }>;
 }
 
 async function resolveOfficeId(): Promise<number> {
@@ -167,7 +507,7 @@ export const consultationService = {
     type_label: string;
     created_at?: string | null;
     created_at_label: string;
-    next_view: 'colposcopy' | 'legacy_report_editor';
+    next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'v2_report_builder_pending';
     editor_url?: string | null;
   }> {
     const resolvedOfficeId = officeId ?? (await resolveOfficeId());
@@ -180,7 +520,7 @@ export const consultationService = {
         type_label: string;
         created_at?: string | null;
         created_at_label: string;
-        next_view: 'colposcopy' | 'legacy_report_editor';
+        next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'v2_report_builder_pending';
         editor_url?: string | null;
       };
     }>(`/v2/patients/${patientId}/reports`, {
@@ -189,5 +529,76 @@ export const consultationService = {
     });
 
     return response.data.data;
+  },
+
+  async getPatientReport<TPayload = unknown>(reportId: number, officeId?: number): Promise<PatientReportRecord<TPayload>> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.get<{ status: string; data: PatientReportRecord<TPayload> }>(
+      `/v2/patient-reports/${reportId}`,
+      { params: { office_id: resolvedOfficeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async updatePatientReport<TPayload = unknown>(
+    reportId: number,
+    payload: {
+      report_payload: TPayload;
+      title?: string;
+      report_date?: string;
+    },
+    officeId?: number
+  ): Promise<PatientReportRecord<TPayload>> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.put<{ status: string; data: PatientReportRecord<TPayload> }>(
+      `/v2/patient-reports/${reportId}`,
+      {
+        office_id: resolvedOfficeId,
+        ...payload,
+      }
+    );
+
+    return response.data.data;
+  },
+
+  async getColposcopyReportBuilder(reportId: number, officeId?: number): Promise<ColposcopyReportBuilderData> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.get<{ status: string; data: ColposcopyReportBuilderData }>(
+      `/v2/patient-reports/${reportId}/colposcopy-builder`,
+      { params: { office_id: resolvedOfficeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async updateColposcopyReportFiles(
+    reportId: number,
+    fileIds: number[],
+    officeId?: number
+  ): Promise<ColposcopyReportBuilderData> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.put<{ status: string; data: ColposcopyReportBuilderData }>(
+      `/v2/patient-reports/${reportId}/colposcopy-files`,
+      {
+        office_id: resolvedOfficeId,
+        file_ids: fileIds,
+      }
+    );
+
+    return response.data.data;
+  },
+
+  async downloadPatientReportDocx(reportId: number, officeId?: number): Promise<Blob> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.post<Blob>(
+      `/v2/patient-reports/${reportId}/download-docx`,
+      {
+        office_id: resolvedOfficeId,
+      },
+      { responseType: 'blob' }
+    );
+
+    return response.data;
   },
 };

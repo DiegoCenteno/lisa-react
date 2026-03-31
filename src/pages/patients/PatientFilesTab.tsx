@@ -34,6 +34,7 @@ import { formatDisplayDateTimeLongEs } from '../../utils/date';
 interface Props {
   patientId: number;
   refreshKey?: number;
+  cameraModuleTitle?: string;
   onError: (message: string) => void;
 }
 
@@ -59,13 +60,15 @@ const captureSessionChipColors = [
   { bg: '#FCE4EC', color: '#C2185B' },
 ];
 
-function resolveFileChip(file: PatientFile) {
+function resolveFileChip(file: PatientFile, cameraModuleTitle: string) {
   if (file.capture_source === 'colposcopy_camera') {
     const paletteIndex = Math.abs(Number(file.capture_session_id ?? 0)) % captureSessionChipColors.length;
     const palette = captureSessionChipColors[paletteIndex];
+    const labelPrefix = cameraModuleTitle.trim() || 'Camara';
 
     return {
-      label: file.capture_session_title?.trim() || `Colposcopia ${formatDisplayDateTimeLongEs(file.uploaded_at)}`,
+      label: file.capture_session_title?.replace(/^Colposcopia/i, labelPrefix).trim()
+        || `${labelPrefix} ${formatDisplayDateTimeLongEs(file.uploaded_at)}`,
       sx: {
         backgroundColor: palette.bg,
         color: palette.color,
@@ -86,7 +89,7 @@ function resolveFileChip(file: PatientFile) {
   };
 }
 
-function PatientFilesTabInner({ patientId, refreshKey = 0, onError }: Props) {
+function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = 'Camara', onError }: Props) {
   const [files, setFiles] = useState<PatientFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<number, string>>({});
@@ -241,8 +244,8 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, onError }: Props) {
                         </Box>
                         <Chip
                           size="small"
-                          label={resolveFileChip(file).label}
-                          sx={resolveFileChip(file).sx}
+                          label={resolveFileChip(file, cameraModuleTitle).label}
+                          sx={resolveFileChip(file, cameraModuleTitle).sx}
                         />
                       </Box>
                     }

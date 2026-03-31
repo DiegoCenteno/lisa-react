@@ -415,25 +415,27 @@ export default function PatientDetailPage() {
 
       {/* Tab 3: Archivos */}
       <TabPanel value={tab} index={3}>
-        <PatientFilesTab patientId={patient.id} refreshKey={filesRefreshKey} onError={(msg) => setCopyError(msg)} />
+        <PatientFilesTab
+          patientId={patient.id}
+          refreshKey={filesRefreshKey}
+          cameraModuleTitle={cameraMenuTitle}
+          onError={(msg) => setCopyError(msg)}
+        />
       </TabPanel>
 
       {/* Tab 8: Reportes */}
       <TabPanel value={tab} index={8}>
-        <PatientReportsTab
-          patientId={patient.id}
-          onOpenColposcopy={() => {
-            if (!patient?.detail_menu?.camera_menu_enabled) return;
-            setTab(4);
-            setSearchParams({ tab: 'colposcopy' }, { replace: true });
-          }}
-        />
+        <PatientReportsTab patientId={patient.id} />
       </TabPanel>
 
       {/* Tab 4: Colposcop\u00eda */}
       {patient.detail_menu?.camera_menu_enabled ? (
         <TabPanel value={tab} index={4}>
-          <PatientColposcopyTab patientId={patient.id} onCaptureSaved={refreshPatientFiles} />
+          <PatientColposcopyTab
+            patientId={patient.id}
+            moduleTitle={cameraMenuTitle}
+            onCaptureSaved={refreshPatientFiles}
+          />
         </TabPanel>
       ) : null}
 

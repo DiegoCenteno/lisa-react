@@ -106,6 +106,31 @@ function clearDraft(patientId: number) {
   localStorage.removeItem(getDraftKey(patientId));
 }
 
+function calculateAgeFromBirthDate(value?: string) {
+  if (!value) return '';
+  const birthDate = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(birthDate.getTime())) return '';
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDiff = today.getMonth() - birthDate.getMonth();
+  const dayDiff = today.getDate() - birthDate.getDate();
+
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? String(age) : '';
+}
+
+async function flushActiveElement() {
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement) {
+    activeElement.blur();
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  }
+}
+
 const SectionCard = memo(function SectionCard({ title, icon, children }: SectionCardProps) {
   return (
     <Card
@@ -201,6 +226,13 @@ const Field = memo(function Field({
   sm = 6,
 }: FieldProps) {
   const isDateField = type === 'date';
+  const isImmediateField = Boolean(select || isDateField);
+  const stringValue = String(value ?? '');
+  const [draftValue, setDraftValue] = useState(stringValue);
+
+  useEffect(() => {
+    setDraftValue(stringValue);
+  }, [stringValue]);
 
   if (disabled) {
     return <DocumentField label={label} value={value ?? ''} xs={xs} sm={sm} />;
@@ -212,8 +244,19 @@ const Field = memo(function Field({
         fullWidth
         size="small"
         label={label}
-        value={value ?? ''}
-        onChange={(event) => onChange?.(event.target.value)}
+        value={isImmediateField ? stringValue : draftValue}
+        onChange={(event) => {
+          if (isImmediateField) {
+            onChange?.(event.target.value);
+            return;
+          }
+          setDraftValue(event.target.value);
+        }}
+        onBlur={() => {
+          if (!isImmediateField && draftValue !== stringValue) {
+            onChange?.(draftValue);
+          }
+        }}
         disabled={disabled}
         select={select}
         multiline={multiline}
@@ -235,7 +278,7 @@ const Field = memo(function Field({
   );
 });
 
-const CheckField = memo(function CheckField({
+const LegacyCheckField = memo(function LegacyCheckField({
   label,
   checked,
   value,
@@ -293,7 +336,7 @@ const CheckField = memo(function CheckField({
           value={value ?? ''}
           onChange={(event) => onValueChange?.(event.target.value)}
           disabled={disabled || !checked}
-          placeholder="Descripción"
+          placeholder="Descripcion"
           multiline={multiline}
           rows={rows}
         />
@@ -301,6 +344,88 @@ const CheckField = memo(function CheckField({
     </Grid>
   );
 });
+
+const BufferedCheckField = memo(function BufferedCheckField({
+  label,
+  checked,
+  value,
+  disabled,
+  onCheckedChange,
+  onValueChange,
+  multiline,
+  rows,
+}: CheckFieldProps) {
+  const stringValue = String(value ?? '');
+  const [draftValue, setDraftValue] = useState(stringValue);
+
+  useEffect(() => {
+    setDraftValue(stringValue);
+  }, [stringValue]);
+
+  if (disabled) {
+    return (
+      <LegacyCheckField
+        label={label}
+        checked={checked}
+        value={value}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+        onValueChange={onValueChange}
+        multiline={multiline}
+        rows={rows}
+      />
+    );
+  }
+
+  return (
+    <Grid size={{ xs: 12 }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '260px minmax(0, 1fr)' },
+          gap: 1.5,
+          alignItems: 'start',
+        }}
+      >
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={Boolean(checked)}
+              onChange={(event) => {
+                const nextChecked = event.target.checked;
+                onCheckedChange?.(nextChecked);
+                if (!nextChecked) {
+                  setDraftValue('');
+                  onValueChange?.('');
+                }
+              }}
+              disabled={disabled}
+            />
+          }
+          label={label}
+          sx={{ m: 0 }}
+        />
+        <TextField
+          fullWidth
+          size="small"
+          value={draftValue}
+          onChange={(event) => setDraftValue(event.target.value)}
+          onBlur={() => {
+            if (draftValue !== stringValue) {
+              onValueChange?.(draftValue);
+            }
+          }}
+          disabled={disabled || !checked}
+          placeholder="Descripcion"
+          multiline={multiline}
+          rows={rows}
+        />
+      </Box>
+    </Grid>
+  );
+});
+
+const CheckField = BufferedCheckField;
 
 type HereditarySectionProps = {
   value: HereditaryBackground;
@@ -667,14 +792,33 @@ const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
                 </MenuItem>
               ))}
             </Field>
-            <Field label="Patología obstétrica" value={value.obstetric_pathology} disabled={disabled} onChange={(obstetric_pathology) => onPatch({ obstetric_pathology })} xs={12} multiline rows={2} />
+            <Field label="Patologia obstetrica" value={value.obstetric_pathology} disabled={disabled} onChange={(obstetric_pathology) => onPatch({ obstetric_pathology })} xs={12} />
             <Field label="TA embarazo" value={value.pregnancy_bp} disabled={disabled} onChange={(pregnancy_bp) => onPatch({ pregnancy_bp })} />
             <Field label="Peso embarazo" value={value.pregnancy_weight} disabled={disabled} onChange={(pregnancy_weight) => onPatch({ pregnancy_weight })} />
             <Field label="Talla embarazo" value={value.pregnancy_height} disabled={disabled} onChange={(pregnancy_height) => onPatch({ pregnancy_height })} />
-            <CheckField label="Donación de óvulos" checked={value.ovum_donation_checked} value={value.pregnancy_notes} disabled={disabled} onCheckedChange={(ovum_donation_checked) => onPatch({ ovum_donation_checked })} onValueChange={(pregnancy_notes) => onPatch({ pregnancy_notes })} multiline rows={2} />
-            <Field label="Fecha nacimiento donador" value={value.ovum_donor_birth_date} disabled={disabled || !value.ovum_donation_checked} onChange={(ovum_donor_birth_date) => onPatch({ ovum_donor_birth_date })} type="date" />
-            <Field label="Edad donador" value={value.ovum_donor_age} disabled={disabled || !value.ovum_donation_checked} onChange={(ovum_donor_age) => onPatch({ ovum_donor_age })} />
-            <CheckField label="Control prenatal" checked={value.prenatal_care_checked} value={value.prenatal_care} disabled={disabled} onCheckedChange={(prenatal_care_checked) => onPatch({ prenatal_care_checked })} onValueChange={(prenatal_care) => onPatch({ prenatal_care })} />
+            <Grid size={{ xs: 12 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={Boolean(value.ovum_donation_checked)}
+                    onChange={(event) => {
+                      const nextChecked = event.target.checked;
+                      onPatch({
+                        ovum_donation_checked: nextChecked,
+                        ovum_donor_birth_date: nextChecked ? value.ovum_donor_birth_date : '',
+                        ovum_donor_age: nextChecked ? value.ovum_donor_age : '',
+                      });
+                    }}
+                    disabled={disabled}
+                  />
+                }
+                label="Donacion de ovulos"
+                sx={{ m: 0 }}
+              />
+            </Grid>
+            <Field label="Fecha nacimiento donador" value={value.ovum_donor_birth_date} disabled={disabled || !value.ovum_donation_checked} onChange={(ovum_donor_birth_date) => onPatch({ ovum_donor_birth_date, ovum_donor_age: calculateAgeFromBirthDate(ovum_donor_birth_date) })} type="date" />
+            <Field label="Edad donador" value={value.ovum_donor_age} disabled />
+            <Field label="Anotaciones adicionales del embarazo" value={value.pregnancy_notes} disabled={disabled} onChange={(pregnancy_notes) => onPatch({ pregnancy_notes })} xs={12} />
           </>
         )}
       </Grid>
@@ -682,111 +826,6 @@ const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
   );
 });
 
-type GynecologyUltrasoundsBlockProps = {
-  value: GynecologicalBackground;
-  disabled: boolean;
-  onPatch: (patch: Partial<GynecologicalBackground>) => void;
-  ultrasoundRows: readonly [1, 2, 3, 4, 5];
-};
-
-const GynecologyUltrasoundsBlock = memo(function GynecologyUltrasoundsBlock({
-  value,
-  disabled,
-  onPatch,
-  ultrasoundRows,
-}: GynecologyUltrasoundsBlockProps) {
-  if (disabled) {
-    const enabledUltrasounds = ultrasoundRows.filter((index) => Boolean(value[`ultrasound${index}_checked` as const]));
-
-    return (
-      <SubsectionCard title="Ultrasonidos">
-        {enabledUltrasounds.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">
-            No hay ultrasonidos registrados.
-          </Typography>
-        ) : (
-          <Grid container spacing={2}>
-            {enabledUltrasounds.map((index) => {
-              const dateKey = `ultrasound${index}_date` as const;
-              const weeksKey = `ultrasound${index}_weeks` as const;
-              const daysKey = `ultrasound${index}_days` as const;
-              const notesKey = `ultrasound${index}_notes` as const;
-
-              return (
-                <Grid key={index} size={{ xs: 12 }}>
-                  <Box
-                    sx={{
-                      border: '1px solid',
-                      borderColor: 'rgba(35, 165, 193, 0.12)',
-                      borderRadius: 2,
-                      p: 2,
-                    }}
-                  >
-                    <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: '#177b26' }}>
-                      Ultrasonido {index}
-                    </Typography>
-                    <Grid container spacing={2}>
-                      <DocumentField label="Fecha" value={String(value[dateKey] ?? '')} />
-                      <DocumentField label="Semanas" value={String(value[weeksKey] ?? '')} />
-                      <DocumentField label="Días" value={String(value[daysKey] ?? '')} />
-                      <DocumentField label="Notas" value={String(value[notesKey] ?? '')} xs={12} sm={12} />
-                    </Grid>
-                  </Box>
-                </Grid>
-              );
-            })}
-          </Grid>
-        )}
-      </SubsectionCard>
-    );
-  }
-
-  return (
-    <SubsectionCard title="Ultrasonidos">
-      <Grid container spacing={2}>
-        {ultrasoundRows.map((index) => {
-          const checkedKey = `ultrasound${index}_checked` as const;
-          const dateKey = `ultrasound${index}_date` as const;
-          const weeksKey = `ultrasound${index}_weeks` as const;
-          const daysKey = `ultrasound${index}_days` as const;
-          const notesKey = `ultrasound${index}_notes` as const;
-          const enabled = Boolean(value[checkedKey]);
-
-          return (
-            <Grid key={index} size={{ xs: 12 }}>
-              <Box
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'rgba(35, 165, 193, 0.12)',
-                  borderRadius: 2,
-                  p: 2,
-                }}
-              >
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={enabled}
-                      onChange={(event) => onPatch({ [checkedKey]: event.target.checked } as Partial<GynecologicalBackground>)}
-                      disabled={disabled}
-                    />
-                  }
-                  label={`Ultrasonido ${index}`}
-                  sx={{ mb: 1 }}
-                />
-                <Grid container spacing={2}>
-                  <Field label="Fecha" value={String(value[dateKey] ?? '')} disabled={disabled || !enabled} onChange={(next) => onPatch({ [dateKey]: next } as Partial<GynecologicalBackground>)} type="date" />
-                  <Field label="Semanas" value={String(value[weeksKey] ?? '')} disabled={disabled || !enabled} onChange={(next) => onPatch({ [weeksKey]: next } as Partial<GynecologicalBackground>)} />
-                  <Field label="Días" value={String(value[daysKey] ?? '')} disabled={disabled || !enabled} onChange={(next) => onPatch({ [daysKey]: next } as Partial<GynecologicalBackground>)} />
-                  <Field label="Notas" value={String(value[notesKey] ?? '')} disabled={disabled || !enabled} onChange={(next) => onPatch({ [notesKey]: next } as Partial<GynecologicalBackground>)} multiline rows={2} xs={12} />
-                </Grid>
-              </Box>
-            </Grid>
-          );
-        })}
-      </Grid>
-    </SubsectionCard>
-  );
-});
 
 const GynecologySexualBlock = memo(function GynecologySexualBlock({
   value,
@@ -799,17 +838,43 @@ const GynecologySexualBlock = memo(function GynecologySexualBlock({
         <Field label="IVSA" value={value.ivsa} disabled={disabled} onChange={(ivsa) => onPatch({ ivsa })} />
         <Field label="Parejas sexuales" value={value.sexual_partners} disabled={disabled} onChange={(sexual_partners) => onPatch({ sexual_partners })} />
         <CheckField label="ETS" checked={value.std_checked} value={value.std} disabled={disabled} onCheckedChange={(std_checked) => onPatch({ std_checked })} onValueChange={(std) => onPatch({ std })} />
-        <Field label="Citología" value={value.cytology} disabled={disabled} onChange={(cytology) => onPatch({ cytology })} />
-        <Field label="Planificación familiar" value={value.family_planning} disabled={disabled} onChange={(family_planning) => onPatch({ family_planning })} />
-        <CheckField label="Gestaciones" checked={value.gestations_checked} value={value.gestations} disabled={disabled} onCheckedChange={(gestations_checked) => onPatch({ gestations_checked })} onValueChange={(gestations) => onPatch({ gestations })} />
-        <Field label="Fecha última gestación" value={value.last_gestation_date} disabled={disabled} onChange={(last_gestation_date) => onPatch({ last_gestation_date })} type="date" />
-        <Field label="Partos" value={value.deliveries} disabled={disabled} onChange={(deliveries) => onPatch({ deliveries })} />
-        <Field label="Cesáreas" value={value.cesareans} disabled={disabled} onChange={(cesareans) => onPatch({ cesareans })} />
-        <Field label="Abortos" value={value.abortions} disabled={disabled} onChange={(abortions) => onPatch({ abortions })} />
-        <Field label="Embarazo ectópico" value={value.ectopic} disabled={disabled} onChange={(ectopic) => onPatch({ ectopic })} />
-        <Field label="Embarazo molar" value={value.molar} disabled={disabled} onChange={(molar) => onPatch({ molar })} />
+        <Field label="Citologia" value={value.cytology} disabled={disabled} onChange={(cytology) => onPatch({ cytology })} />
+        <Field label="Planificacion familiar" value={value.family_planning} disabled={disabled} onChange={(family_planning) => onPatch({ family_planning })} />
+        <Grid size={{ xs: 12 }}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={Boolean(value.gestations_checked)}
+                onChange={(event) => {
+                  const nextChecked = event.target.checked;
+                  onPatch({
+                    gestations_checked: nextChecked,
+                    gestations: nextChecked ? value.gestations : '',
+                    last_gestation_date: nextChecked ? value.last_gestation_date : '',
+                    deliveries: nextChecked ? value.deliveries : '',
+                    cesareans: nextChecked ? value.cesareans : '',
+                    abortions: nextChecked ? value.abortions : '',
+                    ectopic: nextChecked ? value.ectopic : '',
+                    molar: nextChecked ? value.molar : '',
+                  });
+                }}
+                disabled={disabled}
+              />
+            }
+            label="Gestaciones"
+            sx={{ m: 0 }}
+          />
+        </Grid>
+        <Field label="Fecha ultima gestacion" value={value.last_gestation_date} disabled={disabled || !value.gestations_checked} onChange={(last_gestation_date) => onPatch({ last_gestation_date })} type="date" />
+        <Field label="Gestaciones" value={value.gestations} disabled={disabled || !value.gestations_checked} onChange={(gestations) => onPatch({ gestations })} />
+        <Field label="Partos" value={value.deliveries} disabled={disabled || !value.gestations_checked} onChange={(deliveries) => onPatch({ deliveries })} />
+        <Field label="Cesareas" value={value.cesareans} disabled={disabled || !value.gestations_checked} onChange={(cesareans) => onPatch({ cesareans })} />
+        <Field label="Abortos" value={value.abortions} disabled={disabled || !value.gestations_checked} onChange={(abortions) => onPatch({ abortions })} />
+        <Field label="Embarazo ectopico" value={value.ectopic} disabled={disabled || !value.gestations_checked} onChange={(ectopic) => onPatch({ ectopic })} />
+        <Field label="Embarazo molar" value={value.molar} disabled={disabled || !value.gestations_checked} onChange={(molar) => onPatch({ molar })} />
         <Field label="Edad de menopausia" value={value.menopause_age} disabled={disabled} onChange={(menopause_age) => onPatch({ menopause_age })} />
-        <CheckField label="Síntomas climatéricos" checked={value.climacteric_symptoms_checked} value={value.climacteric_symptoms} disabled={disabled} onCheckedChange={(climacteric_symptoms_checked) => onPatch({ climacteric_symptoms_checked })} onValueChange={(climacteric_symptoms) => onPatch({ climacteric_symptoms })} />
+        <CheckField label="Sintomas de climaterio" checked={value.climacteric_symptoms_checked} value={value.climacteric_symptoms} disabled={disabled} onCheckedChange={(climacteric_symptoms_checked) => onPatch({ climacteric_symptoms_checked })} onValueChange={(climacteric_symptoms) => onPatch({ climacteric_symptoms })} />
+        <CheckField label="Control prenatal" checked={value.prenatal_care_checked} value={value.prenatal_care} disabled={disabled} onCheckedChange={(prenatal_care_checked) => onPatch({ prenatal_care_checked })} onValueChange={(prenatal_care) => onPatch({ prenatal_care })} />
       </Grid>
     </SubsectionCard>
   );
@@ -820,18 +885,11 @@ const GynecologicalSection = memo(function GynecologicalSection({
   disabled,
   onPatch,
 }: GynecologicalSectionProps) {
-  const ultrasoundRows = useMemo(() => ([1, 2, 3, 4, 5] as const), []);
 
   return (
     <SectionCard title="Antecedentes Ginecológicos" icon={<PregnantWomanIcon />}>
       <Box sx={{ display: 'grid', gap: 2 }}>
         <GynecologyPregnancyBlock value={value} disabled={disabled} onPatch={onPatch} />
-        <GynecologyUltrasoundsBlock
-          value={value}
-          disabled={disabled}
-          onPatch={onPatch}
-          ultrasoundRows={ultrasoundRows}
-        />
         <GynecologySexualBlock value={value} disabled={disabled} onPatch={onPatch} />
       </Box>
     </SectionCard>
@@ -976,6 +1034,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
 
     try {
       setSaving(true);
+      await flushActiveElement();
       const saved = await patientService.updateClinicalHistory(patientId, form);
       setClinicalHistory(saved);
       setForm(saved);
@@ -1128,3 +1187,4 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
 }
 
 export default memo(ClinicalHistoryTabInner);
+

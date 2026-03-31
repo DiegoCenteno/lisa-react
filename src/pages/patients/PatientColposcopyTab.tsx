@@ -27,10 +27,11 @@ import { formatDisplayDateTimeLongEs } from '../../utils/date';
 
 interface Props {
   patientId: number;
+  moduleTitle?: string;
   onCaptureSaved?: (file: PatientFile) => void;
 }
 
-function PatientColposcopyTabInner({ patientId, onCaptureSaved }: Props) {
+function PatientColposcopyTabInner({ patientId, moduleTitle = 'Camara', onCaptureSaved }: Props) {
   const [colposcopyFiles, setColposcopyFiles] = useState<PatientFile[]>([]);
   const [loadingColposcopy, setLoadingColposcopy] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -86,7 +87,7 @@ function PatientColposcopyTabInner({ patientId, onCaptureSaved }: Props) {
     } catch (err) {
       console.error('Error abriendo c\u00e1mara:', err);
       setCameraReady(false);
-      setCameraError('Necesitas habilitar permisos de c\u00e1mara para usar colposcop\u00eda');
+      setCameraError(`Necesitas habilitar permisos de camara para usar ${moduleTitle.toLowerCase()}`);
     }
   };
 
@@ -207,7 +208,7 @@ function PatientColposcopyTabInner({ patientId, onCaptureSaved }: Props) {
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
-            <Typography variant="h6">Captura de colposcop\u00eda</Typography>
+            <Typography variant="h6">Captura con {moduleTitle}</Typography>
             <Button
               variant="contained"
               color="primary"
@@ -220,7 +221,7 @@ function PatientColposcopyTabInner({ patientId, onCaptureSaved }: Props) {
           </Box>
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Puedes capturar con el bot\u00f3n, con click sobre la vista previa o presionando la tecla <strong>B</strong>.
+            Puedes capturar con el boton, con click sobre la vista previa o presionando la tecla <strong>B</strong>.
           </Typography>
 
           {cameraError && (
@@ -287,7 +288,7 @@ function PatientColposcopyTabInner({ patientId, onCaptureSaved }: Props) {
 
           {colposcopyFiles.length === 0 ? (
             <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              No hay capturas colposc\u00f3picas almacenadas
+              No hay capturas almacenadas en este modulo
             </Typography>
           ) : (
             <List>
