@@ -17,6 +17,24 @@ interface Props {
   onNavigateToHistorical: () => void;
 }
 
+function getAppointmentStatusLabel(status: unknown): string {
+  const numericStatus = Number(status);
+
+  if (Number.isNaN(numericStatus)) {
+    return String(status ?? '-');
+  }
+
+  const labels: Record<number, string> = {
+    0: 'programada',
+    1: 'confirmada',
+    2: 'no asistió',
+    3: 'cancelada',
+    4: 'lista de espera',
+  };
+
+  return labels[numericStatus] ?? String(numericStatus);
+}
+
 function getPatientActivityMetaLines(log: ActivityLogItem): string[] {
   const meta = log.meta ?? {};
   const lines: string[] = [];
@@ -31,7 +49,9 @@ function getPatientActivityMetaLines(log: ActivityLogItem): string[] {
   }
 
   if ('previous_status' in meta || 'new_status' in meta) {
-    lines.push(`Estatus: ${String(meta.previous_status ?? '-')} -> ${String(meta.new_status ?? '-')}`);
+    lines.push(
+      `Estatus: ${getAppointmentStatusLabel(meta.previous_status ?? '-')} -> ${getAppointmentStatusLabel(meta.new_status ?? '-')}`
+    );
   }
 
   if ('new_reason' in meta && String(meta.new_reason ?? '').trim() !== '') {
@@ -48,7 +68,7 @@ function PatientActivityLogTabInner({ patientActivityLogs, onNavigateToHistorica
     <Card>
       <CardContent>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Bit\u00e1cora
+          Bitácora
         </Typography>
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
@@ -57,7 +77,7 @@ function PatientActivityLogTabInner({ patientActivityLogs, onNavigateToHistorica
             startIcon={<HistoryIcon />}
             onClick={onNavigateToHistorical}
           >
-            Hist\u00f3rico
+            Histórico
           </Button>
         </Box>
 

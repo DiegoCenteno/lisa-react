@@ -39,6 +39,15 @@ interface ApiActivityLogListResponse {
   data: ActivityLogItem[];
 }
 
+interface FutureActiveAppointmentWarning {
+  appointment_id: number;
+  datestart: string;
+  dateend: string;
+  status: number;
+  reason?: string | null;
+  display: string;
+}
+
 export const appointmentService = {
   async getAppointmentsByRange(
     startDate: string,
@@ -61,6 +70,8 @@ export const appointmentService = {
     reason?: string;
     activity_action?: 'create' | 'assign';
     notify_patient?: boolean;
+    replace_previous_appointment?: boolean;
+    previous_appointment_id?: number;
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',
@@ -95,6 +106,8 @@ export const appointmentService = {
     birth_date?: string;
     activity_action?: 'create' | 'assign';
     notify_patient?: boolean;
+    replace_previous_appointment?: boolean;
+    previous_appointment_id?: number;
   }): Promise<Appointment> {
     const response = await apiClient.post<ApiSingleResponse>(
       '/v2/appointments',
@@ -169,5 +182,16 @@ export const appointmentService = {
       `/v2/appointments/${appointmentId}/activity-logs`
     );
     return response.data.data ?? [];
+  },
+
+  async getFutureActiveAppointmentWarning(
+    officeId: number,
+    patientId: number
+  ): Promise<FutureActiveAppointmentWarning | null> {
+    const response = await apiClient.get<{ status: string; data: FutureActiveAppointmentWarning | null }>(
+      '/v2/appointments/check-future-active',
+      { params: { office_id: officeId, patient_id: patientId } }
+    );
+    return response.data.data ?? null;
   },
 };

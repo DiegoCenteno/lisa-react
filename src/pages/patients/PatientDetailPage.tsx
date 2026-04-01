@@ -308,7 +308,7 @@ export default function PatientDetailPage() {
             }}
           >
             Paciente: {patient.name} {patient.last_name}
-            {patient.age ? ` - ${patient.age} anos` : ''}
+            {patient.age ? ` - ${patient.age} años` : ''}
           </Typography>
         </Box>
         </Box>
@@ -339,7 +339,7 @@ export default function PatientDetailPage() {
           <Box>
             <Typography variant="h5">
               {patient.name} {patient.last_name}
-              {patient.age ? ` (${patient.age} anos)` : ""}
+              {patient.age ? ` (${patient.age} años)` : ""}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', color: 'text.secondary' }}>
               <Typography variant="body2" color="inherit">
@@ -397,15 +397,15 @@ export default function PatientDetailPage() {
         }}
       >
         <Tab value={0} icon={<PersonIcon />} label={compactPatientTabs ? '' : 'Perfil'} iconPosition="start" />
-        <Tab value={1} icon={<MedicalIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'HC' : compactPatientTabs ? 'H. Clinica' : 'Historia clinica'} iconPosition="start" />
+        <Tab value={1} icon={<MedicalIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'HC' : compactPatientTabs ? 'H. Clínica' : 'Historia clínica'} iconPosition="start" />
         <Tab value={8} icon={<AssessmentIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'REPO' : 'Reportes'} iconPosition="start" />
         <Tab value={3} icon={<FileIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'ARCH' : 'Archivos'} iconPosition="start" />
         {cameraMenuEnabled && (
           <Tab value={4} icon={<CameraAltIcon />} label={cameraMenuTitle} iconPosition="start" />
         )}
         <Tab value={5} icon={<TagIcon />} label={iconOnlyPatientTabs ? '' : 'Etiquetas'} iconPosition="start" />
-        <Tab value={6} icon={<LogbookIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Bitacora'} iconPosition="start" />
-        <Tab value={7} icon={<HistoryIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Historico'} iconPosition="start" />
+        <Tab value={6} icon={<LogbookIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Bitácora'} iconPosition="start" />
+        <Tab value={7} icon={<HistoryIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Histórico'} iconPosition="start" />
         <Tab value={2} icon={<NoteIcon />} label={iconOnlyPatientTabs ? '' : 'Nota Diaria'} iconPosition="start" />
       </Tabs>
       </Box>

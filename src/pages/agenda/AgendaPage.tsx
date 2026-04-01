@@ -427,20 +427,6 @@ export default function AgendaPage() {
     [visibleAppointments]
   );
 
-  const calendarRenderKey = useMemo(
-    () => visibleAppointments
-      .map((appointment) => [
-        appointment.id,
-        appointment.status,
-        appointment.confirmed ? 1 : 0,
-        appointment.datestart,
-        appointment.dateend,
-      ].join(':'))
-      .join('|'),
-    [visibleAppointments]
-  );
-
-
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
     setPendingAction(null);
@@ -452,6 +438,9 @@ export default function AgendaPage() {
 
   const isSelectedEventToday = selectedEvent
     ? dayjs(selectedEvent.event.start).isSame(dayjs(), 'day')
+    : false;
+  const canConfirmSelectedEvent = selectedEvent
+    ? dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day') < 3
     : false;
 
   const handleAppointmentCreated = useCallback(() => {
@@ -840,7 +829,6 @@ export default function AgendaPage() {
           }}
         >
           <FullCalendar
-            key={calendarRenderKey}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             initialView="listMonth"
             locale="es"
@@ -1281,23 +1269,25 @@ export default function AgendaPage() {
 
               {!showAppointmentDetails && !showAppointmentMore && !pendingAction && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<CheckCircleIcon />}
-                    onClick={() => {
-                      setPendingAction('confirm');
-                      setNotifyPatientAction(confirmNotificationDefault);
-                    }}
-                    sx={{
-                      borderColor: '#50c65b',
-                      color: '#50c65b',
-                      py: 0.9,
-                      fontWeight: 500,
-                    }}
-                  >
-                    CONFIRMAR CITA
-                  </Button>
+                  {canConfirmSelectedEvent && (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<CheckCircleIcon />}
+                      onClick={() => {
+                        setPendingAction('confirm');
+                        setNotifyPatientAction(confirmNotificationDefault);
+                      }}
+                      sx={{
+                        borderColor: '#50c65b',
+                        color: '#50c65b',
+                        py: 0.9,
+                        fontWeight: 500,
+                      }}
+                    >
+                      CONFIRMAR CITA
+                    </Button>
+                  )}
                   <Button
                     fullWidth
                     variant="outlined"
@@ -1682,7 +1672,10 @@ export default function AgendaPage() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         officeId={officeId}
-        onAppointmentCreated={handleAppointmentCreated}
+        onAppointmentCreated={() => {
+          handleAppointmentCreated();
+          setActionToast('Cita guardada correctamente');
+        }}
         initialNotifyPatient={newAppointmentNotificationDefault}
         initialGenderDefault={newAppointmentDefaultGender}
         consultationReasons={newAppointmentConsultationReasons}
@@ -1697,6 +1690,7 @@ export default function AgendaPage() {
         officeId={officeId}
         onAppointmentCreated={() => {
           handleAppointmentCreated();
+          setActionToast('Cita reprogramada correctamente');
           setRescheduleDialogOpen(false);
           setRescheduleAppointment(null);
         }}

@@ -57,7 +57,7 @@ function ConsultationHistoryTabInner({ soapNotes, canEditConsultationHistory, on
     <Card>
       <CardContent>
         <Typography variant="h6" sx={{ mb: 2 }}>
-          Hist\u00f3rico de Consultas
+          Histórico de Consultas
         </Typography>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
           <Button
@@ -65,7 +65,7 @@ function ConsultationHistoryTabInner({ soapNotes, canEditConsultationHistory, on
             startIcon={<LogbookIcon />}
             onClick={onNavigateToBitacora}
           >
-            Bit\u00e1cora
+            Bitácora
           </Button>
         </Box>
         <TextField

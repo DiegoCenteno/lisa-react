@@ -109,6 +109,12 @@ const FileLeading = memo(function FileLeading({
       return;
     }
 
+    const rect = element.getBoundingClientRect();
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (rect.top <= viewportHeight + 200 && rect.bottom >= -200) {
+      onVisible(file.id);
+    }
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
@@ -129,8 +135,8 @@ const FileLeading = memo(function FileLeading({
   }, [file.id, file.type, onVisible]);
 
   const commonSx = {
-    width: 72,
-    height: 72,
+    width: 92,
+    height: 92,
     borderRadius: 1.5,
     display: 'block',
     cursor: isPreviewableFile(file.type) ? 'pointer' : 'default',
@@ -173,7 +179,7 @@ const FileLeading = memo(function FileLeading({
       ) : (
         <Avatar
           variant="rounded"
-          sx={{ width: 72, height: 72, bgcolor: '#E3F2FD', color: '#1565C0' }}
+          sx={{ width: 92, height: 92, bgcolor: '#E3F2FD', color: '#1565C0' }}
         >
           <DocIcon />
         </Avatar>
@@ -215,7 +221,11 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
     setLoading(true);
     try {
       const nextFiles = await patientService.getFiles(patientId);
-      setVisibleImageIds([]);
+      const initialVisibleIds = nextFiles
+        .filter((file) => isImageFile(file.type))
+        .slice(0, 12)
+        .map((file) => file.id);
+      setVisibleImageIds(initialVisibleIds);
       setFiles(
         [...nextFiles].sort(
           (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
@@ -267,18 +277,40 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
     let cancelled = false;
 
     const loadMissingPreviews = async () => {
-      try {
-        const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
-        for (const file of missingFiles) {
-          const blob = await patientService.getFileThumbnailBlob(file.id);
-          nextPreviewUrls[file.id] = window.URL.createObjectURL(blob);
-        }
-        if (!cancelled) {
-          setImagePreviewUrls(nextPreviewUrls);
-        }
-      } catch (err) {
-        console.error('Error cargando miniaturas de archivos:', err);
-      }
+      await Promise.all(
+        missingFiles.map(async (file) => {
+          try {
+            let blob: Blob;
+            try {
+              blob = await patientService.getFileThumbnailBlob(file.id);
+            } catch {
+              blob = await patientService.getFileBlob(file.id);
+            }
+
+            const objectUrl = window.URL.createObjectURL(blob);
+            if (cancelled) {
+              window.URL.revokeObjectURL(objectUrl);
+              return;
+            }
+
+            setImagePreviewUrls((current) => {
+              const previousUrl = current[file.id];
+              if (previousUrl && previousUrl !== objectUrl) {
+                window.URL.revokeObjectURL(previousUrl);
+              }
+
+              const next = {
+                ...current,
+                [file.id]: objectUrl,
+              };
+              imagePreviewUrlsRef.current = next;
+              return next;
+            });
+          } catch (err) {
+            console.error(`Error cargando miniatura del archivo ${file.id}:`, err);
+          }
+        })
+      );
     };
 
     void loadMissingPreviews();

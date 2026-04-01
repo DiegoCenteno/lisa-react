@@ -156,13 +156,13 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField select label="G\u00e9nero" fullWidth value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                <TextField select label="Género" fullWidth value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
                   <MenuItem value="">Sin especificar</MenuItem>
                   <MenuItem value="Masculino">Masculino</MenuItem>
                   <MenuItem value="Femenino">Femenino</MenuItem>
                 </TextField>
               ) : (
-                <InfoRow label="G\u00e9nero" value={patient.gender} />
+                <InfoRow label="Género" value={patient.gender} />
               )}
             </Grid>
           </Grid>

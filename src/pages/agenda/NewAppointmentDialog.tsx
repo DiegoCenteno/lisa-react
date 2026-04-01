@@ -88,6 +88,14 @@ interface Props {
 
 type WizardStep = 'dates' | 'patient' | 'summary';
 type ManualStep = 'month' | 'day' | 'period' | 'hour' | 'duration';
+type FutureActiveAppointmentWarning = {
+  appointment_id: number;
+  datestart: string;
+  dateend: string;
+  status: number;
+  reason?: string | null;
+  display: string;
+};
 
 export default function NewAppointmentDialog({
   open,
@@ -159,6 +167,9 @@ export default function NewAppointmentDialog({
   // ── Step 3: summary ──
   const [reason, setReason] = useState('');
   const [notifyPatient, setNotifyPatient] = useState(true);
+  const [futureActiveAppointment, setFutureActiveAppointment] = useState<FutureActiveAppointmentWarning | null>(null);
+  const [checkingFutureAppointment, setCheckingFutureAppointment] = useState(false);
+  const [replacePreviousAppointment, setReplacePreviousAppointment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
@@ -204,6 +215,9 @@ export default function NewAppointmentDialog({
       setManualDurationTotal(null);
       setReason(initialReason);
       setNotifyPatient(initialNotifyPatient);
+      setFutureActiveAppointment(null);
+      setCheckingFutureAppointment(false);
+      setReplacePreviousAppointment(false);
       setSaving(false);
       setSaveError('');
       loadAvailableDates();
@@ -461,6 +475,10 @@ export default function NewAppointmentDialog({
           reason: reason || undefined,
           activity_action: 'assign',
           notify_patient: notifyPatient,
+          replace_previous_appointment: replacePreviousAppointment,
+          previous_appointment_id: replacePreviousAppointment
+            ? futureActiveAppointment?.appointment_id
+            : undefined,
         });
       } else if (selectedPatient) {
         await appointmentService.createAppointment({
@@ -471,6 +489,10 @@ export default function NewAppointmentDialog({
           reason: reason || undefined,
           activity_action: 'create',
           notify_patient: notifyPatient,
+          replace_previous_appointment: replacePreviousAppointment,
+          previous_appointment_id: replacePreviousAppointment
+            ? futureActiveAppointment?.appointment_id
+            : undefined,
         });
       } else {
         await appointmentService.createAppointmentWithNewPatient({
@@ -492,11 +514,58 @@ export default function NewAppointmentDialog({
       onClose();
     } catch (err) {
       console.error('Error saving appointment:', err);
-      setSaveError('Error al guardar la cita. Intente de nuevo.');
+      const apiMessage =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === 'string'
+          ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message ?? '')
+          : '';
+      setSaveError(apiMessage || 'Error al guardar la cita. Intente de nuevo.');
     } finally {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (
+      !open ||
+      step !== 'summary' ||
+      mode === 'reschedule' ||
+      !selectedPatient?.id ||
+      !officeId
+    ) {
+      setFutureActiveAppointment(null);
+      setCheckingFutureAppointment(false);
+      setReplacePreviousAppointment(false);
+      return;
+    }
+
+    setCheckingFutureAppointment(true);
+    appointmentService
+      .getFutureActiveAppointmentWarning(officeId, selectedPatient.id)
+      .then((data) => {
+        if (cancelled) return;
+        setFutureActiveAppointment(data);
+        setReplacePreviousAppointment(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Error checking future active appointment:', error);
+        setFutureActiveAppointment(null);
+        setReplacePreviousAppointment(false);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCheckingFutureAppointment(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, officeId, open, selectedPatient?.id, step]);
 
   // ── Filtered patients (client-side search with deferred value for instant typing) ──
   const deferredSearch = useDeferredValue(patientSearch);
@@ -1351,6 +1420,43 @@ export default function NewAppointmentDialog({
         <Box sx={{ borderTop: '1px solid #eee', pt: 1 }}>
           <Typography>{slotTime}</Typography>
         </Box>
+
+        {checkingFutureAppointment && (
+          <Alert severity="info" sx={{ mt: 1 }}>
+            Validando si el paciente ya tiene una cita futura agendada...
+          </Alert>
+        )}
+
+        {futureActiveAppointment && (
+          <Alert
+            severity="warning"
+            sx={{
+              mt: 1,
+              alignItems: 'flex-start',
+              '& .MuiAlert-message': {
+                width: '100%',
+              },
+            }}
+          >
+            <Typography sx={{ fontWeight: 700, mb: 0.5 }}>
+              El paciente ya tiene una cita agendada el dia:
+            </Typography>
+            <Typography sx={{ fontWeight: 600, mb: 1 }}>
+              {futureActiveAppointment.display}
+            </Typography>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={replacePreviousAppointment}
+                  onChange={(e) => setReplacePreviousAppointment(e.target.checked)}
+                  sx={{ color: TEAL, '&.Mui-checked': { color: TEAL } }}
+                />
+              }
+              label="Reemplazar cita previa por la actual."
+              sx={{ m: 0 }}
+            />
+          </Alert>
+        )}
 
         <Box sx={{ borderTop: '1px solid #eee', pt: 1 }}>
           <Typography sx={{ color: TEAL, fontSize: '0.85rem', textDecoration: 'underline', mb: 0.5 }}>
