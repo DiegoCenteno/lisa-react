@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Button,
@@ -10,19 +10,16 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  Avatar,
   List,
   ListItem,
-  ListItemIcon,
   ListItemText,
   Typography,
 } from '@mui/material';
 import {
   Add as AddIcon,
   Close as CloseIcon,
-  Image as ImageIcon,
   InsertDriveFile as DocIcon,
-  PictureAsPdf as PdfIcon,
-  Visibility as VisibilityIcon,
 } from '@mui/icons-material';
 import Lightbox from 'yet-another-react-lightbox';
 import Zoom from 'yet-another-react-lightbox/plugins/zoom';
@@ -38,18 +35,16 @@ interface Props {
   onError: (message: string) => void;
 }
 
-const fileIcons: Record<string, React.ReactNode> = {
-  'application/pdf': <PdfIcon sx={{ color: '#E53935' }} />,
-  'image/jpeg': <ImageIcon sx={{ color: '#43A047' }} />,
-  'image/png': <ImageIcon sx={{ color: '#43A047' }} />,
-};
-
 function isImageFile(type?: string) {
   return type === 'image/jpeg' || type === 'image/png';
 }
 
 function isPdfFile(type?: string) {
   return type === 'application/pdf';
+}
+
+function isPreviewableFile(type?: string) {
+  return isImageFile(type) || isPdfFile(type);
 }
 
 const captureSessionChipColors = [
@@ -89,50 +84,161 @@ function resolveFileChip(file: PatientFile, cameraModuleTitle: string) {
   };
 }
 
+interface FileLeadingProps {
+  file: PatientFile;
+  previewUrl?: string;
+  onVisible: (fileId: number) => void;
+  onOpenPreview: () => void;
+}
+
+const FileLeading = memo(function FileLeading({
+  file,
+  previewUrl,
+  onVisible,
+  onOpenPreview,
+}: FileLeadingProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!isImageFile(file.type)) {
+      return;
+    }
+
+    const element = containerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onVisible(file.id);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: '200px',
+      }
+    );
+
+    observer.observe(element);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [file.id, file.type, onVisible]);
+
+  const commonSx = {
+    width: 72,
+    height: 72,
+    borderRadius: 1.5,
+    display: 'block',
+    cursor: isPreviewableFile(file.type) ? 'pointer' : 'default',
+    border: '1px solid #E0E0E0',
+  } as const;
+
+  return (
+    <Box ref={containerRef}>
+      {isImageFile(file.type) && previewUrl ? (
+        <Box
+          component="img"
+          src={previewUrl}
+          alt={file.name}
+          onClick={onOpenPreview}
+          sx={{
+            ...commonSx,
+            objectFit: 'cover',
+          }}
+        />
+      ) : isImageFile(file.type) ? (
+        <Box
+          sx={{
+            ...commonSx,
+            bgcolor: 'grey.100',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <CircularProgress size={18} />
+        </Box>
+      ) : isPdfFile(file.type) ? (
+        <Box
+          component="img"
+          src="/img/pdf-active.png"
+          alt="PDF"
+          onClick={onOpenPreview}
+          sx={{ ...commonSx, objectFit: 'contain' }}
+        />
+      ) : (
+        <Avatar
+          variant="rounded"
+          sx={{ width: 72, height: 72, bgcolor: '#E3F2FD', color: '#1565C0' }}
+        >
+          <DocIcon />
+        </Avatar>
+      )}
+    </Box>
+  );
+});
+
 function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = 'Camara', onError }: Props) {
   const [files, setFiles] = useState<PatientFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<number, string>>({});
+  const [visibleImageIds, setVisibleImageIds] = useState<number[]>([]);
   const imagePreviewUrlsRef = useRef<Record<number, string>>({});
-  const [lightboxSlides, setLightboxSlides] = useState<Array<{ src: string; alt: string }>>([]);
+  const [imageViewerUrls, setImageViewerUrls] = useState<Record<number, string>>({});
+  const imageViewerUrlsRef = useRef<Record<number, string>>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewName, setPdfPreviewName] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const viewerLoadingIdsRef = useRef<Record<number, boolean>>({});
   const onErrorRef = useRef(onError);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     imagePreviewUrlsRef.current = imagePreviewUrls;
   }, [imagePreviewUrls]);
 
   useEffect(() => {
+    imageViewerUrlsRef.current = imageViewerUrls;
+  }, [imageViewerUrls]);
+
+  useEffect(() => {
     onErrorRef.current = onError;
   }, [onError]);
 
-  useEffect(() => {
-    const loadFiles = async () => {
-      setLoading(true);
-      try {
-        const nextFiles = await patientService.getFiles(patientId);
-        setFiles(
-          [...nextFiles].sort(
-            (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
-          )
-        );
-      } catch (err) {
-        console.error('Error cargando archivos del paciente:', err);
-        onErrorRef.current('No se pudieron cargar los archivos');
-      } finally {
-        setLoading(false);
-      }
-    };
+  const loadFiles = useCallback(async () => {
+    setLoading(true);
+    try {
+      const nextFiles = await patientService.getFiles(patientId);
+      setVisibleImageIds([]);
+      setFiles(
+        [...nextFiles].sort(
+          (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
+        )
+      );
+    } catch (err) {
+      console.error('Error cargando archivos del paciente:', err);
+      onErrorRef.current('No se pudieron cargar los archivos');
+    } finally {
+      setLoading(false);
+    }
+  }, [patientId]);
 
+  useEffect(() => {
     void loadFiles();
-  }, [patientId, refreshKey]);
+  }, [loadFiles, refreshKey]);
 
   useEffect(() => {
     return () => {
       Object.values(imagePreviewUrlsRef.current).forEach((url) => {
+        window.URL.revokeObjectURL(url);
+      });
+      Object.values(imageViewerUrlsRef.current).forEach((url) => {
         window.URL.revokeObjectURL(url);
       });
       if (pdfPreviewUrl) {
@@ -142,6 +248,95 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
   }, [pdfPreviewUrl]);
 
   const imageFiles = files.filter((file) => isImageFile(file.type));
+  const lightboxSlides = imageFiles.map((file) => ({
+    src: imageViewerUrls[file.id] ?? imagePreviewUrls[file.id],
+    alt: file.name,
+  }));
+
+  useEffect(() => {
+    const missingFiles = files.filter(
+      (file) =>
+        isImageFile(file.type) &&
+        visibleImageIds.includes(file.id) &&
+        !imagePreviewUrlsRef.current[file.id]
+    );
+    if (missingFiles.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadMissingPreviews = async () => {
+      try {
+        const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
+        for (const file of missingFiles) {
+          const blob = await patientService.getFileThumbnailBlob(file.id);
+          nextPreviewUrls[file.id] = window.URL.createObjectURL(blob);
+        }
+        if (!cancelled) {
+          setImagePreviewUrls(nextPreviewUrls);
+        }
+      } catch (err) {
+        console.error('Error cargando miniaturas de archivos:', err);
+      }
+    };
+
+    void loadMissingPreviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [files, visibleImageIds]);
+
+  const handleImageVisible = useCallback((fileId: number) => {
+    setVisibleImageIds((current) => (current.includes(fileId) ? current : [...current, fileId]));
+  }, []);
+
+  const ensureViewerOriginals = useCallback(async (startIndex: number) => {
+    const targetIndexes = [startIndex, startIndex + 1].filter(
+      (index) => index >= 0 && index < imageFiles.length
+    );
+
+    const missingFiles = targetIndexes
+      .map((index) => imageFiles[index])
+      .filter((file): file is PatientFile => Boolean(file))
+      .filter((file) => !imageViewerUrlsRef.current[file.id] && !viewerLoadingIdsRef.current[file.id]);
+
+    if (missingFiles.length === 0) {
+      return;
+    }
+
+    missingFiles.forEach((file) => {
+      viewerLoadingIdsRef.current[file.id] = true;
+    });
+
+    try {
+      const loadedImages = await Promise.all(
+        missingFiles.map(async (file) => ({
+          fileId: file.id,
+          url: window.URL.createObjectURL(await patientService.getFileBlob(file.id)),
+        }))
+      );
+
+      const nextViewerUrls = {
+        ...imageViewerUrlsRef.current,
+      };
+
+      loadedImages.forEach(({ fileId, url }) => {
+        nextViewerUrls[fileId] = url;
+      });
+
+      imageViewerUrlsRef.current = nextViewerUrls;
+      setImageViewerUrls(nextViewerUrls);
+    } catch (err) {
+      console.error('Error cargando imagen original del visor:', err);
+      onErrorRef.current('No se pudo cargar la imagen completa');
+    } finally {
+      missingFiles.forEach((file) => {
+        delete viewerLoadingIdsRef.current[file.id];
+      });
+    }
+  }, [imageFiles]);
 
   const handleDownloadFile = async (file: PatientFile) => {
     try {
@@ -154,32 +349,11 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
 
   const handlePreviewImage = async (selectedFile: PatientFile) => {
     try {
-      const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
-      const missingFiles = imageFiles.filter((file) => !nextPreviewUrls[file.id]);
-
-      if (missingFiles.length > 0) {
-        const loadedPreviews = await Promise.all(
-          missingFiles.map(async (file) => ({
-            fileId: file.id,
-            url: window.URL.createObjectURL(await patientService.getFileBlob(file.id)),
-          }))
-        );
-
-        loadedPreviews.forEach(({ fileId, url }) => {
-          nextPreviewUrls[fileId] = url;
-        });
-        setImagePreviewUrls(nextPreviewUrls);
-      }
-
-      const slides = imageFiles.map((file) => ({
-        src: nextPreviewUrls[file.id],
-        alt: file.name,
-      }));
-
-      setLightboxSlides(slides);
       const selectedIndex = imageFiles.findIndex((file) => file.id === selectedFile.id);
-      setLightboxIndex(selectedIndex >= 0 ? selectedIndex : 0);
+      const nextIndex = selectedIndex >= 0 ? selectedIndex : 0;
+      setLightboxIndex(nextIndex);
       setLightboxOpen(true);
+      await ensureViewerOriginals(nextIndex);
     } catch (err) {
       console.error('Error visualizando imagen:', err);
       onErrorRef.current('No se pudo abrir la imagen');
@@ -209,16 +383,46 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
     setPdfPreviewName('');
   };
 
+  const handleOpenUpload = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleUploadChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0];
+    event.target.value = '';
+    if (!selectedFile) {
+      return;
+    }
+
+    setUploading(true);
+    try {
+      await patientService.uploadPatientFile(patientId, selectedFile);
+      await loadFiles();
+    } catch (err) {
+      console.error('Error subiendo archivo del paciente:', err);
+      onErrorRef.current('No se pudo subir el archivo');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
     <>
       <Card>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
             <Typography variant="h6">Archivos del Paciente</Typography>
-            <Button variant="outlined" startIcon={<AddIcon />} size="small">
+            <Button variant="outlined" startIcon={<AddIcon />} size="small" onClick={handleOpenUpload} disabled={uploading}>
               Subir Archivo
             </Button>
           </Box>
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,application/pdf,image/jpeg,image/png,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            onChange={handleUploadChange}
+          />
           {loading && (
             <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
               <CircularProgress size={24} />
@@ -232,9 +436,23 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
             <List>
               {files.map((file) => (
                 <ListItem key={file.id} divider>
-                  <ListItemIcon>
-                    {fileIcons[file.type] ?? <DocIcon sx={{ color: '#1565C0' }} />}
-                  </ListItemIcon>
+                  <Box sx={{ mr: 2, flexShrink: 0 }}>
+                    <FileLeading
+                      file={file}
+                      previewUrl={imagePreviewUrls[file.id]}
+                      onVisible={handleImageVisible}
+                      onOpenPreview={() => {
+                        if (isImageFile(file.type)) {
+                          void handlePreviewImage(file);
+                          return;
+                        }
+
+                        if (isPdfFile(file.type)) {
+                          void handlePreviewPdf(file);
+                        }
+                      }}
+                    />
+                  </Box>
                   <ListItemText
                     primary={file.name}
                     secondary={
@@ -251,16 +469,6 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
                     }
                   />
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                    {isImageFile(file.type) && (
-                      <Button size="small" startIcon={<VisibilityIcon />} onClick={() => handlePreviewImage(file)}>
-                        Ver
-                      </Button>
-                    )}
-                    {isPdfFile(file.type) && (
-                      <Button size="small" startIcon={<VisibilityIcon />} onClick={() => handlePreviewPdf(file)}>
-                        Ver
-                      </Button>
-                    )}
                     <Button size="small" onClick={() => handleDownloadFile(file)}>
                       Descargar
                     </Button>
@@ -276,6 +484,12 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
         close={() => setLightboxOpen(false)}
         slides={lightboxSlides}
         index={lightboxIndex}
+        on={{
+          view: ({ index }) => {
+            setLightboxIndex(index);
+            void ensureViewerOriginals(index);
+          },
+        }}
         plugins={[Zoom]}
       />
       <Dialog open={Boolean(pdfPreviewUrl)} onClose={handleClosePdfPreview} maxWidth="lg" fullWidth>

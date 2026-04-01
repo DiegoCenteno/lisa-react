@@ -157,12 +157,30 @@ function extractPatients(payload: ApiPatientsPayload): ApiPatientRecord[] {
   return payload.data ?? [];
 }
 
+let cachedOfficeId: number | null = null;
+let officeIdPromise: Promise<number> | null = null;
+
 async function resolveOfficeId(): Promise<number> {
+  if (cachedOfficeId) {
+    return cachedOfficeId;
+  }
+
+  const persistedOfficeId = localStorage.getItem('cached_office_id');
+  if (persistedOfficeId) {
+    const parsedOfficeId = Number(persistedOfficeId);
+    if (Number.isFinite(parsedOfficeId) && parsedOfficeId > 0) {
+      cachedOfficeId = parsedOfficeId;
+      return parsedOfficeId;
+    }
+  }
+
   const userRaw = localStorage.getItem('user');
   if (userRaw) {
     try {
       const user = JSON.parse(userRaw) as { consultorio_id?: number };
       if (user.consultorio_id) {
+        cachedOfficeId = user.consultorio_id;
+        localStorage.setItem('cached_office_id', String(user.consultorio_id));
         return user.consultorio_id;
       }
     } catch {
@@ -170,11 +188,22 @@ async function resolveOfficeId(): Promise<number> {
     }
   }
 
-  const offices = await appointmentService.getOffices();
-  if (offices.length === 0) {
-    throw new Error('No se encontraron consultorios disponibles');
+  if (!officeIdPromise) {
+    officeIdPromise = appointmentService.getOffices().then((offices) => {
+      if (offices.length === 0) {
+        throw new Error('No se encontraron consultorios disponibles');
+      }
+
+      const officeId = offices[0].id;
+      cachedOfficeId = officeId;
+      localStorage.setItem('cached_office_id', String(officeId));
+      return officeId;
+    }).finally(() => {
+      officeIdPromise = null;
+    });
   }
-  return offices[0].id;
+
+  return officeIdPromise;
 }
 
 export const patientService = {
@@ -363,6 +392,25 @@ export const patientService = {
     return response.data.data ?? [];
   },
 
+  async uploadPatientFile(patientId: number, file: File): Promise<PatientFile> {
+    const officeId = await resolveOfficeId();
+    const payload = new FormData();
+    payload.append('office_id', String(officeId));
+    payload.append('file', file);
+
+    const response = await apiClient.post<{ status: string; data: PatientFile }>(
+      `/v2/patients/${patientId}/files`,
+      payload,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
+
+    return response.data.data;
+  },
+
   async getPatientTagControl(patientId: number): Promise<PatientTagControlData> {
     const officeId = await resolveOfficeId();
     const response = await apiClient.get<ApiPatientTagControlResponse>(`/v2/patients/${patientId}/tag-control`, {
@@ -470,6 +518,13 @@ export const patientService = {
 
   async getFileBlob(fileId: number): Promise<Blob> {
     const response = await apiClient.get<Blob>(`/v2/files/${fileId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  async getFileThumbnailBlob(fileId: number): Promise<Blob> {
+    const response = await apiClient.get<Blob>(`/v2/files/${fileId}/thumbnail`, {
       responseType: 'blob',
     });
     return response.data;

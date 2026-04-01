@@ -30,6 +30,17 @@ interface PassportLoginResponse {
   };
 }
 
+interface DoctorRegisterPayload {
+  name: string;
+  last_name: string;
+  email: string;
+  phone: string;
+  password: string;
+  password_confirmation: string;
+  promocode?: string;
+  sumatoria: string;
+}
+
 export const authService = {
   async login(emailOrPhone: string, password: string): Promise<AuthResponse> {
     const response = await apiClient.post<PassportLoginResponse>('/login', {
@@ -71,5 +82,14 @@ export const authService = {
       return JSON.parse(userStr) as User;
     }
     throw new Error('No autenticado');
+  },
+
+  async registerDoctor(payload: DoctorRegisterPayload): Promise<{ email: string }> {
+    const response = await apiClient.post<{ status: string; data: { email: string } }>(
+      '/v2/public/doctor-register',
+      payload
+    );
+
+    return response.data.data;
   },
 };

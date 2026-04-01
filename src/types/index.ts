@@ -321,6 +321,7 @@ export interface PatientFile {
   name: string;
   type: string;
   url: string;
+  thumbnail_url?: string | null;
   size: number;
   uploaded_at: string;
   description?: string;

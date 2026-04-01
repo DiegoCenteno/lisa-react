@@ -304,8 +304,8 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
       let currentBuilder = colposcopyBuilder;
 
       if (!colposcopyBuilder.is_locked) {
-        if (selectedFileIds.length !== 4) {
-          setError('Selecciona exactamente 4 imagenes.');
+        if (selectedFileIds.length < 1 || selectedFileIds.length > 4) {
+          setError('Selecciona entre 1 y 4 imagenes.');
           return;
         }
 
@@ -810,7 +810,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
                         downloading ||
                         (colposcopyBuilder.is_locked
                           ? !colposcopyBuilder.can_download
-                          : selectedFileIds.length !== 4)
+                          : selectedFileIds.length < 1 || selectedFileIds.length > 4)
                       }
                     >
                       {downloading ? 'Descargando...' : 'Descargar DOCX'}

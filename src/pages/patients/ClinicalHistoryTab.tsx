@@ -17,6 +17,8 @@ import {
 import BiotechIcon from '@mui/icons-material/Biotech';
 import CancelIcon from '@mui/icons-material/Cancel';
 import EditIcon from '@mui/icons-material/Edit';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import FamilyRestroomIcon from '@mui/icons-material/FamilyRestroom';
 import PersonIcon from '@mui/icons-material/Person';
 import PregnantWomanIcon from '@mui/icons-material/PregnantWoman';
@@ -29,7 +31,9 @@ import type {
   PersonalNonPathological,
   PersonalPathological,
 } from '../../types';
+import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
+import settingsService, { type SettingsFormsData } from '../../api/settingsService';
 import { clinicalHistoryCatalogs } from '../../utils/clinicalHistory';
 
 interface ClinicalHistoryTabProps {
@@ -42,10 +46,28 @@ type MessageState = {
   severity: 'success' | 'error' | 'info';
 };
 
+type ClinicalHistorySectionKey = 'hereditary' | 'non_pathological' | 'pathological' | 'gynecological';
+
+const expandedClinicalHistorySections: Record<ClinicalHistorySectionKey, boolean> = {
+  hereditary: false,
+  non_pathological: false,
+  pathological: false,
+  gynecological: false,
+};
+
+const collapsedClinicalHistorySections: Record<ClinicalHistorySectionKey, boolean> = {
+  hereditary: true,
+  non_pathological: true,
+  pathological: true,
+  gynecological: true,
+};
+
 type SectionCardProps = {
   title: string;
   icon: React.ReactNode;
   children: React.ReactNode;
+  collapsed?: boolean;
+  onToggle?: () => void;
 };
 
 type SubsectionCardProps = {
@@ -57,6 +79,7 @@ type FieldProps = {
   label: string;
   value?: string | number;
   disabled?: boolean;
+  hidden?: boolean;
   onChange?: (value: string) => void;
   select?: boolean;
   multiline?: boolean;
@@ -72,6 +95,7 @@ type CheckFieldProps = {
   checked?: boolean;
   value?: string;
   disabled?: boolean;
+  hidden?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   onValueChange?: (value: string) => void;
   multiline?: boolean;
@@ -83,6 +107,7 @@ type DocumentFieldProps = {
   value?: string | number | null;
   xs?: number;
   sm?: number;
+  hidden?: boolean;
 };
 
 const INFO_ALERT_TEXT =
@@ -90,6 +115,31 @@ const INFO_ALERT_TEXT =
 
 function getDraftKey(patientId: number) {
   return `clinical-history-draft:${patientId}`;
+}
+
+function getStoredOfficeId(): number | null {
+  try {
+    const raw = localStorage.getItem('user');
+    if (!raw) return null;
+    const user = JSON.parse(raw) as { consultorio_id?: number };
+    return typeof user.consultorio_id === 'number' && user.consultorio_id > 0 ? user.consultorio_id : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveOfficeIdForForms(): Promise<number | null> {
+  const storedOfficeId = getStoredOfficeId();
+  if (storedOfficeId) {
+    return storedOfficeId;
+  }
+
+  const offices = await appointmentService.getOffices();
+  if (offices.length === 0) {
+    throw new Error('No se encontraron consultorios disponibles');
+  }
+
+  return offices[0].id;
 }
 
 function safeReadDraft(patientId: number): ClinicalHistory | null {
@@ -131,7 +181,13 @@ async function flushActiveElement() {
   }
 }
 
-const SectionCard = memo(function SectionCard({ title, icon, children }: SectionCardProps) {
+const SectionCard = memo(function SectionCard({
+  title,
+  icon,
+  children,
+  collapsed = false,
+  onToggle,
+}: SectionCardProps) {
   return (
     <Card
       elevation={0}
@@ -143,6 +199,7 @@ const SectionCard = memo(function SectionCard({ title, icon, children }: Section
       }}
     >
       <Box
+        onClick={onToggle}
         sx={{
           display: 'flex',
           alignItems: 'center',
@@ -152,14 +209,20 @@ const SectionCard = memo(function SectionCard({ title, icon, children }: Section
           borderBottom: '1px solid',
           borderColor: 'rgba(35, 165, 193, 0.12)',
           background: 'linear-gradient(180deg, rgba(35,165,193,0.06) 0%, rgba(35,165,193,0.02) 100%)',
+          cursor: onToggle ? 'pointer' : 'default',
         }}
       >
         <Box sx={{ color: '#1297a8', display: 'flex', alignItems: 'center' }}>{icon}</Box>
         <Typography variant="h6" fontWeight={700} color="#0d7f1f">
           {title}
         </Typography>
+        {onToggle ? (
+          <Box sx={{ ml: 'auto', color: '#1297a8', display: 'flex', alignItems: 'center' }}>
+            {collapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+          </Box>
+        ) : null}
       </Box>
-      <CardContent sx={{ p: { xs: 2, md: 3 } }}>{children}</CardContent>
+      {!collapsed ? <CardContent sx={{ p: { xs: 2, md: 3 } }}>{children}</CardContent> : null}
     </Card>
   );
 });
@@ -193,7 +256,12 @@ const DocumentField = memo(function DocumentField({
   value,
   xs = 12,
   sm = 6,
+  hidden = false,
 }: DocumentFieldProps) {
+  if (hidden) {
+    return null;
+  }
+
   if (!hasDisplayValue(value)) {
     return null;
   }
@@ -216,6 +284,7 @@ const Field = memo(function Field({
   label,
   value,
   disabled,
+  hidden = false,
   onChange,
   select,
   multiline,
@@ -225,6 +294,10 @@ const Field = memo(function Field({
   xs = 12,
   sm = 6,
 }: FieldProps) {
+  if (hidden) {
+    return null;
+  }
+
   const isDateField = type === 'date';
   const isImmediateField = Boolean(select || isDateField);
   const stringValue = String(value ?? '');
@@ -285,8 +358,6 @@ const LegacyCheckField = memo(function LegacyCheckField({
   disabled,
   onCheckedChange,
   onValueChange,
-  multiline,
-  rows,
 }: CheckFieldProps) {
   if (disabled) {
     if (!checked && !hasDisplayValue(value)) {
@@ -336,9 +407,7 @@ const LegacyCheckField = memo(function LegacyCheckField({
           value={value ?? ''}
           onChange={(event) => onValueChange?.(event.target.value)}
           disabled={disabled || !checked}
-          placeholder="Descripcion"
-          multiline={multiline}
-          rows={rows}
+          placeholder="Anotaciones adicionales"
         />
       </Box>
     </Grid>
@@ -350,11 +419,14 @@ const BufferedCheckField = memo(function BufferedCheckField({
   checked,
   value,
   disabled,
+  hidden = false,
   onCheckedChange,
   onValueChange,
-  multiline,
-  rows,
 }: CheckFieldProps) {
+  if (hidden) {
+    return null;
+  }
+
   const stringValue = String(value ?? '');
   const [draftValue, setDraftValue] = useState(stringValue);
 
@@ -364,16 +436,14 @@ const BufferedCheckField = memo(function BufferedCheckField({
 
   if (disabled) {
     return (
-      <LegacyCheckField
-        label={label}
-        checked={checked}
-        value={value}
-        disabled={disabled}
-        onCheckedChange={onCheckedChange}
-        onValueChange={onValueChange}
-        multiline={multiline}
-        rows={rows}
-      />
+        <LegacyCheckField
+          label={label}
+          checked={checked}
+          value={value}
+          disabled={disabled}
+          onCheckedChange={onCheckedChange}
+          onValueChange={onValueChange}
+        />
     );
   }
 
@@ -416,9 +486,7 @@ const BufferedCheckField = memo(function BufferedCheckField({
             }
           }}
           disabled={disabled || !checked}
-          placeholder="Descripcion"
-          multiline={multiline}
-          rows={rows}
+          placeholder="Anotaciones adicionales"
         />
       </Box>
     </Grid>
@@ -431,20 +499,34 @@ type HereditarySectionProps = {
   value: HereditaryBackground;
   disabled: boolean;
   onPatch: (patch: Partial<HereditaryBackground>) => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  fieldVisible?: (key: string) => boolean;
 };
 
 const HereditarySection = memo(function HereditarySection({
   value,
   disabled,
   onPatch,
+  collapsed,
+  onToggle,
+  fieldVisible,
 }: HereditarySectionProps) {
+  const isVisible = (key: string) => fieldVisible?.(key) ?? true;
+
   return (
-    <SectionCard title="Antecedentes Heredofamiliares" icon={<FamilyRestroomIcon />}>
+    <SectionCard
+      title="Antecedentes Heredofamiliares"
+      icon={<FamilyRestroomIcon />}
+      collapsed={collapsed}
+      onToggle={onToggle}
+    >
       <Grid container spacing={2}>
         <Field
           label="Tipo de sangre / RH"
           value={value.blood_type_rh}
           disabled={disabled}
+          hidden={!isVisible('tiposangre')}
           onChange={(blood_type_rh) => onPatch({ blood_type_rh })}
           select
         >
@@ -457,6 +539,7 @@ const HereditarySection = memo(function HereditarySection({
         <Grid size={{ xs: 12, sm: 6 }} />
         <CheckField
           label="CGDM"
+          hidden={!isVisible('cgdm')}
           checked={value.cgdm_checked}
           value={value.cgdm}
           disabled={disabled}
@@ -465,6 +548,7 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Consanguíneos"
+          hidden={!isVisible('consanguineos')}
           checked={value.consanguineous_checked}
           value={value.consanguineous}
           disabled={disabled}
@@ -473,6 +557,7 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Defectos genéticos"
+          hidden={!isVisible('geneticosodefectos')}
           checked={value.genetic_defects_checked}
           value={value.genetic_defects}
           disabled={disabled}
@@ -481,13 +566,14 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Preeclampsia familiar"
+          hidden={!isVisible('familiarpreeclampsia')}
           checked={value.family_preeclampsia_checked}
           value={value.family_preeclampsia}
           disabled={disabled}
           onCheckedChange={(family_preeclampsia_checked) => onPatch({ family_preeclampsia_checked })}
           onValueChange={(family_preeclampsia) => onPatch({ family_preeclampsia })}
         />
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }} sx={{ display: isVisible('familiarpareja') ? 'block' : 'none' }}>
           {disabled ? (
             value.partner_history_checked ? (
               <Box
@@ -545,7 +631,7 @@ const HereditarySection = memo(function HereditarySection({
                   disabled={disabled || !value.partner_history_checked}
                   onChange={(partner_history_age) => onPatch({ partner_history_age })}
                 />
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ display: isVisible('embarazada') ? 'block' : 'none' }}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -557,7 +643,7 @@ const HereditarySection = memo(function HereditarySection({
                     label="APP en pareja"
                   />
                 </Grid>
-                <Grid size={{ xs: 12, sm: 6 }}>
+                <Grid size={{ xs: 12, sm: 6 }} sx={{ display: isVisible('embarazada') ? 'block' : 'none' }}>
                   <FormControlLabel
                     control={
                       <Checkbox
@@ -577,6 +663,7 @@ const HereditarySection = memo(function HereditarySection({
         </Grid>
         <CheckField
           label="Diabetes"
+          hidden={!isVisible('diabetes')}
           checked={value.diabetes_checked}
           value={value.diabetes}
           disabled={disabled}
@@ -585,6 +672,7 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Cáncer"
+          hidden={!isVisible('cancer')}
           checked={value.cancer_checked}
           value={value.cancer}
           disabled={disabled}
@@ -593,6 +681,7 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Hipertensión"
+          hidden={!isVisible('hipertension')}
           checked={value.hypertension_checked}
           value={value.hypertension}
           disabled={disabled}
@@ -601,6 +690,7 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Enfermedad reumática"
+          hidden={!isVisible('reumatica')}
           checked={value.rheumatic_disease_checked}
           value={value.rheumatic_disease}
           disabled={disabled}
@@ -609,6 +699,7 @@ const HereditarySection = memo(function HereditarySection({
         />
         <CheckField
           label="Otras"
+          hidden={!isVisible('antfam')}
           checked={value.others_checked}
           value={value.others}
           disabled={disabled}
@@ -626,36 +717,49 @@ type NonPathologicalSectionProps = {
   value: PersonalNonPathological;
   disabled: boolean;
   onPatch: (patch: Partial<PersonalNonPathological>) => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  fieldVisible?: (key: string) => boolean;
 };
 
 const NonPathologicalSection = memo(function NonPathologicalSection({
   value,
   disabled,
   onPatch,
+  collapsed,
+  onToggle,
+  fieldVisible,
 }: NonPathologicalSectionProps) {
+  const isVisible = (key: string) => fieldVisible?.(key) ?? true;
+
   return (
-    <SectionCard title="Antecedentes Personales NO Patológicos" icon={<PersonIcon />}>
+    <SectionCard
+      title="Antecedentes Personales NO Patologicos"
+      icon={<PersonIcon />}
+      collapsed={collapsed}
+      onToggle={onToggle}
+    >
       <Grid container spacing={2}>
-        <Field label="Origen" value={value.origin} disabled={disabled} onChange={(origin) => onPatch({ origin })} />
-        <Field label="Residencia" value={value.residence} disabled={disabled} onChange={(residence) => onPatch({ residence })} />
-        <Field label="Estado civil" value={value.civil_status} disabled={disabled} onChange={(civil_status) => onPatch({ civil_status })} />
-        <Field label="Religión" value={value.religion} disabled={disabled} onChange={(religion) => onPatch({ religion })} />
-        <Field label="Escolaridad" value={value.education} disabled={disabled} onChange={(education) => onPatch({ education })} select>
+        <Field label="Origen" value={value.origin} disabled={disabled} hidden={!isVisible('originaria')} onChange={(origin) => onPatch({ origin })} />
+        <Field label="Residencia" value={value.residence} disabled={disabled} hidden={!isVisible('residente')} onChange={(residence) => onPatch({ residence })} />
+        <Field label="Estado civil" value={value.civil_status} disabled={disabled} hidden={!isVisible('estadocivil')} onChange={(civil_status) => onPatch({ civil_status })} />
+        <Field label="Religión" value={value.religion} disabled={disabled} hidden={!isVisible('religion')} onChange={(religion) => onPatch({ religion })} />
+        <Field label="Escolaridad" value={value.education} disabled={disabled} hidden={!isVisible('escolaridad')} onChange={(education) => onPatch({ education })} select>
           {clinicalHistoryCatalogs.education.map((item) => (
             <MenuItem key={item} value={item}>
               {item}
             </MenuItem>
           ))}
         </Field>
-        <Field label="Ocupación" value={value.occupation} disabled={disabled} onChange={(occupation) => onPatch({ occupation })} />
-        <CheckField label="Toxicomanías" checked={value.substance_use_checked} value={value.substance_use} disabled={disabled} onCheckedChange={(substance_use_checked) => onPatch({ substance_use_checked })} onValueChange={(substance_use) => onPatch({ substance_use })} />
-        <CheckField label="Fármacos" checked={value.medications_checked} value={value.medications} disabled={disabled} onCheckedChange={(medications_checked) => onPatch({ medications_checked })} onValueChange={(medications) => onPatch({ medications })} />
-        <CheckField label="Exposiciones" checked={value.exposures_checked} value={value.exposures} disabled={disabled} onCheckedChange={(exposures_checked) => onPatch({ exposures_checked })} onValueChange={(exposures) => onPatch({ exposures })} />
-        <CheckField label="Tabaquismo" checked={value.smoking_checked} value={value.smoking} disabled={disabled} onCheckedChange={(smoking_checked) => onPatch({ smoking_checked })} onValueChange={(smoking) => onPatch({ smoking })} />
-        <CheckField label="Alcohol" checked={value.alcohol_checked} value={value.alcohol} disabled={disabled} onCheckedChange={(alcohol_checked) => onPatch({ alcohol_checked })} onValueChange={(alcohol) => onPatch({ alcohol })} />
-        <CheckField label="Relaciones homosexuales" checked={value.homosexual_relations_checked} value={value.homosexual_relations} disabled={disabled} onCheckedChange={(homosexual_relations_checked) => onPatch({ homosexual_relations_checked })} onValueChange={(homosexual_relations) => onPatch({ homosexual_relations })} />
-        <CheckField label="Ejercicio" checked={value.exercise_checked} value={value.exercise} disabled={disabled} onCheckedChange={(exercise_checked) => onPatch({ exercise_checked })} onValueChange={(exercise) => onPatch({ exercise })} />
-        <CheckField label="Otras" checked={value.others_checked} value={value.others} disabled={disabled} onCheckedChange={(others_checked) => onPatch({ others_checked })} onValueChange={(others) => onPatch({ others })} multiline rows={2} />
+        <Field label="Ocupación" value={value.occupation} disabled={disabled} hidden={!isVisible('ocupacion')} onChange={(occupation) => onPatch({ occupation })} />
+        <CheckField label="Toxicomanías" hidden={!isVisible('toxicomanias')} checked={value.substance_use_checked} value={value.substance_use} disabled={disabled} onCheckedChange={(substance_use_checked) => onPatch({ substance_use_checked })} onValueChange={(substance_use) => onPatch({ substance_use })} />
+        <CheckField label="Fármacos" hidden={!isVisible('farmacos')} checked={value.medications_checked} value={value.medications} disabled={disabled} onCheckedChange={(medications_checked) => onPatch({ medications_checked })} onValueChange={(medications) => onPatch({ medications })} />
+        <CheckField label="Exposiciones" hidden={!isVisible('exposiciones')} checked={value.exposures_checked} value={value.exposures} disabled={disabled} onCheckedChange={(exposures_checked) => onPatch({ exposures_checked })} onValueChange={(exposures) => onPatch({ exposures })} />
+        <CheckField label="Tabaquismo" hidden={!isVisible('tabaquismo')} checked={value.smoking_checked} value={value.smoking} disabled={disabled} onCheckedChange={(smoking_checked) => onPatch({ smoking_checked })} onValueChange={(smoking) => onPatch({ smoking })} />
+        <CheckField label="Alcohol" hidden={!isVisible('bebidas')} checked={value.alcohol_checked} value={value.alcohol} disabled={disabled} onCheckedChange={(alcohol_checked) => onPatch({ alcohol_checked })} onValueChange={(alcohol) => onPatch({ alcohol })} />
+        <CheckField label="Relaciones homosexuales" hidden={!isVisible('homosex')} checked={value.homosexual_relations_checked} value={value.homosexual_relations} disabled={disabled} onCheckedChange={(homosexual_relations_checked) => onPatch({ homosexual_relations_checked })} onValueChange={(homosexual_relations) => onPatch({ homosexual_relations })} />
+        <CheckField label="Ejercicio" hidden={!isVisible('ejercicio')} checked={value.exercise_checked} value={value.exercise} disabled={disabled} onCheckedChange={(exercise_checked) => onPatch({ exercise_checked })} onValueChange={(exercise) => onPatch({ exercise })} />
+        <CheckField label="Otras" hidden={!isVisible('persnopat')} checked={value.others_checked} value={value.others} disabled={disabled} onCheckedChange={(others_checked) => onPatch({ others_checked })} onValueChange={(others) => onPatch({ others })} multiline rows={2} />
       </Grid>
     </SectionCard>
   );
@@ -665,20 +769,34 @@ type PathologicalSectionProps = {
   value: PersonalPathological;
   disabled: boolean;
   onPatch: (patch: Partial<PersonalPathological>) => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  fieldVisible?: (key: string) => boolean;
 };
 
 const PathologicalSection = memo(function PathologicalSection({
   value,
   disabled,
   onPatch,
+  collapsed,
+  onToggle,
+  fieldVisible,
 }: PathologicalSectionProps) {
+  const isVisible = (key: string) => fieldVisible?.(key) ?? true;
+
   return (
-    <SectionCard title="Antecedentes Personales Patológicos" icon={<BiotechIcon />}>
+    <SectionCard
+      title="Antecedentes Personales Patologicos"
+      icon={<BiotechIcon />}
+      collapsed={collapsed}
+      onToggle={onToggle}
+    >
       <Grid container spacing={2}>
         <Field
           label="Alergias"
           value={value.allergies}
           disabled={disabled}
+          hidden={!isVisible('alergias')}
           onChange={(allergies) => onPatch({ allergies })}
           multiline
           rows={2}
@@ -686,6 +804,7 @@ const PathologicalSection = memo(function PathologicalSection({
         />
         <CheckField
           label="Hijo con síndrome de Down"
+          hidden={!isVisible('hijosindromedown')}
           checked={value.down_syndrome_child_checked}
           value={value.down_syndrome_child}
           disabled={disabled}
@@ -694,6 +813,7 @@ const PathologicalSection = memo(function PathologicalSection({
         />
         <CheckField
           label="Enfermedades crónicas"
+          hidden={!isVisible('degenerativas')}
           checked={value.chronic_diseases_checked}
           value={value.chronic_diseases}
           disabled={disabled}
@@ -702,6 +822,7 @@ const PathologicalSection = memo(function PathologicalSection({
         />
         <CheckField
           label="Cirugías"
+          hidden={!isVisible('cirujias')}
           checked={value.surgeries_checked}
           value={value.surgeries}
           disabled={disabled}
@@ -710,6 +831,7 @@ const PathologicalSection = memo(function PathologicalSection({
         />
         <CheckField
           label="Transfusiones"
+          hidden={!isVisible('transfusiones')}
           checked={value.transfusions_checked}
           value={value.transfusions}
           disabled={disabled}
@@ -718,6 +840,7 @@ const PathologicalSection = memo(function PathologicalSection({
         />
         <CheckField
           label="Fracturas"
+          hidden={!isVisible('fracturas')}
           checked={value.fractures_checked}
           value={value.fractures}
           disabled={disabled}
@@ -726,6 +849,7 @@ const PathologicalSection = memo(function PathologicalSection({
         />
         <CheckField
           label="Otras"
+          hidden={!isVisible('perspat')}
           checked={value.others_checked}
           value={value.others}
           disabled={disabled}
@@ -743,24 +867,29 @@ type GynecologicalSectionProps = {
   value: GynecologicalBackground;
   disabled: boolean;
   onPatch: (patch: Partial<GynecologicalBackground>) => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  fieldVisible?: (key: string) => boolean;
 };
 
 const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
   value,
   disabled,
   onPatch,
+  fieldVisible,
 }: GynecologicalSectionProps) {
+  const isVisible = (key: string) => fieldVisible?.(key) ?? true;
   const isPregnant = Boolean(value.pregnant);
 
   return (
     <SubsectionCard title="Embarazo y control">
       <Grid container spacing={2}>
-        <Field label="Menarca" value={value.menarche} disabled={disabled} onChange={(menarche) => onPatch({ menarche })} />
-        <Field label="Ciclos menstruales" value={value.menstrual_cycles} disabled={disabled} onChange={(menstrual_cycles) => onPatch({ menstrual_cycles })} />
+        <Field label="Menarca" value={value.menarche} disabled={disabled} hidden={!isVisible('menarca')} onChange={(menarche) => onPatch({ menarche })} />
+        <Field label="Ciclos menstruales" value={value.menstrual_cycles} disabled={disabled} hidden={!isVisible('ciclosmestruales')} onChange={(menstrual_cycles) => onPatch({ menstrual_cycles })} />
         {disabled ? (
-          <DocumentField label="Embarazada" value={value.pregnant ? 'Sí' : 'No'} />
+          <DocumentField label="Embarazada" hidden={!isVisible('embarazada')} value={value.pregnant ? 'Sí' : 'No'} />
         ) : (
-          <Grid size={{ xs: 12, sm: 6 }}>
+          <Grid size={{ xs: 12, sm: 6 }} sx={{ display: isVisible('embarazada') ? 'block' : 'none' }}>
             <FormControlLabel
               control={
                 <Checkbox
@@ -774,7 +903,7 @@ const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
           </Grid>
         )}
         <Grid size={{ xs: 12, sm: 6 }} />
-        <Field label="FUR" value={value.last_menstruation_date} disabled={disabled} onChange={(last_menstruation_date) => onPatch({ last_menstruation_date })} type="date" />
+        <Field label="FUR" value={value.last_menstruation_date} disabled={disabled} hidden={!isVisible('fur')} onChange={(last_menstruation_date) => onPatch({ last_menstruation_date })} type="date" />
 
         {isPregnant && (
           <>
@@ -831,16 +960,18 @@ const GynecologySexualBlock = memo(function GynecologySexualBlock({
   value,
   disabled,
   onPatch,
+  fieldVisible,
 }: GynecologicalSectionProps) {
+  const isVisible = (key: string) => fieldVisible?.(key) ?? true;
   return (
     <SubsectionCard title="Vida sexual y antecedentes gineco-obstétricos">
       <Grid container spacing={2}>
-        <Field label="IVSA" value={value.ivsa} disabled={disabled} onChange={(ivsa) => onPatch({ ivsa })} />
-        <Field label="Parejas sexuales" value={value.sexual_partners} disabled={disabled} onChange={(sexual_partners) => onPatch({ sexual_partners })} />
-        <CheckField label="ETS" checked={value.std_checked} value={value.std} disabled={disabled} onCheckedChange={(std_checked) => onPatch({ std_checked })} onValueChange={(std) => onPatch({ std })} />
-        <Field label="Citologia" value={value.cytology} disabled={disabled} onChange={(cytology) => onPatch({ cytology })} />
-        <Field label="Planificacion familiar" value={value.family_planning} disabled={disabled} onChange={(family_planning) => onPatch({ family_planning })} />
-        <Grid size={{ xs: 12 }}>
+        <Field label="IVSA" value={value.ivsa} disabled={disabled} hidden={!isVisible('ivsa')} onChange={(ivsa) => onPatch({ ivsa })} />
+        <Field label="Parejas sexuales" value={value.sexual_partners} disabled={disabled} hidden={!isVisible('parejassexuales')} onChange={(sexual_partners) => onPatch({ sexual_partners })} />
+        <CheckField label="ETS" hidden={!isVisible('ets')} checked={value.std_checked} value={value.std} disabled={disabled} onCheckedChange={(std_checked) => onPatch({ std_checked })} onValueChange={(std) => onPatch({ std })} />
+        <Field label="Citologia" value={value.cytology} disabled={disabled} hidden={!isVisible('citologia')} onChange={(cytology) => onPatch({ cytology })} />
+        <Field label="Planificacion familiar" value={value.family_planning} disabled={disabled} hidden={!isVisible('planificacionfamiliar')} onChange={(family_planning) => onPatch({ family_planning })} />
+        <Grid size={{ xs: 12 }} sx={{ display: isVisible('gestaciones') ? 'block' : 'none' }}>
           <FormControlLabel
             control={
               <Checkbox
@@ -865,16 +996,16 @@ const GynecologySexualBlock = memo(function GynecologySexualBlock({
             sx={{ m: 0 }}
           />
         </Grid>
-        <Field label="Fecha ultima gestacion" value={value.last_gestation_date} disabled={disabled || !value.gestations_checked} onChange={(last_gestation_date) => onPatch({ last_gestation_date })} type="date" />
-        <Field label="Gestaciones" value={value.gestations} disabled={disabled || !value.gestations_checked} onChange={(gestations) => onPatch({ gestations })} />
-        <Field label="Partos" value={value.deliveries} disabled={disabled || !value.gestations_checked} onChange={(deliveries) => onPatch({ deliveries })} />
-        <Field label="Cesareas" value={value.cesareans} disabled={disabled || !value.gestations_checked} onChange={(cesareans) => onPatch({ cesareans })} />
-        <Field label="Abortos" value={value.abortions} disabled={disabled || !value.gestations_checked} onChange={(abortions) => onPatch({ abortions })} />
-        <Field label="Embarazo ectopico" value={value.ectopic} disabled={disabled || !value.gestations_checked} onChange={(ectopic) => onPatch({ ectopic })} />
-        <Field label="Embarazo molar" value={value.molar} disabled={disabled || !value.gestations_checked} onChange={(molar) => onPatch({ molar })} />
-        <Field label="Edad de menopausia" value={value.menopause_age} disabled={disabled} onChange={(menopause_age) => onPatch({ menopause_age })} />
-        <CheckField label="Sintomas de climaterio" checked={value.climacteric_symptoms_checked} value={value.climacteric_symptoms} disabled={disabled} onCheckedChange={(climacteric_symptoms_checked) => onPatch({ climacteric_symptoms_checked })} onValueChange={(climacteric_symptoms) => onPatch({ climacteric_symptoms })} />
-        <CheckField label="Control prenatal" checked={value.prenatal_care_checked} value={value.prenatal_care} disabled={disabled} onCheckedChange={(prenatal_care_checked) => onPatch({ prenatal_care_checked })} onValueChange={(prenatal_care) => onPatch({ prenatal_care })} />
+        <Field label="Fecha ultima gestacion" value={value.last_gestation_date} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(last_gestation_date) => onPatch({ last_gestation_date })} type="date" />
+        <Field label="Gestaciones" value={value.gestations} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(gestations) => onPatch({ gestations })} />
+        <Field label="Partos" value={value.deliveries} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(deliveries) => onPatch({ deliveries })} />
+        <Field label="Cesareas" value={value.cesareans} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(cesareans) => onPatch({ cesareans })} />
+        <Field label="Abortos" value={value.abortions} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(abortions) => onPatch({ abortions })} />
+        <Field label="Embarazo ectopico" value={value.ectopic} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(ectopic) => onPatch({ ectopic })} />
+        <Field label="Embarazo molar" value={value.molar} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(molar) => onPatch({ molar })} />
+        <Field label="Edad de menopausia" value={value.menopause_age} disabled={disabled} hidden={!isVisible('txtdejoreglar')} onChange={(menopause_age) => onPatch({ menopause_age })} />
+        <CheckField label="Sintomas de climaterio" hidden={!isVisible('climaterio')} checked={value.climacteric_symptoms_checked} value={value.climacteric_symptoms} disabled={disabled} onCheckedChange={(climacteric_symptoms_checked) => onPatch({ climacteric_symptoms_checked })} onValueChange={(climacteric_symptoms) => onPatch({ climacteric_symptoms })} />
+        <CheckField label="Control prenatal" hidden={!isVisible('controlprenatal')} checked={value.prenatal_care_checked} value={value.prenatal_care} disabled={disabled} onCheckedChange={(prenatal_care_checked) => onPatch({ prenatal_care_checked })} onValueChange={(prenatal_care) => onPatch({ prenatal_care })} />
       </Grid>
     </SubsectionCard>
   );
@@ -884,13 +1015,21 @@ const GynecologicalSection = memo(function GynecologicalSection({
   value,
   disabled,
   onPatch,
+  collapsed,
+  onToggle,
+  fieldVisible,
 }: GynecologicalSectionProps) {
 
   return (
-    <SectionCard title="Antecedentes Ginecológicos" icon={<PregnantWomanIcon />}>
+    <SectionCard
+      title="Antecedentes Ginecologicos"
+      icon={<PregnantWomanIcon />}
+      collapsed={collapsed}
+      onToggle={onToggle}
+    >
       <Box sx={{ display: 'grid', gap: 2 }}>
-        <GynecologyPregnancyBlock value={value} disabled={disabled} onPatch={onPatch} />
-        <GynecologySexualBlock value={value} disabled={disabled} onPatch={onPatch} />
+        <GynecologyPregnancyBlock value={value} disabled={disabled} onPatch={onPatch} fieldVisible={fieldVisible} />
+        <GynecologySexualBlock value={value} disabled={disabled} onPatch={onPatch} fieldVisible={fieldVisible} />
       </Box>
     </SectionCard>
   );
@@ -900,6 +1039,9 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveEnabled, setSaveEnabled] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<ClinicalHistorySectionKey, boolean>>(expandedClinicalHistorySections);
+  const [formSettings, setFormSettings] = useState<SettingsFormsData | null>(null);
   const [draftRecovered, setDraftRecovered] = useState(false);
   const [clinicalHistory, setClinicalHistory] = useState<ClinicalHistory | null>(null);
   const [form, setForm] = useState<ClinicalHistory | null>(null);
@@ -917,7 +1059,11 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
       setDraftRecovered(false);
 
       try {
-        const history = await patientService.getClinicalHistory(patientId);
+        const officeId = await resolveOfficeIdForForms();
+        const [history, settings] = await Promise.all([
+          patientService.getClinicalHistory(patientId),
+          officeId ? settingsService.getFormSettings(officeId).catch(() => null) : Promise.resolve(null),
+        ]);
         if (cancelled) return;
 
         const draft = safeReadDraft(patientId);
@@ -925,7 +1071,9 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
 
         setClinicalHistory(history);
         setForm(initialForm);
-        setEditing(Boolean(draft));
+        setFormSettings(settings);
+        setEditing(false);
+        setCollapsedSections(expandedClinicalHistorySections);
         setDraftRecovered(Boolean(draft));
       } catch {
         if (cancelled) return;
@@ -960,7 +1108,40 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
     };
   }, [editing, form, loading, patientId, saving]);
 
+  useEffect(() => {
+    if (!editing) {
+      setSaveEnabled(false);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSaveEnabled(true);
+    }, 10000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [editing]);
+
+  const toggleSection = useCallback((section: ClinicalHistorySectionKey) => {
+    setCollapsedSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  }, []);
+
+  const fieldVisible = useCallback(
+    (key: string) => {
+      if (!formSettings) {
+        return true;
+      }
+      return formSettings.clinical_history[key] !== false;
+    },
+    [formSettings]
+  );
+
   const patchHereditary = useCallback((patch: Partial<HereditaryBackground>) => {
+    setSaveEnabled(true);
     setForm((prev) =>
       prev
         ? {
@@ -975,6 +1156,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
   }, []);
 
   const patchNonPathological = useCallback((patch: Partial<PersonalNonPathological>) => {
+    setSaveEnabled(true);
     setForm((prev) =>
       prev
         ? {
@@ -989,6 +1171,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
   }, []);
 
   const patchPathological = useCallback((patch: Partial<PersonalPathological>) => {
+    setSaveEnabled(true);
     setForm((prev) =>
       prev
         ? {
@@ -1003,6 +1186,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
   }, []);
 
   const patchGynecological = useCallback((patch: Partial<GynecologicalBackground>) => {
+    setSaveEnabled(true);
     setForm((prev) =>
       prev
         ? {
@@ -1017,6 +1201,8 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
   }, []);
 
   const startEditing = useCallback(() => {
+    setSaveEnabled(false);
+    setCollapsedSections(collapsedClinicalHistorySections);
     setEditing(true);
   }, []);
 
@@ -1025,7 +1211,9 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
       setForm(clinicalHistory);
     }
     setEditing(false);
+    setSaveEnabled(false);
     setDraftRecovered(false);
+    setCollapsedSections(expandedClinicalHistorySections);
     clearDraft(patientId);
   }, [clinicalHistory, patientId]);
 
@@ -1039,6 +1227,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
       setClinicalHistory(saved);
       setForm(saved);
       setEditing(false);
+      setSaveEnabled(false);
       setDraftRecovered(false);
       clearDraft(patientId);
       setMessage({
@@ -1122,7 +1311,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
                     variant="contained"
                     startIcon={<SaveIcon />}
                     onClick={saveClinicalHistory}
-                    disabled={saving}
+                    disabled={saving || !saveEnabled}
                   >
                     {saving ? 'Guardando...' : 'Guardar'}
                   </Button>
@@ -1142,23 +1331,56 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
               value={form.hereditary_background}
               disabled={!editing || saving}
               onPatch={patchHereditary}
+              collapsed={collapsedSections.hereditary}
+              onToggle={() => toggleSection('hereditary')}
+              fieldVisible={fieldVisible}
             />
             <NonPathologicalSection
               value={form.personal_non_pathological}
               disabled={!editing || saving}
               onPatch={patchNonPathological}
+              collapsed={collapsedSections.non_pathological}
+              onToggle={() => toggleSection('non_pathological')}
+              fieldVisible={fieldVisible}
             />
             <PathologicalSection
               value={form.personal_pathological}
               disabled={!editing || saving}
               onPatch={patchPathological}
+              collapsed={collapsedSections.pathological}
+              onToggle={() => toggleSection('pathological')}
+              fieldVisible={fieldVisible}
             />
             <GynecologicalSection
               value={form.gynecological ?? {}}
               disabled={!editing || saving}
               onPatch={patchGynecological}
+              collapsed={collapsedSections.gynecological}
+              onToggle={() => toggleSection('gynecological')}
+              fieldVisible={fieldVisible}
             />
           </Box>
+          {editing ? (
+            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                variant="outlined"
+                color="inherit"
+                startIcon={<CancelIcon />}
+                onClick={cancelEditing}
+                disabled={saving}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={saveClinicalHistory}
+                disabled={saving || !saveEnabled}
+              >
+                {saving ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </Box>
+          ) : null}
           {!editing && !hasVisibleData ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               Aún no hay información registrada en la historia clínica.
@@ -1187,4 +1409,8 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
 }
 
 export default memo(ClinicalHistoryTabInner);
+
+
+
+
 

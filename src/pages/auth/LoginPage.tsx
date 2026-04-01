@@ -129,6 +129,15 @@ export default function LoginPage() {
                 'Iniciar Sesión'
               )}
             </Button>
+            <Button
+              fullWidth
+              variant="text"
+              size="large"
+              onClick={() => navigate('/registrar')}
+              sx={{ mb: 1 }}
+            >
+              Crear cuenta medica
+            </Button>
           </Box>
 
           <Box sx={{ mt: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>

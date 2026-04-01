@@ -411,12 +411,67 @@ export interface ColposcopyReportBuilderData {
   }>;
 }
 
+export interface ActiveColposcopyPatientData {
+  office_id: number;
+  patient_id: number | null;
+  changed?: boolean;
+  updated_at?: string | null;
+}
+
+let cachedOfficeId: number | null = null;
+let officeIdPromise: Promise<number> | null = null;
+let activeColposcopyPatientWriteCache:
+  | {
+      officeId: number;
+      patientId: number;
+      timestamp: number;
+      result: ActiveColposcopyPatientData;
+    }
+  | null = null;
+let activeColposcopyPatientWritePromise:
+  | {
+      officeId: number;
+      patientId: number;
+      promise: Promise<ActiveColposcopyPatientData>;
+    }
+  | null = null;
+let activeColposcopyPatientCache:
+  | {
+      officeId: number;
+      currentPatientId: number;
+      timestamp: number;
+      result: ActiveColposcopyPatientData;
+    }
+  | null = null;
+let activeColposcopyPatientPromise:
+  | {
+      officeId: number;
+      currentPatientId: number;
+      promise: Promise<ActiveColposcopyPatientData>;
+    }
+  | null = null;
+
 async function resolveOfficeId(): Promise<number> {
+  if (cachedOfficeId) {
+    return cachedOfficeId;
+  }
+
+  const persistedOfficeId = localStorage.getItem('cached_office_id');
+  if (persistedOfficeId) {
+    const parsedOfficeId = Number(persistedOfficeId);
+    if (Number.isFinite(parsedOfficeId) && parsedOfficeId > 0) {
+      cachedOfficeId = parsedOfficeId;
+      return parsedOfficeId;
+    }
+  }
+
   const userRaw = localStorage.getItem('user');
   if (userRaw) {
     try {
       const user = JSON.parse(userRaw) as { consultorio_id?: number };
       if (user.consultorio_id) {
+        cachedOfficeId = user.consultorio_id;
+        localStorage.setItem('cached_office_id', String(user.consultorio_id));
         return user.consultorio_id;
       }
     } catch {
@@ -424,12 +479,22 @@ async function resolveOfficeId(): Promise<number> {
     }
   }
 
-  const offices = await appointmentService.getOffices();
-  if (offices.length === 0) {
-    throw new Error('No se encontraron consultorios disponibles');
+  if (!officeIdPromise) {
+    officeIdPromise = appointmentService.getOffices().then((offices) => {
+      if (offices.length === 0) {
+        throw new Error('No se encontraron consultorios disponibles');
+      }
+
+      const officeId = offices[0].id;
+      cachedOfficeId = officeId;
+      localStorage.setItem('cached_office_id', String(officeId));
+      return officeId;
+    }).finally(() => {
+      officeIdPromise = null;
+    });
   }
 
-  return offices[0].id;
+  return officeIdPromise;
 }
 
 export const consultationService = {
@@ -600,5 +665,106 @@ export const consultationService = {
     );
 
     return response.data;
+  },
+
+  async setActiveColposcopyPatient(patientId: number, officeId?: number): Promise<ActiveColposcopyPatientData> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const now = Date.now();
+
+    if (
+      activeColposcopyPatientWriteCache &&
+      activeColposcopyPatientWriteCache.officeId === resolvedOfficeId &&
+      activeColposcopyPatientWriteCache.patientId === patientId &&
+      now - activeColposcopyPatientWriteCache.timestamp < 30000
+    ) {
+      return activeColposcopyPatientWriteCache.result;
+    }
+
+    if (
+      activeColposcopyPatientWritePromise &&
+      activeColposcopyPatientWritePromise.officeId === resolvedOfficeId &&
+      activeColposcopyPatientWritePromise.patientId === patientId
+    ) {
+      return activeColposcopyPatientWritePromise.promise;
+    }
+
+    const requestPromise = apiClient.post<{ status: string; data: ActiveColposcopyPatientData }>(
+      '/v2/datahelp/active-colposcopy-patient',
+      {
+        office_id: resolvedOfficeId,
+        patient_id: patientId,
+      }
+    ).then((response) => {
+      activeColposcopyPatientWriteCache = {
+        officeId: resolvedOfficeId,
+        patientId,
+        timestamp: Date.now(),
+        result: response.data.data,
+      };
+
+      return response.data.data;
+    }).finally(() => {
+      activeColposcopyPatientWritePromise = null;
+    });
+
+    activeColposcopyPatientWritePromise = {
+      officeId: resolvedOfficeId,
+      patientId,
+      promise: requestPromise,
+    };
+
+    return requestPromise;
+  },
+
+  async getActiveColposcopyPatient(currentPatientId?: number, officeId?: number): Promise<ActiveColposcopyPatientData> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const normalizedPatientId = Number(currentPatientId ?? 0);
+    const now = Date.now();
+
+    if (
+      activeColposcopyPatientCache &&
+      activeColposcopyPatientCache.officeId === resolvedOfficeId &&
+      activeColposcopyPatientCache.currentPatientId === normalizedPatientId &&
+      now - activeColposcopyPatientCache.timestamp < 30000
+    ) {
+      return activeColposcopyPatientCache.result;
+    }
+
+    if (
+      activeColposcopyPatientPromise &&
+      activeColposcopyPatientPromise.officeId === resolvedOfficeId &&
+      activeColposcopyPatientPromise.currentPatientId === normalizedPatientId
+    ) {
+      return activeColposcopyPatientPromise.promise;
+    }
+
+    const requestPromise = apiClient.get<{ status: string; data: ActiveColposcopyPatientData }>(
+      '/v2/datahelp/active-colposcopy-patient',
+      {
+        params: {
+          office_id: resolvedOfficeId,
+          current_patient_id: normalizedPatientId,
+        },
+      }
+    ).then((response) => {
+      activeColposcopyPatientCache = {
+        officeId: resolvedOfficeId,
+        currentPatientId: normalizedPatientId,
+        timestamp: Date.now(),
+        result: response.data.data,
+      };
+
+      return response.data.data;
+    }).finally(() => {
+      activeColposcopyPatientPromise = null;
+    });
+
+    activeColposcopyPatientPromise = {
+      officeId: resolvedOfficeId,
+      currentPatientId: normalizedPatientId,
+      promise: requestPromise,
+    };
+
+    return requestPromise;
   },
 };

@@ -11,6 +11,7 @@ import NotificationsPage from '../pages/notifications/NotificationsPage';
 import SettingsPage from '../pages/settings/SettingsPage';
 import PublicAppointmentPage from '../pages/public/PublicAppointmentPage';
 import PublicAssistantRegisterPage from '../pages/public/PublicAssistantRegisterPage';
+import PublicDoctorRegisterPage from '../pages/public/PublicDoctorRegisterPage';
 import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
 import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 
@@ -20,6 +21,7 @@ export default function AppRouter() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/registrar" element={<PublicDoctorRegisterPage />} />
         <Route path="/asistente" element={<PublicAssistantRegisterPage />} />
         <Route path="/asistente/:code" element={<PublicAssistantRegisterPage />} />
         <Route path="/cita/:token" element={<PublicAppointmentPage />} />

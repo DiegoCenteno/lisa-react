@@ -38,6 +38,7 @@ import PatientTagsTab from './PatientTagsTab';
 import PatientActivityLogTab from './PatientActivityLogTab';
 import ConsultationHistoryTab from './ConsultationHistoryTab';
 import PatientReportsTab from './PatientReportsTab';
+import { consultationService } from '../../api/consultationService';
 
 interface TabPanelProps {
   children: React.ReactNode;
@@ -94,6 +95,9 @@ export default function PatientDetailPage() {
       };
 
     if (requestedTab && requestedTab in tabMap) {
+      if (!patient && tabMap[requestedTab] === 4) {
+        return;
+      }
       if (tabMap[requestedTab] === 4 && !patient?.detail_menu?.camera_menu_enabled) {
         setTab(0);
         setSearchParams({ tab: 'general' }, { replace: true });
@@ -160,6 +164,30 @@ export default function PatientDetailPage() {
     };
     loadData();
   }, [id]);
+
+  useEffect(() => {
+    if (!patient?.id || !patient.detail_menu?.camera_menu_enabled) {
+      return;
+    }
+
+    if (tab !== 0 && tab !== 1) {
+      return;
+    }
+
+    let cancelled = false;
+
+    void consultationService
+      .setActiveColposcopyPatient(patient.id)
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('Error actualizando paciente activo de camara:', err);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patient?.id, patient?.detail_menu?.camera_menu_enabled, tab]);
 
   const formatPhoneNumber = (phone?: string) => {
     const digits = String(phone ?? '').replace(/\D/g, '');
@@ -433,6 +461,7 @@ export default function PatientDetailPage() {
         <TabPanel value={tab} index={4}>
           <PatientColposcopyTab
             patientId={patient.id}
+            patientName={`${patient.name} ${patient.last_name}`.trim()}
             moduleTitle={cameraMenuTitle}
             onCaptureSaved={refreshPatientFiles}
           />
