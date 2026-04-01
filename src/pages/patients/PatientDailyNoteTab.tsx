@@ -38,6 +38,7 @@ import { consultationService } from '../../api/consultationService';
 import { patientService } from '../../api/patientService';
 import type { ClinicalHistory, MedicamentHistoryItem, OfficeLabelItem, Patient, PatientSoapContext, PatientTagControlData, SOAPNote } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
+import ClickableDateField from '../../components/ClickableDateField';
 
 type RefreshPayload = {
   patient: Patient;
@@ -167,7 +168,11 @@ const SubjectiveSection = memo(function SubjectiveSection({
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 6 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Fecha de inicio del padecimiento</Typography>
-          <TextField type="date" fullWidth size="small" value={form.illnessStartDate} onChange={(e) => onChange({ ...form, illnessStartDate: e.target.value })} InputLabelProps={{ shrink: true }} />
+          <ClickableDateField
+            label="Fecha de inicio del padecimiento"
+            value={form.illnessStartDate}
+            onChange={(illnessStartDate) => onChange({ ...form, illnessStartDate })}
+          />
         </Grid>
         <Grid size={{ xs: 12 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Motivo de consulta</Typography>
@@ -195,7 +200,13 @@ const ObjectiveSection = memo(function ObjectiveSection({
         <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="F.C." value={form.fc} onChange={(e) => onChange({ ...form, fc: e.target.value })} /></Grid>
         <Grid size={{ xs: 12, md: 4 }}><TextField fullWidth size="small" label="O2 (%)" value={form.os} onChange={(e) => onChange({ ...form, os: e.target.value })} /></Grid>
         <Grid size={{ xs: 12 }}><TextField multiline minRows={3} fullWidth label={`Exploraci\u00f3n f\u00edsica`} value={form.studies} onChange={(e) => onChange({ ...form, studies: e.target.value })} /></Grid>
-        <Grid size={{ xs: 12, md: 6 }}><TextField type="date" fullWidth size="small" label={`Fecha de \u00faltima menstruaci\u00f3n`} value={form.lastMenstruationDate} onChange={(e) => onChange({ ...form, lastMenstruationDate: e.target.value })} InputLabelProps={{ shrink: true }} /></Grid>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <ClickableDateField
+            label="Fecha de última menstruación"
+            value={form.lastMenstruationDate}
+            onChange={(lastMenstruationDate) => onChange({ ...form, lastMenstruationDate })}
+          />
+        </Grid>
         <Grid size={{ xs: 12 }}><FormControlLabel control={<Checkbox checked={form.pregnant} onChange={(e) => onChange({ ...form, pregnant: e.target.checked })} />} label="Embarazada" /></Grid>
       </Grid>
     </CardContent></Card>

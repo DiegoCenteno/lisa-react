@@ -38,6 +38,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import type { EventInput, EventClickArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
 import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultationSummary } from '../../types';
+import ActivityLogFeed from '../../components/activity/ActivityLogFeed';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
 import { useAuth } from '../../hooks/useAuth';
@@ -255,6 +256,8 @@ export default function AgendaPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [actionToast, setActionToast] = useState<string | null>(null);
   const [showPreviousAppointments, setShowPreviousAppointments] = useState(false);
+  const [showOfficeActivityLogs, setShowOfficeActivityLogs] = useState(false);
+  const [showAllOfficeActivityLogs, setShowAllOfficeActivityLogs] = useState(false);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [rescheduleAppointment, setRescheduleAppointment] = useState<{
     id: number;
@@ -270,6 +273,8 @@ export default function AgendaPage() {
   const [showAppointmentMore, setShowAppointmentMore] = useState(false);
   const [appointmentActivityLogs, setAppointmentActivityLogs] = useState<ActivityLogItem[]>([]);
   const [activityLogsLoading, setActivityLogsLoading] = useState(false);
+  const [officeActivityLogs, setOfficeActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [officeActivityLogsLoading, setOfficeActivityLogsLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryData, setSummaryData] = useState<LastConsultationSummary | null>(null);
@@ -332,6 +337,8 @@ export default function AgendaPage() {
     if (!resetToken) return;
 
     setShowPreviousAppointments(false);
+    setShowOfficeActivityLogs(false);
+    setShowAllOfficeActivityLogs(false);
     setDialogOpen(false);
     setSelectedEvent(null);
     setPendingAction(null);
@@ -346,6 +353,8 @@ export default function AgendaPage() {
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
     setActivityLogsLoading(false);
+    setOfficeActivityLogs([]);
+    setOfficeActivityLogsLoading(false);
     setSummaryOpen(false);
     setSummaryLoading(false);
     setSummaryData(null);
@@ -421,6 +430,45 @@ export default function AgendaPage() {
       return !isBeforeToday && !isCancelled;
     });
   }, [appointments, showPreviousAppointments]);
+
+  useEffect(() => {
+    if (!showOfficeActivityLogs || !officeId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadOfficeActivityLogs = async () => {
+      setOfficeActivityLogsLoading(true);
+      try {
+        const data = await appointmentService.getGlobalActivityLogs(10, officeId);
+        if (!cancelled) {
+          setOfficeActivityLogs(data);
+        }
+      } catch (err) {
+        console.error('Error cargando bitacora del consultorio:', err);
+        if (!cancelled) {
+          setOfficeActivityLogs([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setOfficeActivityLogsLoading(false);
+        }
+      }
+    };
+
+    loadOfficeActivityLogs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showOfficeActivityLogs, officeId]);
+
+  useEffect(() => {
+    if (!showOfficeActivityLogs) {
+      setShowAllOfficeActivityLogs(false);
+    }
+  }, [showOfficeActivityLogs]);
 
   const events = useMemo(
     () => visibleAppointments.map(appointmentToEvent),
@@ -724,20 +772,87 @@ export default function AgendaPage() {
       </Box>
 
       <Box sx={{ mb: 2 }}>
-        <Button
-          variant="text"
-          onClick={() => setShowPreviousAppointments((value) => !value)}
-          sx={{
-            p: 0,
-            minWidth: 'auto',
-            textTransform: 'none',
-            textDecoration: 'underline',
-            color: '#2d64c8',
-            fontWeight: 400,
-          }}
-        >
-          {showPreviousAppointments ? 'Ocultar citas previas' : 'Mostrar citas previas'}
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Button
+            variant="text"
+            onClick={() => setShowPreviousAppointments((value) => !value)}
+            sx={{
+              p: 0,
+              minWidth: 'auto',
+              textTransform: 'none',
+              textDecoration: 'underline',
+              color: '#2d64c8',
+              fontWeight: 400,
+            }}
+          >
+            {showPreviousAppointments
+              ? 'Ocultar citas previas'
+              : isMobile
+                ? 'Citas previas'
+                : 'Mostrar citas previas'}
+          </Button>
+          <Box sx={{ flex: 1 }} />
+          <Button
+            variant="text"
+            onClick={() => {
+              setShowOfficeActivityLogs((value) => !value);
+              setShowAllOfficeActivityLogs(false);
+            }}
+            sx={{
+              p: 0,
+              minWidth: 'auto',
+              textTransform: 'none',
+              textDecoration: 'underline',
+              color: '#2d64c8',
+              fontWeight: 400,
+            }}
+          >
+            {showOfficeActivityLogs ? 'Ocultar bitácora' : 'Bitácora'}
+          </Button>
+        </Box>
+        {showOfficeActivityLogs ? (
+          <Box
+            sx={{
+              mt: 1.5,
+              p: 1.5,
+              borderRadius: 2,
+              backgroundColor: '#f8fbfd',
+              border: '1px solid #dde8ef',
+            }}
+          >
+            {officeActivityLogsLoading ? (
+              <Stack spacing={1.25}>
+                <Box sx={{ height: 70, borderRadius: 2, backgroundColor: '#edf3f7' }} />
+                <Box sx={{ height: 70, borderRadius: 2, backgroundColor: '#edf3f7' }} />
+              </Stack>
+            ) : (
+              <Box sx={{ display: 'grid', gap: 1.25 }}>
+                <ActivityLogFeed
+                  logs={showAllOfficeActivityLogs ? officeActivityLogs : officeActivityLogs.slice(0, 2)}
+                  emptyText="Aún no hay movimientos recientes en este consultorio."
+                  showPatient
+                />
+                {officeActivityLogs.length > 2 && !showAllOfficeActivityLogs ? (
+                  <Button
+                    variant="text"
+                    onClick={() => setShowAllOfficeActivityLogs(true)}
+                    sx={{
+                      alignSelf: 'flex-start',
+                      minWidth: 'auto',
+                      p: 0,
+                      color: '#2d64c8',
+                      textDecoration: 'underline',
+                      textTransform: 'none',
+                      fontWeight: 400,
+                    }}
+                  >
+                    Mostrar más
+                  </Button>
+                ) : null}
+              </Box>
+            )}
+          </Box>
+        ) : null}
       </Box>
 
       <Box

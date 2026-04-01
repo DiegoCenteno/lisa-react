@@ -35,6 +35,7 @@ import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
 import settingsService, { type SettingsFormsData } from '../../api/settingsService';
 import { clinicalHistoryCatalogs } from '../../utils/clinicalHistory';
+import ClickableDateField from '../../components/ClickableDateField';
 
 interface ClinicalHistoryTabProps {
   patientId: number;
@@ -311,6 +312,18 @@ const Field = memo(function Field({
     return <DocumentField label={label} value={value ?? ''} xs={xs} sm={sm} />;
   }
 
+  if (isDateField) {
+    return (
+      <Grid size={{ xs, sm }}>
+        <ClickableDateField
+          label={label}
+          value={stringValue}
+          onChange={onChange}
+        />
+      </Grid>
+    );
+  }
+
   return (
     <Grid size={{ xs, sm }}>
       <TextField
@@ -335,15 +348,6 @@ const Field = memo(function Field({
         multiline={multiline}
         rows={rows}
         type={type}
-        slotProps={
-          isDateField
-            ? {
-                inputLabel: {
-                  shrink: true,
-                },
-              }
-            : undefined
-        }
       >
         {children}
       </TextField>
@@ -996,7 +1000,7 @@ const GynecologySexualBlock = memo(function GynecologySexualBlock({
             sx={{ m: 0 }}
           />
         </Grid>
-        <Field label="Fecha ultima gestacion" value={value.last_gestation_date} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(last_gestation_date) => onPatch({ last_gestation_date })} type="date" />
+        <Field label="Fecha última gestación" value={value.last_gestation_date} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(last_gestation_date) => onPatch({ last_gestation_date })} type="date" />
         <Field label="Gestaciones" value={value.gestations} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(gestations) => onPatch({ gestations })} />
         <Field label="Partos" value={value.deliveries} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(deliveries) => onPatch({ deliveries })} />
         <Field label="Cesareas" value={value.cesareans} hidden={!isVisible('gestaciones')} disabled={disabled || !value.gestations_checked} onChange={(cesareans) => onPatch({ cesareans })} />
@@ -1116,7 +1120,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
 
     const timeoutId = window.setTimeout(() => {
       setSaveEnabled(true);
-    }, 10000);
+    }, 5000);
 
     return () => {
       window.clearTimeout(timeoutId);

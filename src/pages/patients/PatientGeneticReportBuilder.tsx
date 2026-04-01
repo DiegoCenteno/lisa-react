@@ -41,7 +41,7 @@ const conclusionFetusCountOptions: Option[] = [
 ];
 const recommendedStudyOptions: Option[] = [
   { value: 'tipoest1', label: 'Ultrasonido obstetrico basico' },
-  { value: 'tipoest3', label: 'Ultrasonido genÃ©tico' },
+  { value: 'tipoest3', label: 'Ultrasonido genético' },
   { value: 'tipoest4', label: 'Ultrasonido estructural' },
   { value: 'tipoest5', label: 'Ultrasonido bienestar fetal' },
   { value: 'tipoest7', label: 'Ultrasonido vitalidad fetal' },

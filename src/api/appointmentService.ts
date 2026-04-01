@@ -184,6 +184,16 @@ export const appointmentService = {
     return response.data.data ?? [];
   },
 
+  async getGlobalActivityLogs(limit: number = 500, officeId?: number): Promise<ActivityLogItem[]> {
+    const response = await apiClient.get<ApiActivityLogListResponse>('/v2/activity-logs', {
+      params: {
+        limit,
+        office_id: officeId,
+      },
+    });
+    return response.data.data ?? [];
+  },
+
   async getFutureActiveAppointmentWarning(
     officeId: number,
     patientId: number

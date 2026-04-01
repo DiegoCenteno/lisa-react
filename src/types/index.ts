@@ -377,7 +377,9 @@ export interface ActivityLogItem {
   entity_id: number;
   action: string;
   patient_id?: number | null;
+  patient_name?: string | null;
   office_id?: number | null;
+  office_title?: string | null;
   appointment_id?: number | null;
   user_id?: number | null;
   user_role_id?: number | null;

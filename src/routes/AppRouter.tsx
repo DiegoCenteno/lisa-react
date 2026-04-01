@@ -4,6 +4,7 @@ import ProtectedRoute from './ProtectedRoute';
 import LoginPage from '../pages/auth/LoginPage';
 import DashboardPage from '../pages/dashboard/DashboardPage';
 import AgendaPage from '../pages/agenda/AgendaPage';
+import ActivityLogsPage from '../pages/activity/ActivityLogsPage';
 import PatientsPage from '../pages/patients/PatientsPage';
 import PatientDetailPage from '../pages/patients/PatientDetailPage';
 import ConsultationsPage from '../pages/consultations/ConsultationsPage';
@@ -39,6 +40,14 @@ export default function AppRouter() {
         >
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/agenda" element={<AgendaPage />} />
+          <Route
+            path="/bitacora"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <ActivityLogsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/pacientes"
             element={

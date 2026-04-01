@@ -18,6 +18,7 @@ import {
   CalendarMonth as CalendarIcon,
   People as PeopleIcon,
   Assignment as ConsultationIcon,
+  History as HistoryIcon,
   Sms as WhatsAppIcon,
   Settings as SettingsIcon,
   LocalHospital as HospitalIcon,
@@ -70,6 +71,13 @@ const menuItems: MenuItem[] = [
     permission: 'consultations.view',
   },
   {
+    text: 'Bitácora',
+    icon: <HistoryIcon />,
+    path: '/bitacora',
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    permission: 'patients.view',
+  },
+  {
     text: 'WhatsApp',
     icon: <WhatsAppIcon />,
     path: '/notificaciones',
@@ -92,7 +100,8 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [isHovered, setIsHovered] = useState(false);
-  const mockWhatsappUrl = 'http://lisa.test/smsmasivos/mock-whatsapp';
+  const monitorBaseUrl = import.meta.env.VITE_BACKEND_URL || 'http://lisa.test';
+  const mockWhatsappUrl = `${monitorBaseUrl.replace(/\/$/, '')}/smsmasivos/mock-whatsapp`;
   const desktopDrawerWidth = isHovered ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
   const filteredItems = menuItems.filter((item) => hasRole(item.roles) && (!item.permission || can(item.permission)));

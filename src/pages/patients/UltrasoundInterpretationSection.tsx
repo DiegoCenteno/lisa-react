@@ -117,7 +117,7 @@ export function calculateInterpretationDerivedValues(
     fum: formatDateDisplay(fumDate),
     fumDay: getWeekdayLabel(fumDate),
     sdga: String(sdga),
-    sdgaLabel: `${sdgaWeeks} semanas ${sdgaDays} dÃ­as`,
+    sdgaLabel: `${sdgaWeeks} semanas ${sdgaDays} días`,
     fpp: formatDateDisplay(fppDate),
     fppDay: getWeekdayLabel(fppDate),
   };
@@ -291,7 +291,7 @@ const InterpretationItemCard = memo(function InterpretationItemCard({
             />
             <TextField
               size="small"
-              label="FetometrÃ­a"
+              label="Fetometría"
               value={fetometryWeeksDraft}
               onChange={(event) => handleImmediateChange('fetometry_weeks', event.target.value)}
               placeholder="semanas"
@@ -301,12 +301,12 @@ const InterpretationItemCard = memo(function InterpretationItemCard({
             />
             <TextField
               size="small"
-              label="FetometrÃ­a"
+              label="Fetometría"
               value={fetometryDaysDraft}
               onChange={(event) => handleImmediateChange('fetometry_days', event.target.value)}
-              placeholder="dÃ­as"
+              placeholder="días"
               fullWidth
-              helperText="dÃ­as"
+              helperText="días"
               sx={{ '& .MuiInputBase-root': { minHeight: 44 }, '& .MuiInputBase-input': { px: 0.5 } }}
             />
             <TextField
@@ -348,8 +348,8 @@ const InterpretationItemCard = memo(function InterpretationItemCard({
 export const UltrasoundInterpretationSection = memo(function UltrasoundInterpretationSection({
   items,
   onChange,
-  title = '4. InterpretaciÃ³n de ultrasonidos',
-  description = 'Se mantienen 5 bloques como en legacy para registrar estudios previos y sus cÃ¡lculos derivados.',
+  title = '4. Interpretación de ultrasonidos',
+  description = 'Se mantienen 5 bloques como en legacy para registrar estudios previos y sus cálculos derivados.',
   showHeader = true,
 }: UltrasoundInterpretationSectionProps) {
   return (
@@ -373,7 +373,7 @@ export const UltrasoundInterpretationSection = memo(function UltrasoundInterpret
 
 export const UltrasoundInterpretationDisplay = memo(function UltrasoundInterpretationDisplay({
   items,
-  title = '4. InterpretaciÃ³n de ultrasonidos',
+  title = '4. Interpretación de ultrasonidos',
   emptyText = 'No se incluyeron ultrasonidos previos.',
   showHeader = true,
 }: UltrasoundInterpretationDisplayProps) {
@@ -420,8 +420,8 @@ export const UltrasoundInterpretationDisplay = memo(function UltrasoundInterpret
                     label="Fecha US"
                     value={derived ? item.study_date && formatDateDisplay(new Date(`${item.study_date}T00:00:00`)) : ''}
                   />
-                  <DisplayField label="FetometrÃ­a semanas" value={item.fetometry_weeks} />
-                  <DisplayField label="FetometrÃ­a dÃ­as" value={item.fetometry_days} />
+                  <DisplayField label="Fetometría semanas" value={item.fetometry_weeks} />
+                  <DisplayField label="Fetometría días" value={item.fetometry_days} />
                   <DisplayField label="FUM" value={derived?.fum} />
                   <DisplayField label="SDG por amenorrea" value={derived?.sdgaLabel || derived?.sdga} />
                   <DisplayField label="FPP por amenorrea" value={derived?.fpp} />

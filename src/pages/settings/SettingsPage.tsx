@@ -21,7 +21,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { ContentCopy, DeleteOutline, LockOutlined as LockOutlinedIcon } from '@mui/icons-material';
+import { ContentCopy, DeleteOutline, ExpandLess, ExpandMore, LockOutlined as LockOutlinedIcon } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -1161,6 +1161,15 @@ function FormSettingsPanel({
   const [data, setData] = useState<SettingsFormsData | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [cameraMenuDirty, setCameraMenuDirty] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    heredofamiliares: true,
+    personales_no_patologicos: true,
+    personales_patologicos: true,
+    ginecologicos: true,
+    daily_note: true,
+    new_appointment_default_gender: true,
+    patient_detail_menu: true,
+  });
   const cameraMenuTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -1465,6 +1474,10 @@ function FormSettingsPanel({
                     values={data.clinical_history}
                     disabled={saving}
                     onToggle={(key, checked) => persistSection('clinical_history', key, checked)}
+                    collapsed={collapsedGroups[group.module] ?? true}
+                    onCollapsedChange={(collapsed) =>
+                      setCollapsedGroups((current) => ({ ...current, [group.module]: collapsed }))
+                    }
                   >
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2 }}>
                         <Box>
@@ -1654,75 +1667,98 @@ function FormSettingsPanel({
                     values={data.daily_note}
                     disabled={saving}
                     onToggle={(key, checked) => persistSection('daily_note', key, checked)}
+                    collapsed={collapsedGroups.daily_note ?? true}
+                    onCollapsedChange={(collapsed) =>
+                      setCollapsedGroups((current) => ({ ...current, daily_note: collapsed }))
+                    }
                   />
                 ))}
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
-                    Género por defecto
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    El select de género seguirá visible al agendar una cita, pero se precargará automáticamente con la opción elegida.
-                  </Typography>
-                  <TextField
-                    select
-                    label="Género por defecto en nueva cita"
-                    value={data.new_appointment.default_gender}
-                    fullWidth
-                    variant="standard"
-                    disabled={saving}
-                    onChange={(event) => persistNewAppointmentDefaultGender(event.target.value as 'M' | 'F' | '')}
-                  >
-                    <MenuItem value="">Ninguno</MenuItem>
-                    <MenuItem value="F">Femenino</MenuItem>
-                    <MenuItem value="M">Masculino</MenuItem>
-                  </TextField>
-                </Box>
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                  <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
-                    Menú del detalle del paciente
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    Activa el acceso al módulo de cámara dentro del submenú del detalle del paciente y personaliza su título.
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <Checkbox
-                      checked={data.patient_detail.camera_menu_enabled}
-                      disabled={saving}
-                      onChange={(event) => handlePatientDetailCameraToggle(event.target.checked)}
-                    />
-                    <Typography>Mostrar menú de cámara</Typography>
-                  </Box>
-                  {data.patient_detail.camera_menu_enabled ? (
+                <FormFieldGroupCard
+                  title="Género por defecto"
+                  fields={[]}
+                  values={{}}
+                  disabled={saving}
+                  onToggle={() => undefined}
+                  collapsed={collapsedGroups.new_appointment_default_gender ?? true}
+                  onCollapsedChange={(collapsed) =>
+                    setCollapsedGroups((current) => ({ ...current, new_appointment_default_gender: collapsed }))
+                  }
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      El select de género seguirá visible al agendar una cita, pero se precargará automáticamente con la opción elegida.
+                    </Typography>
                     <TextField
-                      inputRef={cameraMenuTitleInputRef}
-                      label="Título del menú"
-                      value={data.patient_detail.camera_menu_title}
+                      select
+                      label="Género por defecto en nueva cita"
+                      value={data.new_appointment.default_gender}
                       fullWidth
                       variant="standard"
                       disabled={saving}
-                      onChange={(event) => {
-                        const nextValue = event.target.value;
-                        setData((current) => current ? ({
-                          ...current,
-                          patient_detail: {
-                            ...current.patient_detail,
-                            camera_menu_title: nextValue,
-                          },
-                        }) : current);
-                        setCameraMenuDirty(true);
-                      }}
-                    />
-                  ) : null}
-                  <Box>
-                    <Button
-                      variant="contained"
-                      disabled={saving || !cameraMenuDirty}
-                      onClick={() => persistPatientDetailCameraMenu(data.patient_detail)}
+                      onChange={(event) => persistNewAppointmentDefaultGender(event.target.value as 'M' | 'F' | '')}
                     >
-                      Guardar
-                    </Button>
+                      <MenuItem value="">Ninguno</MenuItem>
+                      <MenuItem value="F">Femenino</MenuItem>
+                      <MenuItem value="M">Masculino</MenuItem>
+                    </TextField>
                   </Box>
-                </Box>
+                </FormFieldGroupCard>
+                <FormFieldGroupCard
+                  title="Menú del detalle del paciente"
+                  fields={[]}
+                  values={{}}
+                  disabled={saving}
+                  onToggle={() => undefined}
+                  collapsed={collapsedGroups.patient_detail_menu ?? true}
+                  onCollapsedChange={(collapsed) =>
+                    setCollapsedGroups((current) => ({ ...current, patient_detail_menu: collapsed }))
+                  }
+                >
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                    <Typography variant="body2" color="text.secondary">
+                      Activa el acceso al módulo de cámara dentro del submenú del detalle del paciente y personaliza su título.
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      <Checkbox
+                        checked={data.patient_detail.camera_menu_enabled}
+                        disabled={saving}
+                        onChange={(event) => handlePatientDetailCameraToggle(event.target.checked)}
+                      />
+                      <Typography>Mostrar menú de cámara</Typography>
+                    </Box>
+                    {data.patient_detail.camera_menu_enabled ? (
+                      <TextField
+                        inputRef={cameraMenuTitleInputRef}
+                        label="Título del menú"
+                        value={data.patient_detail.camera_menu_title}
+                        fullWidth
+                        variant="standard"
+                        disabled={saving}
+                        inputProps={{ maxLength: 14 }}
+                        onChange={(event) => {
+                          const nextValue = event.target.value.slice(0, 14);
+                          setData((current) => current ? ({
+                            ...current,
+                            patient_detail: {
+                              ...current.patient_detail,
+                              camera_menu_title: nextValue,
+                            },
+                          }) : current);
+                          setCameraMenuDirty(true);
+                        }}
+                      />
+                    ) : null}
+                    <Box>
+                      <Button
+                        variant="contained"
+                        disabled={saving || !cameraMenuDirty}
+                        onClick={() => persistPatientDetailCameraMenu(data.patient_detail)}
+                      >
+                        Guardar
+                      </Button>
+                    </Box>
+                  </Box>
+                </FormFieldGroupCard>
               </Box>
             </Grid>
           </>
@@ -3049,6 +3085,8 @@ function FormFieldGroupCard({
   disabled,
   onToggle,
   children,
+  collapsed = true,
+  onCollapsedChange,
 }: {
   title: string;
   fields: FormFieldDefinition[];
@@ -3056,44 +3094,66 @@ function FormFieldGroupCard({
   disabled: boolean;
   onToggle: (key: string, checked: boolean) => void;
   children?: ReactNode;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }) {
   return (
     <Box sx={{ border: '1px solid #d8e8ef', borderRadius: 2, overflow: 'hidden', backgroundColor: '#fff' }}>
-      <Box sx={{ px: 2, py: 1.5, backgroundColor: '#f2fbff', borderBottom: '1px solid #d8e8ef' }}>
+      <Box
+        onClick={() => onCollapsedChange?.(!collapsed)}
+        sx={{
+          px: 2,
+          py: 1.5,
+          backgroundColor: '#f2fbff',
+          borderBottom: collapsed ? 'none' : '1px solid #d8e8ef',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.5,
+          cursor: onCollapsedChange ? 'pointer' : 'default',
+        }}
+      >
         <Typography sx={{ color: '#1e8b2d', fontWeight: 600 }}>{title}</Typography>
+        {onCollapsedChange ? (
+          collapsed ? <ExpandMore sx={{ color: '#1e8b2d' }} /> : <ExpandLess sx={{ color: '#1e8b2d' }} />
+        ) : null}
       </Box>
-      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-        {fields.map((field, index) => (
-          <Box
-            key={field.key}
-            onClick={() => !disabled && onToggle(field.key, !Boolean(values[field.key]))}
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.5,
-              px: 2,
-              py: 1.25,
-              cursor: disabled ? 'default' : 'pointer',
-              borderBottom: index === fields.length - 1 ? 'none' : '1px solid #edf4f7',
-              transition: 'background-color 0.18s ease',
-              '&:hover': disabled ? undefined : { backgroundColor: '#f8fcfe' },
-            }}
-          >
-            <Checkbox
-              checked={Boolean(values[field.key])}
-              disabled={disabled}
-              onChange={(event) => onToggle(field.key, event.target.checked)}
-              onClick={(event) => event.stopPropagation()}
-              sx={{ p: 0.5 }}
-            />
-            <Typography sx={{ color: '#183844' }}>{field.label}</Typography>
+      {!collapsed ? (
+        <>
+          <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+            {fields.map((field, index) => (
+              <Box
+                key={field.key}
+                onClick={() => !disabled && onToggle(field.key, !Boolean(values[field.key]))}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1.5,
+                  px: 2,
+                  py: 1.25,
+                  cursor: disabled ? 'default' : 'pointer',
+                  borderBottom: index === fields.length - 1 ? 'none' : '1px solid #edf4f7',
+                  transition: 'background-color 0.18s ease',
+                  '&:hover': disabled ? undefined : { backgroundColor: '#f8fcfe' },
+                }}
+              >
+                <Checkbox
+                  checked={Boolean(values[field.key])}
+                  disabled={disabled}
+                  onChange={(event) => onToggle(field.key, event.target.checked)}
+                  onClick={(event) => event.stopPropagation()}
+                  sx={{ p: 0.5 }}
+                />
+                <Typography sx={{ color: '#183844' }}>{field.label}</Typography>
+              </Box>
+            ))}
           </Box>
-        ))}
-      </Box>
-      {children ? (
-        <Box sx={{ borderTop: '1px solid #d8e8ef', backgroundColor: '#fcfeff', p: 2 }}>
-          {children}
-        </Box>
+          {children ? (
+            <Box sx={{ borderTop: '1px solid #d8e8ef', backgroundColor: '#fcfeff', p: 2 }}>
+              {children}
+            </Box>
+          ) : null}
+        </>
       ) : null}
     </Box>
   );

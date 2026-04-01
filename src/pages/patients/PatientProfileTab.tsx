@@ -19,6 +19,7 @@ import {
 import type { Patient } from '../../types';
 import { patientService } from '../../api/patientService';
 import { formatDisplayDate } from '../../utils/date';
+import ClickableDateField from '../../components/ClickableDateField';
 
 interface Props {
   patient: Patient;
@@ -48,6 +49,7 @@ function formatPhoneNumber(phone?: string) {
 function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveEnabled, setSaveEnabled] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -68,6 +70,29 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
     });
   }, [patient]);
 
+  useEffect(() => {
+    if (!editing) {
+      setSaveEnabled(false);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSaveEnabled(true);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [editing]);
+
+  const updateFormField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
+    setSaveEnabled(true);
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  };
+
   const handleCancel = () => {
     setForm({
       name: patient.name ?? '',
@@ -77,6 +102,7 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
       gender: patient.gender ?? '',
     });
     setEditing(false);
+    setSaveEnabled(false);
   };
 
   const handleSave = async () => {
@@ -92,6 +118,7 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
       });
       onPatientUpdated(updatedPatient);
       setEditing(false);
+      setSaveEnabled(false);
       setMessage('Datos generales actualizados');
     } catch (err) {
       console.error('Error actualizando paciente:', err);
@@ -112,12 +139,19 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
                 <Button variant="outlined" startIcon={<CancelIcon />} onClick={handleCancel} disabled={saving}>
                   Cancelar
                 </Button>
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving}>
+                <Button variant="contained" startIcon={<SaveIcon />} onClick={handleSave} disabled={saving || !saveEnabled}>
                   Guardar
                 </Button>
               </Box>
             ) : (
-              <Button variant="outlined" startIcon={<EditIcon />} onClick={() => setEditing(true)}>
+              <Button
+                variant="outlined"
+                startIcon={<EditIcon />}
+                onClick={() => {
+                  setSaveEnabled(false);
+                  setEditing(true);
+                }}
+              >
                 Editar
               </Button>
             )}
@@ -125,38 +159,42 @@ function PatientProfileTabInner({ patient, onPatientUpdated }: Props) {
           <Grid container spacing={3}>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField label="Nombre(s)" fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <TextField label="Nombre(s)" fullWidth value={form.name} onChange={(e) => updateFormField('name', e.target.value)} />
               ) : (
                 <InfoRow label="Nombre" value={patient.name} />
               )}
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField label="Apellidos" fullWidth value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+                <TextField label="Apellidos" fullWidth value={form.last_name} onChange={(e) => updateFormField('last_name', e.target.value)} />
               ) : (
                 <InfoRow label="Apellidos" value={patient.last_name} />
               )}
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField label="Teléfono" fullWidth value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <TextField label="Teléfono" fullWidth value={form.phone} onChange={(e) => updateFormField('phone', e.target.value)} />
               ) : (
                 <InfoRow label="Teléfono" value={formatPhoneNumber(patient.phone)} />
               )}
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField label="Fecha de nacimiento" type="date" fullWidth value={form.birth_date} onChange={(e) => setForm({ ...form, birth_date: e.target.value })} InputLabelProps={{ shrink: true }} />
+                <ClickableDateField
+                  label="Fecha de nacimiento"
+                  value={form.birth_date}
+                  onChange={(birth_date) => updateFormField('birth_date', birth_date)}
+                />
               ) : (
                 <InfoRow
                   label="Fecha de Nacimiento"
-                  value={patient.birth_date ? `${formatDisplayDate(patient.birth_date)}${patient.age ? ` (${patient.age} a\u00f1os)` : ''}` : undefined}
+                  value={patient.birth_date ? `${formatDisplayDate(patient.birth_date)}${patient.age ? ` (${patient.age} años)` : ''}` : undefined}
                 />
               )}
             </Grid>
             <Grid size={{ xs: 12, sm: 6, md: 4 }}>
               {editing ? (
-                <TextField select label="Género" fullWidth value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
+                <TextField select label="Género" fullWidth value={form.gender} onChange={(e) => updateFormField('gender', e.target.value)}>
                   <MenuItem value="">Sin especificar</MenuItem>
                   <MenuItem value="Masculino">Masculino</MenuItem>
                   <MenuItem value="Femenino">Femenino</MenuItem>

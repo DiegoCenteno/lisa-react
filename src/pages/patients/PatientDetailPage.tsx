@@ -21,7 +21,6 @@ import {
   Note as NoteIcon,
   History as HistoryIcon,
   PictureAsPdfOutlined as AssessmentIcon,
-  ChecklistRtlOutlined as LogbookIcon,
   LocalOfferOutlined as TagIcon,
   ContentCopy as ContentCopyIcon,
   CameraAlt as CameraAltIcon,
@@ -53,8 +52,8 @@ function TabPanel({ children, value, index }: TabPanelProps) {
 
 export default function PatientDetailPage() {
   const theme = useTheme();
-  const compactPatientTabs = useMediaQuery(theme.breakpoints.down(1400));
-  const veryCompactPatientTabs = useMediaQuery(theme.breakpoints.down(1200));
+  const compactPatientTabs = useMediaQuery(theme.breakpoints.down(1200));
+  const veryCompactPatientTabs = useMediaQuery(theme.breakpoints.down(1100));
   const iconOnlyPatientTabs = useMediaQuery(theme.breakpoints.down(1000));
   const ultraCompactPatientTabs = useMediaQuery(theme.breakpoints.down(800));
   const { id } = useParams<{ id: string }>();
@@ -387,9 +386,6 @@ export default function PatientDetailPage() {
             alignItems: 'center',
             gap: ultraCompactPatientTabs ? 0.25 : 0,
           },
-          '& .MuiTab-root:nth-of-type(6)': {
-            display: 'none',
-          },
           '& .MuiTab-root': {
             minWidth: ultraCompactPatientTabs ? 44 : undefined,
             px: ultraCompactPatientTabs ? 0.5 : undefined,
@@ -404,7 +400,7 @@ export default function PatientDetailPage() {
           <Tab value={4} icon={<CameraAltIcon />} label={cameraMenuTitle} iconPosition="start" />
         )}
         <Tab value={5} icon={<TagIcon />} label={iconOnlyPatientTabs ? '' : 'Etiquetas'} iconPosition="start" />
-        <Tab value={6} icon={<LogbookIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Bitácora'} iconPosition="start" />
+        <Tab value={6} label="" sx={{ display: 'none', minWidth: 0, p: 0, m: 0 }} />
         <Tab value={7} icon={<HistoryIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Histórico'} iconPosition="start" />
         <Tab value={2} icon={<NoteIcon />} label={iconOnlyPatientTabs ? '' : 'Nota Diaria'} iconPosition="start" />
       </Tabs>
