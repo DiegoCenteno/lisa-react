@@ -5,7 +5,6 @@ import {
   Divider,
   FormControlLabel,
   Grid,
-  Paper,
   TextField,
   Typography,
 } from '@mui/material';
@@ -248,7 +247,16 @@ const InterpretationItemCard = memo(function InterpretationItemCard({
   }, [handleFieldChange, item.notes, notesDraft]);
 
   return (
-    <Paper variant="outlined" sx={{ p: 1.5 }}>
+    <Box
+      sx={{
+        px: { xs: 1.5, md: 1.75 },
+        py: 1.5,
+        borderRadius: 2,
+        border: '1px solid',
+        borderColor: 'rgba(35, 165, 193, 0.12)',
+        backgroundColor: 'rgba(255,255,255,0.72)',
+      }}
+    >
       <FormControlLabel
         control={
           <Checkbox
@@ -341,7 +349,7 @@ const InterpretationItemCard = memo(function InterpretationItemCard({
           />
         </>
       )}
-    </Paper>
+    </Box>
   );
 });
 
@@ -360,13 +368,11 @@ export const UltrasoundInterpretationSection = memo(function UltrasoundInterpret
           <SectionTitle title={title} description={description} />
         </>
       ) : null}
-      <SectionCard background="rgba(156, 39, 176, 0.04)">
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {items.map((item, index) => (
-            <InterpretationItemCard key={index} index={index} item={item} onChange={onChange} />
-          ))}
-        </Box>
-      </SectionCard>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        {items.map((item, index) => (
+          <InterpretationItemCard key={index} index={index} item={item} onChange={onChange} />
+        ))}
+      </Box>
     </>
   );
 });

@@ -1,5 +1,8 @@
 ﻿import { Fragment, memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Box, Button, Card, CardContent, Divider, Grid, MenuItem, Paper, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Card, CardContent, Grid, MenuItem, Paper, TextField, Typography } from '@mui/material';
+import type { SxProps, Theme } from '@mui/material/styles';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -21,12 +24,24 @@ interface Props {
   onError?: (message: string) => void;
   onSuccess?: (message: string) => void;
   startInEditMode?: boolean;
-  variant?: 'genetic' | 'structural';
+  variant?: 'genetic' | 'structural' | 'wellbeing';
 }
 
 type Option = { value: string | number; label: string };
 type FlatField = { key: string; label: string; hiddenKey?: string; options?: Option[]; placeholder?: string };
-type ReportVariant = 'genetic' | 'structural';
+type ReportVariant = 'genetic' | 'structural' | 'wellbeing';
+type EditSectionKey = 'growth' | 'basic' | 'anatomy' | 'screenings' | 'hemodynamic' | 'biophysical' | 'interpretation' | 'conclusion';
+
+const collapsedEditSections: Record<EditSectionKey, boolean> = {
+  growth: true,
+  basic: true,
+  anatomy: true,
+  screenings: true,
+  hemodynamic: true,
+  biophysical: true,
+  interpretation: true,
+  conclusion: true,
+};
 
 const riskOptions: Option[] = ['bajo riesgo', 'alto riesgo'].map((value) => ({ value, label: value }));
 const normalOptions: Option[] = ['normal', 'anormal', 'no valorable'].map((value) => ({ value, label: value }));
@@ -70,6 +85,20 @@ const growthFields: FlatField[] = [
   { key: 'percentile', label: 'Percentilla', hiddenKey: 'uobapercentilla' },
 ];
 
+const wellbeingGrowthFields: FlatField[] = [
+  { key: 'dbp.value', label: 'DBP', hiddenKey: 'tamizajedbp', placeholder: 'cm' },
+  { key: 'dbp.sdg', label: 'DBP SDG', hiddenKey: 'tamizajedbp' },
+  { key: 'cc.value', label: 'CC', hiddenKey: 'tamizajecc', placeholder: 'cm' },
+  { key: 'cc.sdg', label: 'CC SDG', hiddenKey: 'tamizajecc' },
+  { key: 'ca.value', label: 'CA', hiddenKey: 'tamizajeca', placeholder: 'cm' },
+  { key: 'ca.sdg', label: 'CA SDG', hiddenKey: 'tamizajeca' },
+  { key: 'lf.value', label: 'LF', hiddenKey: 'tamizajelf', placeholder: 'cm' },
+  { key: 'lf.sdg', label: 'LF SDG', hiddenKey: 'tamizajelf' },
+  { key: 'average_fetometry', label: 'Fetometria promedio', hiddenKey: 'uobafetometria' },
+  { key: 'estimated_weight', label: 'Peso estimado', hiddenKey: 'uobapesoestimado', placeholder: 'Gr.' },
+  { key: 'percentile', label: 'Percentilla', hiddenKey: 'uobapercentilla' },
+];
+
 const basicFields: FlatField[] = [
   { key: 'presentation', label: 'Presentacion', hiddenKey: 'uobbpresentacion', options: [{ value: 'cefálico', label: 'Cefálico' }, { value: 'pélvico', label: 'Pélvico' }] },
   { key: 'situation', label: 'Situacion', hiddenKey: 'uobbsituacion', options: ['longitudinal', 'oblicuo', 'transverso'].map((value) => ({ value, label: value })) },
@@ -86,6 +115,11 @@ const basicFields: FlatField[] = [
   { key: 'uterus_and_adnexa', label: 'Utero y anexos', hiddenKey: 'uobbuteroyanex', options: normalOptions },
   { key: 'cervical_length', label: 'Longitud cervical', hiddenKey: 'uobblongcerv', placeholder: 'cm' },
   { key: 'internal_cervical_os', label: 'Orificio cervical interno', hiddenKey: 'uobborificiocervint', options: ['cerrado', 'abierto'].map((value) => ({ value, label: value })) },
+];
+
+const wellbeingBasicFields: FlatField[] = [
+  ...basicFields,
+  { key: 'umbilical_cord', label: 'Cordon umbilical', hiddenKey: 'uobbcordonumbilical', options: ['no circular', 'si circular', 'si asa'].map((value) => ({ value, label: value })) },
 ];
 
 const geneticScreeningGroups: Array<{ title: string; fields: FlatField[]; subgroupTitle?: string; subgroupFields?: FlatField[] }> = [
@@ -126,6 +160,42 @@ const structuralScreeningGroups: Array<{ title: string; fields: FlatField[]; sub
       { key: 'preeclampsia.uterine_left_ip', label: 'IP uterina izquierda', hiddenKey: 'tamnormaliputerinaizq' },
       { key: 'preeclampsia.average_ip', label: 'IP promedio', hiddenKey: 'tamnormalippromedio' },
       { key: 'preeclampsia.percentile', label: 'Percentilla', hiddenKey: 'tamnormalpercentilla' },
+    ],
+  },
+];
+
+const wellbeingScreeningGroups: Array<{ title: string; fields: FlatField[]; subgroupTitle?: string; subgroupFields?: FlatField[] }> = [
+  {
+    title: 'Tamizajes hemodinamico',
+    fields: [
+      { key: 'hemodynamic.uterine_right_ip', label: 'IP uterina derecha', hiddenKey: 'tamnormaliputerinader' },
+      { key: 'hemodynamic.uterine_left_ip', label: 'IP uterina izquierda', hiddenKey: 'tamnormaliputerinaizq' },
+      { key: 'hemodynamic.average_ip', label: 'IP promedio', hiddenKey: 'tamnormalippromedio' },
+      { key: 'hemodynamic.percentile', label: 'Percentila', hiddenKey: 'thippercentila' },
+      { key: 'hemodynamic.umbilical_artery', label: 'IP uterina umbilical', hiddenKey: 'tmhemoarteriaumbilical' },
+      { key: 'hemodynamic.diastole', label: 'Diastole', hiddenKey: 'tamhemodiastole', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
+      { key: 'hemodynamic.umbilical_percentile', label: 'Percentila', hiddenKey: 'thumbpercentila' },
+      { key: 'hemodynamic.middle_cerebral_artery', label: 'IP arteria cerebral media', hiddenKey: 'tmhemoarteriacerebralmed' },
+      { key: 'hemodynamic.middle_cerebral_percentile', label: 'Percentila', hiddenKey: 'thcerebralpercentila' },
+      { key: 'hemodynamic.psm', label: 'PSM ACM', hiddenKey: 'thpsmacm' },
+      { key: 'hemodynamic.mom', label: 'MoM', hiddenKey: 'thhemomom' },
+      { key: 'hemodynamic.cerebroplacental_index', label: 'Indice cerebro placentario', hiddenKey: 'tmindicecerebroplac' },
+      { key: 'hemodynamic.cerebroplacental_percentile', label: 'Percentila', hiddenKey: 'thhemoicppercentila' },
+      { key: 'hemodynamic.aortic_isthmus', label: 'Istomo aortico', hiddenKey: 'thistomoaortico', options: normalOptions },
+      { key: 'hemodynamic.ductus_venosus_ip', label: 'IP ductus venoso', hiddenKey: 'thipductusvenoso' },
+      { key: 'hemodynamic.ductus_venosus_percentile', label: 'Percentila', hiddenKey: 'thipdvpercentila' },
+      { key: 'hemodynamic.a_wave', label: 'Onda a', hiddenKey: 'thondaa', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
+    ],
+  },
+  {
+    title: 'Tamizajes perfil biofisico',
+    fields: [
+      { key: 'biophysical_profile.fetal_tone', label: 'Tono fetal', hiddenKey: 'tpbtonofetal', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
+      { key: 'biophysical_profile.body_movements', label: 'Movimientos corporales', hiddenKey: 'tpbmovcorp', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
+      { key: 'biophysical_profile.breathing_movements', label: 'Movimientos respiratorios', hiddenKey: 'tpbmovresp', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
+      { key: 'biophysical_profile.total', label: 'Total', hiddenKey: 'tpbtotal', options: Array.from({ length: 10 }, (_, index) => ({ value: String(index + 1), label: String(index + 1) })) },
+      { key: 'biophysical_profile.amniotic_fluid', label: 'Liquido amniotico', hiddenKey: 'tpbliquido', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
+      { key: 'biophysical_profile.non_stress_test', label: 'Prueba sin estres', hiddenKey: 'tpbpruebasinestres', options: ['presentes', 'ausentes', 'no valorable'].map((value) => ({ value, label: value })) },
     ],
   },
 ];
@@ -193,7 +263,6 @@ const anatomyGroups: AnatomyGroup[] = [
       { key: 'heart.size', label: 'Tamano', hiddenKey: 'tamdefestrcorazontam', options: normalOptions },
       { key: 'heart.axis', label: 'Eje', hiddenKey: 'tamdefestreje', options: normalOptions },
       { key: 'heart.situs', label: 'Situs', hiddenKey: 'tamdefestrsitus', options: normalOptions },
-      { key: 'heart.fetal_heart_rate', label: 'Frecuencia cardiaca fetal', hiddenKey: 'tdefrecardfetal', placeholder: 'LPM' },
       { key: 'heart.rhythm', label: 'Ritmo', hiddenKey: 'tdecorazonritmo', options: normalOptions },
       { key: 'heart.atrial_ventricular_chambers', label: 'Cavidades auriculares y ventriculares', hiddenKey: 'tdecorazoncavauven', options: normalOptions },
       { key: 'heart.valvular_apparatus', label: 'Aparatos valvulares', hiddenKey: 'tdecorazonaparatosvalv', options: normalOptions },
@@ -224,8 +293,8 @@ const anatomyGroups: AnatomyGroup[] = [
     title: 'Extremidades',
     icon: '/img/reports/extr.jpg',
     fields: [
-      { key: 'extremities.upper_right', label: 'Superior derecha', hiddenKey: 'tamdefestrextremsupder', options: normalOptions },
-      { key: 'extremities.upper_left', label: 'Superior izquierda', hiddenKey: 'tamdefestrextremsupiz', options: normalOptions },
+      { key: 'extremities.upper_right', label: 'Superior derecha y su mano', hiddenKey: 'tamdefestrextremsupder', options: normalOptions },
+      { key: 'extremities.upper_left', label: 'Superior izquierda y su mano', hiddenKey: 'tamdefestrextremsupiz', options: normalOptions },
       { key: 'extremities.lower_right', label: 'Inferior derecha', hiddenKey: 'tamdefestrextreminfder', options: normalOptions },
       { key: 'extremities.lower_left', label: 'Inferior izquierda', hiddenKey: 'tamdefestrextreminfiz', options: normalOptions },
       { key: 'extremities.genitalia', label: 'Genitales externos', hiddenKey: 'tamdefestrextrgenitales', options: [{ value: 'femeninos', label: 'Femeninos' }, { value: 'masculinos', label: 'Masculinos' }] },
@@ -260,43 +329,95 @@ const structuralConclusionRiskFields: FlatField[] = [
   { key: 'preeclampsia_risk', label: 'Preeclampsia', hiddenKey: 'uobcpreeclampsia', options: riskOptions },
 ];
 
+const wellbeingConclusionRiskFields: FlatField[] = [
+  { key: 'fetus_count_risk', label: 'Numero fetos', hiddenKey: 'uobcnumfetos', options: conclusionFetusCountOptions },
+  { key: 'growth_risk', label: 'Crecimiento', hiddenKey: 'uobccrecimiento', options: riskOptions },
+  { key: 'frequency_risk', label: 'Frecuencia cardiaca', hiddenKey: 'uobcfrecuencia', options: riskOptions },
+  { key: 'placenta_risk', label: 'Placenta', hiddenKey: 'uobcplacenta', options: riskOptions },
+  { key: 'amniotic_fluid_risk', label: 'Liquido amniotico', hiddenKey: 'uobcloquidoamn', options: riskOptions },
+  { key: 'uterus_and_adnexa_risk', label: 'Utero y anexos', hiddenKey: 'uobcuteroyanex', options: riskOptions },
+  { key: 'preterm_birth_risk', label: 'Parto prematuro', hiddenKey: 'uobcpartoprem', options: riskOptions },
+  { key: 'structural_risk', label: 'Estructural', hiddenKey: 'uobinterestruct', options: riskOptions },
+  { key: 'fetal_wellbeing_risk', label: 'Bienestar fetal', hiddenKey: 'uobinterbienestarfet', options: riskOptions },
+];
+
+const wellbeingHemodynamicRows: string[][] = [
+  ['hemodynamic.uterine_right_ip', 'hemodynamic.uterine_left_ip', 'hemodynamic.average_ip', 'hemodynamic.percentile'],
+  ['hemodynamic.umbilical_artery', 'hemodynamic.diastole', 'hemodynamic.umbilical_percentile'],
+  ['hemodynamic.middle_cerebral_artery', 'hemodynamic.middle_cerebral_percentile', 'hemodynamic.psm', 'hemodynamic.mom'],
+  ['hemodynamic.cerebroplacental_index', 'hemodynamic.cerebroplacental_percentile'],
+  ['hemodynamic.aortic_isthmus', 'hemodynamic.ductus_venosus_ip', 'hemodynamic.ductus_venosus_percentile', 'hemodynamic.a_wave'],
+];
+
 function getVariantConfig(variant: ReportVariant) {
+  if (variant === 'wellbeing') {
+    return {
+      title: 'Ultrasonido bienestar fetal',
+      reportLabel: 'bienestar fetal',
+      defaultRecommendedStudy: 'tipoest7',
+      growthFields: wellbeingGrowthFields,
+      basicFields: wellbeingBasicFields,
+      screeningGroups: wellbeingScreeningGroups,
+      conclusionFields: wellbeingConclusionRiskFields,
+      interpretationTitle: '6. Interpretacion de ultrasonidos',
+      conclusionTitle: '7. Conclusion',
+      screeningSectionTitle: '4. Tamizajes hemodinamico - Feto 1',
+      screeningIcon: '/img/reports/tamizajepreeclampsia.png',
+      downloadFileName: 'ReporteUltrasonidoBienestarFetal.docx',
+      successSave: 'Reporte de bienestar fetal guardado correctamente.',
+      errorLoad: 'No se pudo cargar el reporte de bienestar fetal.',
+      errorSave: 'No se pudo guardar el reporte de bienestar fetal.',
+      errorDownload: 'No se pudo descargar el reporte de bienestar fetal.',
+      successDownload: 'Reporte descargado correctamente.',
+      sectionNote: 'La interpretacion de ultrasonidos reutiliza el componente compartido y se precarga desde estudios previos compatibles.',
+      supportsDownload: true,
+    };
+  }
+
   if (variant === 'structural') {
     return {
       title: 'Ultrasonido estructural',
-      builderDescription: 'Builder V2 del estudio usando patient_reports.report_payload.',
       reportLabel: 'estructural',
       defaultRecommendedStudy: 'tipoest5',
+      growthFields,
+      basicFields,
       screeningGroups: structuralScreeningGroups,
       conclusionFields: structuralConclusionRiskFields,
-      interpretationTitle: '6. Interpretacion de ultrasonidos',
-      conclusionTitle: '7. Conclusion',
+      interpretationTitle: '5. Interpretacion de ultrasonidos',
+      conclusionTitle: '6. Conclusion',
+      screeningSectionTitle: '4. Tamizaje preeclampsia - Feto 1',
+      screeningIcon: '/img/reports/tamizajepreeclampsia.png',
       downloadFileName: 'ReporteUltrasonidoEstructural.docx',
       successSave: 'Reporte estructural guardado correctamente.',
       errorLoad: 'No se pudo cargar el reporte estructural.',
       errorSave: 'No se pudo guardar el reporte estructural.',
       errorDownload: 'No se pudo descargar el reporte estructural.',
       successDownload: 'Reporte descargado correctamente.',
-      sectionNote: 'Esta primera version de tipoest4 ya queda sobre la estructura V2 y reutiliza la interpretacion compartida.',
+      sectionNote: 'La interpretacion de ultrasonidos reutiliza el componente compartido y se precarga desde estudios previos compatibles.',
+      supportsDownload: true,
     };
   }
 
   return {
     title: 'Ultrasonido genetico',
-    builderDescription: 'Builder V2 del estudio usando patient_reports.report_payload.',
     reportLabel: 'genetico',
     defaultRecommendedStudy: 'tipoest4',
+    growthFields,
+    basicFields,
     screeningGroups: geneticScreeningGroups,
     conclusionFields: conclusionRiskFields,
     interpretationTitle: '8. Interpretacion de ultrasonidos',
     conclusionTitle: '9. Conclusion',
+    screeningSectionTitle: '4. Tamizaje preeclampsia - Feto 1',
+    screeningIcon: '/img/reports/tamizajepreeclampsia.png',
     downloadFileName: 'ReporteUltrasonidoGenetico.docx',
     successSave: 'Reporte de genetico guardado correctamente.',
     errorLoad: 'No se pudo cargar el reporte de genetico.',
     errorSave: 'No se pudo guardar el reporte de genetico.',
     errorDownload: 'No se pudo descargar el reporte de genetico.',
     successDownload: 'Reporte descargado correctamente.',
-    sectionNote: 'Esta primera version de tipoest3 ya queda sobre la estructura V2 y reutiliza la interpretacion compartida.',
+    sectionNote: 'La interpretacion de ultrasonidos reutiliza el componente compartido y se precarga desde estudios previos compatibles.',
+    supportsDownload: true,
   };
 }
 
@@ -345,6 +466,16 @@ function hasDisplayValue(value?: string | number | null) {
 function getOptionLabel(options: Option[], value?: string | number | null) {
   const match = options.find((option) => option.value === value);
   return match?.label ?? (value ?? '');
+}
+
+function getSelectFieldValue(options: Option[], value: unknown) {
+  if (typeof value === 'string') {
+    return value.trim() !== '' ? value : String(options[0]?.value ?? '');
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  return String(options[0]?.value ?? '');
 }
 
 function getDeepValue(source: unknown, path: string) {
@@ -407,19 +538,49 @@ function createDefaultFetusPayload(fetusNumber: number, variant: ReportVariant =
       uterus_and_adnexa: String(normalOptions[0].value),
       cervical_length: '',
       internal_cervical_os: 'cerrado',
+      ...(variant === 'wellbeing' ? { umbilical_cord: 'no circular' } : {}),
     },
     anatomical_screening: {
-      central_nervous_system: { skull: 'normal', midline: 'normal', choroid_plexuses: 'normal' },
-      face: { orbits: 'normal', profile: 'normal', nose_and_lips: 'normal' },
+      central_nervous_system: {
+        skull: 'normal',
+        midline: 'normal',
+        thalami: 'normal',
+        cavum_septum_pellucidum: 'normal',
+        lateral_ventricle: 'normal',
+        lateral_ventricle_mm: '',
+        choroid_plexuses: 'normal',
+        cerebral_peduncles: 'normal',
+        cerebral_hemispheres: 'normal',
+        cerebellum: 'normal',
+        cisterna_magna: 'normal',
+        cisterna_magna_mm: '',
+      },
+      face: {
+        orbits_and_lenses: 'normal',
+        nose_and_upper_lip: 'normal',
+        profile: 'normal',
+      },
       spine_and_neck: { spine: 'normal', neck: 'normal' },
       thorax: {
-        situs: 'normal',
-        axis: 'normal',
         thoracic_wall: 'normal',
-        diaphragm: 'normal',
         lung_area: 'normal',
+        diaphragm: 'normal',
       },
-      heart: { size: 'normal', position: 'normal', rate: '', rhythm: 'normal' },
+      heart: {
+        size: 'normal',
+        axis: 'normal',
+        situs: 'normal',
+        rhythm: 'normal',
+        atrial_ventricular_chambers: 'normal',
+        valvular_apparatus: 'normal',
+        interventricular_septum: 'normal',
+        interatrial_septum_foramen_ovale: 'normal',
+        pulmonary_veins: 'normal',
+        aortic_outflow: 'normal',
+        pulmonary_outflow: 'normal',
+        three_vessel_view: 'normal',
+        three_vessel_trachea_view: 'normal',
+      },
       abdomen: {
         abdominal_wall: 'normal',
         stomach: 'normal',
@@ -448,6 +609,36 @@ function createDefaultFetusPayload(fetusNumber: number, variant: ReportVariant =
               percentile: '',
             },
           }
+        : variant === 'wellbeing'
+          ? {
+              hemodynamic: {
+                uterine_right_ip: '',
+                uterine_left_ip: '',
+                average_ip: '',
+                percentile: '',
+                umbilical_artery: '',
+                diastole: '',
+                umbilical_percentile: '',
+                middle_cerebral_artery: '',
+                middle_cerebral_percentile: '',
+                psm: '',
+                mom: '',
+                cerebroplacental_index: '',
+                cerebroplacental_percentile: '',
+                aortic_isthmus: '',
+                ductus_venosus_ip: '',
+                ductus_venosus_percentile: '',
+                a_wave: '',
+              },
+              biophysical_profile: {
+                fetal_tone: '',
+                body_movements: '',
+                breathing_movements: '',
+                total: '',
+                amniotic_fluid: '',
+                non_stress_test: '',
+              },
+            }
         : {
             preeclampsia: {
               uterine_right_ip: '',
@@ -531,6 +722,18 @@ function buildNormalizedPayload(payload?: GeneticReportPayload | null, variant: 
               },
             }
           : {}),
+        ...(variant === 'wellbeing'
+          ? {
+              hemodynamic: {
+                ...(defaultFetus.screenings as any).hemodynamic,
+                ...(payloadFetus?.screenings as any)?.hemodynamic,
+              },
+              biophysical_profile: {
+                ...(defaultFetus.screenings as any).biophysical_profile,
+                ...(payloadFetus?.screenings as any)?.biophysical_profile,
+              },
+            }
+          : {}),
       },
     };
   });
@@ -566,6 +769,12 @@ function buildNormalizedPayload(payload?: GeneticReportPayload | null, variant: 
             chromosomopathies_risk: payload?.conclusion?.chromosomopathies_risk || String(riskOptions[0].value),
           }
         : {}),
+      ...(variant === 'wellbeing'
+        ? {
+            structural_risk: payload?.conclusion?.structural_risk || String(riskOptions[0].value),
+            fetal_wellbeing_risk: payload?.conclusion?.fetal_wellbeing_risk || String(riskOptions[0].value),
+          }
+        : {}),
       comments: payload?.conclusion?.comments ?? '',
       recommended_next_study: payload?.conclusion?.recommended_next_study || getVariantConfig(variant).defaultRecommendedStudy,
       recommended_start_date: payload?.conclusion?.recommended_start_date ?? '',
@@ -582,7 +791,13 @@ function SectionTitle({ title, description, icon }: { title: string; description
           component="img"
           src={icon}
           alt={title}
-          sx={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0, mt: 0.2 }}
+          sx={{
+            width: 44,
+            height: 44,
+            objectFit: 'contain',
+            flexShrink: 0,
+            mt: 0.2,
+          }}
         />
       ) : null}
       <Box>
@@ -607,6 +822,100 @@ function SectionCard({ children, background }: { children: ReactNode; background
   );
 }
 
+const whiteFieldSx = {
+  '& .MuiInputBase-root': {
+    backgroundColor: '#fff',
+  },
+  '& .MuiOutlinedInput-root': {
+    backgroundColor: '#fff',
+  },
+};
+
+function EditableSectionCard({
+  title,
+  icon,
+  description,
+  collapsed,
+  onToggle,
+  background,
+  children,
+  wrapInSectionCard = true,
+}: {
+  title: string;
+  icon?: string;
+  description?: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  background: string;
+  children: ReactNode;
+  wrapInSectionCard?: boolean;
+}) {
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: 'rgba(35, 165, 193, 0.18)',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        onClick={onToggle}
+        sx={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: 1.25,
+          px: 2.5,
+          py: 1.5,
+          borderBottom: collapsed ? 'none' : '1px solid',
+          borderColor: 'rgba(35, 165, 193, 0.12)',
+          background: 'linear-gradient(180deg, rgba(35,165,193,0.06) 0%, rgba(35,165,193,0.02) 100%)',
+          cursor: 'pointer',
+        }}
+      >
+        {icon ? (
+          <Box
+            component="img"
+            src={icon}
+            alt={title}
+            sx={{
+              width: 44,
+              height: 44,
+              objectFit: 'contain',
+              flexShrink: 0,
+              mt: 0.2,
+            }}
+          />
+        ) : null}
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="h6" fontWeight={700} color="#0d7f1f">
+            {title}
+          </Typography>
+          {description ? (
+            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+              {description}
+            </Typography>
+          ) : null}
+        </Box>
+        <Box sx={{ ml: 'auto', color: '#1297a8', display: 'flex', alignItems: 'center' }}>
+          {collapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
+        </Box>
+      </Box>
+      {!collapsed ? (
+        <CardContent
+          sx={{
+            p: { xs: 2, md: 3 },
+            background,
+          }}
+        >
+          {wrapInSectionCard ? <SectionCard background={background}>{children}</SectionCard> : children}
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
 function DisplaySectionCard({ title, children, icon }: { title: string; children: ReactNode; icon?: string }) {
   return (
     <Card elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: 'rgba(35, 165, 193, 0.18)' }}>
@@ -621,7 +930,17 @@ function DisplaySectionCard({ title, children, icon }: { title: string; children
       >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: icon ? 1.25 : 0 }}>
           {icon ? (
-            <Box component="img" src={icon} alt={title} sx={{ width: 44, height: 44, objectFit: 'contain', flexShrink: 0 }} />
+            <Box
+              component="img"
+              src={icon}
+              alt={title}
+              sx={{
+                width: 70,
+                height: 70,
+                objectFit: 'contain',
+                flexShrink: 0,
+              }}
+            />
           ) : null}
           <Typography variant="h6" fontWeight={700} color="#0d7f1f">
             {title}
@@ -658,9 +977,13 @@ function GroupTitle({ title, icon }: { title: string; icon: string }) {
 function getScreeningGroupIcon(title: string) {
   switch (title) {
     case 'Tamizaje preeclampsia':
-      return '/img/reports/preecl.png';
+      return '/img/reports/tamizajepreeclampsia.png';
     case 'Tamizaje cromosomopatias':
       return '/img/reports/1432426.png';
+    case 'Tamizajes hemodinamico':
+      return '/img/reports/tamizajepreeclampsia.png';
+    case 'Tamizajes perfil biofisico':
+      return '/img/reports/tamizajeperfilbiofisico.png';
     default:
       return undefined;
   }
@@ -702,6 +1025,7 @@ const BufferedTextInput = memo(function BufferedTextInput({
   multiline,
   minRows,
   resetKey,
+  sx,
 }: {
   label: string;
   value: string;
@@ -710,6 +1034,7 @@ const BufferedTextInput = memo(function BufferedTextInput({
   multiline?: boolean;
   minRows?: number;
   resetKey?: number;
+  sx?: SxProps<Theme>;
 }) {
   const [draft, setDraft] = useState(value);
 
@@ -730,6 +1055,7 @@ const BufferedTextInput = memo(function BufferedTextInput({
       fullWidth
       multiline={multiline}
       minRows={minRows}
+      sx={sx}
     />
   );
 });
@@ -737,6 +1063,8 @@ const BufferedTextInput = memo(function BufferedTextInput({
 const EditableFieldsSection = memo(function EditableFieldsSection({
   title,
   description,
+  collapsed,
+  onToggle,
   background,
   fields,
   source,
@@ -748,6 +1076,8 @@ const EditableFieldsSection = memo(function EditableFieldsSection({
 }: {
   title: string;
   description?: string;
+  collapsed: boolean;
+  onToggle: () => void;
   background: string;
   fields: FlatField[];
   source: unknown;
@@ -761,10 +1091,7 @@ const EditableFieldsSection = memo(function EditableFieldsSection({
   if (visibleFields.length === 0) return null;
 
   return (
-    <>
-      <Divider />
-      <SectionTitle title={title} description={description} icon={icon} />
-      <SectionCard background={background}>
+    <EditableSectionCard title={title} description={description} icon={icon} collapsed={collapsed} onToggle={onToggle} background={background} wrapInSectionCard={false}>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 1.5 }}>
           {visibleFields.map((field) => {
             const value = getDeepValue(source, field.key);
@@ -774,9 +1101,10 @@ const EditableFieldsSection = memo(function EditableFieldsSection({
                   key={field.key}
                   select
                   label={field.label}
-                  value={String(value ?? field.options[0]?.value ?? '')}
+                  value={getSelectFieldValue(field.options, value)}
                   onChange={(event) => onCommit(field.key, event.target.value)}
                   fullWidth
+                  sx={whiteFieldSx}
                 >
                   {field.options.map((option) => (
                     <MenuItem key={`${field.key}-${option.value}`} value={option.value}>
@@ -795,12 +1123,12 @@ const EditableFieldsSection = memo(function EditableFieldsSection({
                 onCommit={(nextValue) => onTextDraft(field.key, nextValue)}
                 placeholder={field.placeholder}
                 resetKey={resetKey}
+                sx={whiteFieldSx}
               />
             );
           })}
         </Box>
-      </SectionCard>
-    </>
+    </EditableSectionCard>
   );
 });
 
@@ -810,16 +1138,18 @@ const DisplayFieldsSection = memo(function DisplayFieldsSection({
   source,
   hiddenFields,
   icon,
+  showEmpty = false,
 }: {
   title: string;
   fields: FlatField[];
   source: unknown;
   hiddenFields: Set<string>;
   icon?: string;
+  showEmpty?: boolean;
 }) {
   const visibleFields = fields.filter((field) => isFieldVisible(hiddenFields, field.hiddenKey));
   const hasVisibleValues = visibleFields.some((field) => hasDisplayValue(getDeepValue(source, field.key) as string | null));
-  if (!hasVisibleValues) return null;
+  if (!hasVisibleValues && !showEmpty) return null;
 
   return (
     <DisplaySectionCard title={title} icon={icon}>
@@ -836,12 +1166,18 @@ const DisplayFieldsSection = memo(function DisplayFieldsSection({
 
 const AnatomyEditingSection = memo(function AnatomyEditingSection({
   title,
+  icon,
+  collapsed,
+  onToggle,
   background,
   source,
   hiddenFields,
   onCommit,
 }: {
   title: string;
+  icon?: string;
+  collapsed: boolean;
+  onToggle: () => void;
   background: string;
   source: unknown;
   hiddenFields: Set<string>;
@@ -857,10 +1193,7 @@ const AnatomyEditingSection = memo(function AnatomyEditingSection({
   if (visibleGroups.length === 0) return null;
 
   return (
-    <>
-      <Divider />
-      <SectionTitle title={title} />
-      <SectionCard background={background}>
+    <EditableSectionCard title={title} icon={icon} collapsed={collapsed} onToggle={onToggle} background={background} wrapInSectionCard={false}>
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {visibleGroups.map((group) => (
             <Box key={group.title}>
@@ -892,9 +1225,10 @@ const AnatomyEditingSection = memo(function AnatomyEditingSection({
                         <TextField
                           select
                           label={field.label}
-                          value={String(getDeepValue(source, field.key) ?? field.options?.[0]?.value ?? '')}
+                          value={getSelectFieldValue(field.options, getDeepValue(source, field.key))}
                           onChange={(event) => onCommit(field.key, event.target.value)}
                           fullWidth
+                          sx={whiteFieldSx}
                         >
                           {field.options.map((option) => (
                             <MenuItem key={`${field.key}-${option.value}`} value={option.value}>
@@ -908,6 +1242,7 @@ const AnatomyEditingSection = memo(function AnatomyEditingSection({
                           value={String(getDeepValue(source, field.key) ?? '')}
                           onCommit={(value) => onCommit(field.key, value)}
                           placeholder={field.placeholder}
+                          sx={whiteFieldSx}
                         />
                       )}
                     </Box>
@@ -932,9 +1267,10 @@ const AnatomyEditingSection = memo(function AnatomyEditingSection({
                           key={field.key}
                           select
                           label={field.label}
-                          value={String(getDeepValue(source, field.key) ?? field.options?.[0]?.value ?? '')}
+                          value={getSelectFieldValue(field.options, getDeepValue(source, field.key))}
                           onChange={(event) => onCommit(field.key, event.target.value)}
                           fullWidth
+                          sx={whiteFieldSx}
                         >
                           {field.options.map((option) => (
                             <MenuItem key={`${field.key}-${option.value}`} value={option.value}>
@@ -949,6 +1285,7 @@ const AnatomyEditingSection = memo(function AnatomyEditingSection({
                           value={String(getDeepValue(source, field.key) ?? '')}
                           onCommit={(value) => onCommit(field.key, value)}
                           placeholder={field.placeholder}
+                          sx={whiteFieldSx}
                         />
                       )
                     ))}
@@ -958,19 +1295,22 @@ const AnatomyEditingSection = memo(function AnatomyEditingSection({
             </Box>
           ))}
         </Box>
-      </SectionCard>
-    </>
+    </EditableSectionCard>
   );
 });
 
 const AnatomyDisplaySection = memo(function AnatomyDisplaySection({
   title,
+  icon,
   source,
   hiddenFields,
+  showEmpty = false,
 }: {
   title: string;
+  icon?: string;
   source: unknown;
   hiddenFields: Set<string>;
+  showEmpty?: boolean;
 }) {
   const visibleGroups = anatomyGroups
     .map((group) => ({
@@ -981,10 +1321,10 @@ const AnatomyDisplaySection = memo(function AnatomyDisplaySection({
     }))
     .filter((group) => group.fields.length > 0);
 
-  if (visibleGroups.length === 0) return null;
+  if (visibleGroups.length === 0 && !showEmpty) return null;
 
   return (
-    <DisplaySectionCard title={title}>
+    <DisplaySectionCard title={title} icon={icon}>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
         {visibleGroups.map((group) => (
           <Box key={group.title}>
@@ -1044,6 +1384,10 @@ const AnatomyDisplaySection = memo(function AnatomyDisplaySection({
 });
 
 const ScreeningEditingSection = memo(function ScreeningEditingSection({
+  title,
+  icon,
+  collapsed,
+  onToggle,
   background,
   source,
   groups,
@@ -1053,7 +1397,12 @@ const ScreeningEditingSection = memo(function ScreeningEditingSection({
   resetKey,
   startNumber,
   selectedFetusLabel,
+  wrapInSectionCard = true,
 }: {
+  title: string;
+  icon?: string;
+  collapsed: boolean;
+  onToggle: () => void;
   background: string;
   source: unknown;
   groups: Array<{ title: string; fields: FlatField[]; subgroupTitle?: string; subgroupFields?: FlatField[] }>;
@@ -1063,6 +1412,7 @@ const ScreeningEditingSection = memo(function ScreeningEditingSection({
   resetKey: number;
   startNumber: number;
   selectedFetusLabel: string;
+  wrapInSectionCard?: boolean;
 }) {
   const visibleGroups = groups
     .map((group) => ({
@@ -1075,15 +1425,16 @@ const ScreeningEditingSection = memo(function ScreeningEditingSection({
   if (visibleGroups.length === 0) return null;
 
   return (
-    <>
-      {visibleGroups.map((group, index) => (
-        <Fragment key={group.title}>
-          <Divider />
-          <SectionTitle
-            title={`${startNumber + index}. ${group.title} - ${selectedFetusLabel}`}
-            icon={getScreeningGroupIcon(group.title)}
-          />
-          <SectionCard background={background}>
+    <EditableSectionCard title={title} icon={icon} collapsed={collapsed} onToggle={onToggle} background={background} wrapInSectionCard={wrapInSectionCard}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+        {visibleGroups.map((group, index) => (
+          <Fragment key={group.title}>
+            {visibleGroups.length > 1 ? (
+              <SectionTitle
+                title={`${startNumber + index}. ${group.title} - ${selectedFetusLabel}`}
+                icon={getScreeningGroupIcon(group.title)}
+              />
+            ) : null}
             <Box
               sx={{
                 display: 'grid',
@@ -1109,9 +1460,10 @@ const ScreeningEditingSection = memo(function ScreeningEditingSection({
                     <TextField
                       select
                       label={field.label}
-                      value={String(getDeepValue(source, field.key) ?? field.options?.[0]?.value ?? '')}
+                      value={getSelectFieldValue(field.options, getDeepValue(source, field.key))}
                       onChange={(event) => onCommit(field.key, event.target.value)}
                       fullWidth
+                      sx={whiteFieldSx}
                     >
                       {field.options.map((option) => (
                         <MenuItem key={`${field.key}-${option.value}`} value={option.value}>
@@ -1126,13 +1478,14 @@ const ScreeningEditingSection = memo(function ScreeningEditingSection({
                       onCommit={(value) => onTextDraft(field.key, value)}
                       placeholder={field.placeholder}
                       resetKey={resetKey}
+                      sx={whiteFieldSx}
                     />
                   )}
                 </Box>
               ))}
             </Box>
             {group.subgroupTitle && (group.subgroupFields?.length ?? 0) > 0 ? (
-              <Box sx={{ mt: 2.5 }}>
+              <Box sx={{ mt: 0.5 }}>
                 <Typography variant="subtitle1" sx={{ color: 'text.secondary', mb: 1.5 }}>
                   {group.subgroupTitle}
                 </Typography>
@@ -1148,22 +1501,119 @@ const ScreeningEditingSection = memo(function ScreeningEditingSection({
                 >
                   {group.subgroupFields?.map((field) => (
                     <Box key={field.key}>
-                      <BufferedTextInput
-                        label={field.label}
-                        value={String(getDeepValue(source, field.key) ?? '')}
-                        onCommit={(value) => onTextDraft(field.key, value)}
-                        placeholder={field.placeholder}
-                        resetKey={resetKey}
-                      />
+                        <BufferedTextInput
+                          label={field.label}
+                          value={String(getDeepValue(source, field.key) ?? '')}
+                          onCommit={(value) => onTextDraft(field.key, value)}
+                          placeholder={field.placeholder}
+                          resetKey={resetKey}
+                          sx={whiteFieldSx}
+                        />
                     </Box>
                   ))}
                 </Box>
               </Box>
             ) : null}
-          </SectionCard>
-        </Fragment>
-      ))}
-    </>
+          </Fragment>
+        ))}
+      </Box>
+    </EditableSectionCard>
+  );
+});
+
+const WellbeingHemodynamicEditingSection = memo(function WellbeingHemodynamicEditingSection({
+  title,
+  icon,
+  collapsed,
+  onToggle,
+  background,
+  source,
+  hiddenFields,
+  onCommit,
+  onTextDraft,
+  resetKey,
+}: {
+  title: string;
+  icon?: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  background: string;
+  source: unknown;
+  hiddenFields: Set<string>;
+  onCommit: (path: string, value: string) => void;
+  onTextDraft: (path: string, value: string) => void;
+  resetKey: number;
+}) {
+  const hemodynamicGroup = wellbeingScreeningGroups[0];
+  const visibleFields = hemodynamicGroup.fields.filter((field) => isFieldVisible(hiddenFields, field.hiddenKey));
+  if (visibleFields.length === 0) return null;
+
+  const fieldMap = new Map(visibleFields.map((field) => [field.key, field]));
+  const visibleRows = wellbeingHemodynamicRows
+    .map((row) => row.map((key) => fieldMap.get(key)).filter((field): field is FlatField => Boolean(field)))
+    .filter((row) => row.length > 0);
+
+  return (
+    <EditableSectionCard title={title} icon={icon} collapsed={collapsed} onToggle={onToggle} background={background} wrapInSectionCard={false}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>
+          Tamizaje hemodinamico
+        </Typography>
+        {visibleRows.map((row, rowIndex) => (
+          <Fragment key={`hemodynamic-row-${rowIndex}`}>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1.5,
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                '@media (min-width:1000px)': {
+                  gridTemplateColumns: `repeat(${Math.max(row.length, 1)}, minmax(0, 1fr))`,
+                },
+              }}
+            >
+              {row.map((field) => (
+                <Box key={field.key}>
+                  {field.options ? (
+                    <TextField
+                      select
+                      label={field.label}
+                      value={getSelectFieldValue(field.options, getDeepValue(source, field.key))}
+                      onChange={(event) => onCommit(field.key, event.target.value)}
+                      fullWidth
+                      sx={whiteFieldSx}
+                    >
+                      {field.options.map((option) => (
+                        <MenuItem key={`${field.key}-${option.value}`} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  ) : (
+                    <BufferedTextInput
+                      label={field.label}
+                      value={String(getDeepValue(source, field.key) ?? '')}
+                      onCommit={(value) => onTextDraft(field.key, value)}
+                      placeholder={field.placeholder}
+                      resetKey={resetKey}
+                      sx={whiteFieldSx}
+                    />
+                  )}
+                </Box>
+              ))}
+            </Box>
+            {rowIndex < visibleRows.length - 1 ? (
+              <Box
+                aria-hidden
+                sx={{
+                  borderTop: '2px dotted #06b36b',
+                  width: '100%',
+                }}
+              />
+            ) : null}
+          </Fragment>
+        ))}
+      </Box>
+    </EditableSectionCard>
   );
 });
 
@@ -1173,24 +1623,35 @@ const ScreeningDisplaySection = memo(function ScreeningDisplaySection({
   hiddenFields,
   startNumber,
   selectedFetusLabel,
+  singleGroupIcon,
+  showEmptySingleGroup = false,
 }: {
   source: unknown;
   groups: Array<{ title: string; fields: FlatField[]; subgroupTitle?: string; subgroupFields?: FlatField[] }>;
   hiddenFields: Set<string>;
   startNumber: number;
   selectedFetusLabel: string;
+  singleGroupIcon?: string;
+  showEmptySingleGroup?: boolean;
 }) {
-  const visibleGroups = groups
+  const filteredGroups = groups
     .map((group) => ({
       ...group,
-      fields: group.fields.filter(
-        (field) => isFieldVisible(hiddenFields, field.hiddenKey) && hasDisplayValue(getDeepValue(source, field.key) as string | null)
-      ),
-      subgroupFields: (group.subgroupFields ?? []).filter(
-        (field) => isFieldVisible(hiddenFields, field.hiddenKey) && hasDisplayValue(getDeepValue(source, field.key) as string | null)
-      ),
+      allFields: group.fields.filter((field) => isFieldVisible(hiddenFields, field.hiddenKey)),
+      allSubgroupFields: (group.subgroupFields ?? []).filter((field) => isFieldVisible(hiddenFields, field.hiddenKey)),
     }))
-    .filter((group) => group.fields.length > 0 || (group.subgroupFields?.length ?? 0) > 0);
+    .map((group) => ({
+      ...group,
+      fields: group.allFields.filter((field) => hasDisplayValue(getDeepValue(source, field.key) as string | null)),
+      subgroupFields: group.allSubgroupFields.filter((field) => hasDisplayValue(getDeepValue(source, field.key) as string | null)),
+    }));
+
+  const visibleGroups = filteredGroups.filter((group) => {
+    if (group.fields.length > 0 || (group.subgroupFields?.length ?? 0) > 0) {
+      return true;
+    }
+    return showEmptySingleGroup && filteredGroups.length === 1 && (group.allFields.length > 0 || (group.allSubgroupFields?.length ?? 0) > 0);
+  });
 
   if (visibleGroups.length === 0) return null;
 
@@ -1200,7 +1661,7 @@ const ScreeningDisplaySection = memo(function ScreeningDisplaySection({
         <DisplaySectionCard
           key={group.title}
           title={`${startNumber + index}. ${group.title} - ${selectedFetusLabel}`}
-          icon={getScreeningGroupIcon(group.title)}
+          icon={visibleGroups.length === 1 && singleGroupIcon ? singleGroupIcon : getScreeningGroupIcon(group.title)}
         >
           <Grid container spacing={3}>
             {group.fields.map((field) => (
@@ -1237,34 +1698,41 @@ const ScreeningDisplaySection = memo(function ScreeningDisplaySection({
 const GrowthEditingSection = memo(function GrowthEditingSection({
   title,
   description,
+  collapsed,
+  onToggle,
   background,
   source,
   hiddenFields,
   onTextDraft,
   resetKey,
   icon,
+  fields,
 }: {
   title: string;
   description?: string;
+  collapsed: boolean;
+  onToggle: () => void;
   background: string;
   source: unknown;
   hiddenFields: Set<string>;
   onTextDraft: (path: string, value: string) => void;
   resetKey: number;
   icon?: string;
+  fields: FlatField[];
 }) {
-  const measurementPairs = [
-    { base: 'dbp', label: 'DBP', hiddenKey: 'tamizajedbp', placeholder: 'cm' },
-    { base: 'cc', label: 'CC', hiddenKey: 'tamizajecc', placeholder: 'cm' },
-    { base: 'ca', label: 'CA', hiddenKey: 'tamizajeca', placeholder: 'cm' },
-    { base: 'lf', label: 'LF', hiddenKey: 'tamizajelf', placeholder: 'cm' },
-    { base: 'lt', label: 'LT', hiddenKey: 'tamizajelt', placeholder: 'cm' },
-    { base: 'lh', label: 'LH', hiddenKey: 'tamizajelh', placeholder: 'cm' },
-    { base: 'lc', label: 'LC', hiddenKey: 'tamizajelc', placeholder: 'cm' },
-    { base: 'cerebellum', label: 'Cerebelo', hiddenKey: 'tamizajecerebelo', placeholder: 'cm' },
-  ].filter((field) => isFieldVisible(hiddenFields, field.hiddenKey));
+  const measurementPairs = fields
+    .filter((field) => field.key.endsWith('.value') && isFieldVisible(hiddenFields, field.hiddenKey))
+    .map((field) => {
+      const base = field.key.replace(/\.value$/, '');
+      return {
+        base,
+        label: field.label,
+        hiddenKey: field.hiddenKey,
+        placeholder: field.placeholder,
+      };
+    });
 
-  const extraFields = growthFields.filter(
+  const extraFields = fields.filter(
     (field) => !field.key.includes('.') && isFieldVisible(hiddenFields, field.hiddenKey)
   );
 
@@ -1273,10 +1741,7 @@ const GrowthEditingSection = memo(function GrowthEditingSection({
   }
 
   return (
-    <>
-      <Divider />
-      <SectionTitle title={title} description={description} icon={icon} />
-      <SectionCard background={background}>
+    <EditableSectionCard title={title} description={description} icon={icon} collapsed={collapsed} onToggle={onToggle} background={background} wrapInSectionCard={false}>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 1.5 }}>
           {measurementPairs.map((field, index) => (
             <Box
@@ -1286,6 +1751,13 @@ const GrowthEditingSection = memo(function GrowthEditingSection({
                 gridTemplateColumns: '1fr 1fr auto',
                 gap: 1.25,
                 alignItems: 'stretch',
+                gridColumn:
+                  field.base === 'cerebellum'
+                    ? {
+                        xs: '1 / -1',
+                        md: 'span 2',
+                      }
+                    : undefined,
               }}
             >
               <BufferedTextInput
@@ -1294,12 +1766,14 @@ const GrowthEditingSection = memo(function GrowthEditingSection({
                 onCommit={(value) => onTextDraft(`${field.base}.value`, value)}
                 placeholder={field.placeholder}
                 resetKey={resetKey}
+                sx={whiteFieldSx}
               />
               <BufferedTextInput
                 label={`${field.label} SDG`}
                 value={String(getDeepValue(source, `${field.base}.sdg`) ?? '')}
                 onCommit={(value) => onTextDraft(`${field.base}.sdg`, value)}
                 resetKey={resetKey}
+                sx={whiteFieldSx}
               />
               {index < measurementPairs.length - 1 ? (
                 <Box
@@ -1316,20 +1790,86 @@ const GrowthEditingSection = memo(function GrowthEditingSection({
               )}
             </Box>
           ))}
-
-          {extraFields.map((field) => (
-            <BufferedTextInput
-              key={field.key}
-              label={field.label}
-              value={String(getDeepValue(source, field.key) ?? '')}
-              onCommit={(value) => onTextDraft(field.key, value)}
-              placeholder={field.placeholder}
-              resetKey={resetKey}
-            />
-          ))}
         </Box>
-      </SectionCard>
-    </>
+        {extraFields.length > 0 ? (
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: 1.5,
+              mt: 1.5,
+            }}
+          >
+            {extraFields.map((field) => (
+              <BufferedTextInput
+                key={field.key}
+                label={field.label}
+                value={String(getDeepValue(source, field.key) ?? '')}
+                onCommit={(value) => onTextDraft(field.key, value)}
+                placeholder={field.placeholder}
+                resetKey={resetKey}
+                sx={whiteFieldSx}
+              />
+            ))}
+          </Box>
+        ) : null}
+    </EditableSectionCard>
+  );
+});
+
+const WellbeingHemodynamicDisplaySection = memo(function WellbeingHemodynamicDisplaySection({
+  title,
+  icon,
+  source,
+  hiddenFields,
+}: {
+  title: string;
+  icon?: string;
+  source: unknown;
+  hiddenFields: Set<string>;
+}) {
+  const hemodynamicGroup = wellbeingScreeningGroups[0];
+  const visibleFields = hemodynamicGroup.fields.filter((field) => isFieldVisible(hiddenFields, field.hiddenKey));
+  const fieldMap = new Map(visibleFields.map((field) => [field.key, field]));
+  const visibleRows = wellbeingHemodynamicRows
+    .map((row) =>
+      row
+        .map((key) => fieldMap.get(key))
+        .filter((field): field is FlatField => Boolean(field))
+        .filter((field) => hasDisplayValue(getDeepValue(source, field.key) as string | null))
+    )
+    .filter((row) => row.length > 0);
+
+  if (visibleRows.length === 0) return null;
+
+  return (
+    <DisplaySectionCard title={title} icon={icon}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <Typography variant="subtitle1" sx={{ color: 'text.secondary' }}>
+          Tamizaje hemodinamico
+        </Typography>
+        {visibleRows.map((row, rowIndex) => (
+          <Fragment key={`hemodynamic-display-row-${rowIndex}`}>
+            <Grid container spacing={3}>
+              {row.map((field) => {
+                const rawValue = getDeepValue(source, field.key) as string | number | null | undefined;
+                const value = field.options ? getOptionLabel(field.options, rawValue) : rawValue;
+                return <DisplayField key={field.key} label={field.label} value={value} sm={3} md={3} />;
+              })}
+            </Grid>
+            {rowIndex < visibleRows.length - 1 ? (
+              <Box
+                aria-hidden
+                sx={{
+                  borderTop: '2px dotted #06b36b',
+                  width: '100%',
+                }}
+              />
+            ) : null}
+          </Fragment>
+        ))}
+      </Box>
+    </DisplaySectionCard>
   );
 });
 
@@ -1349,12 +1889,33 @@ function PatientGeneticReportBuilder({
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [editing, setEditing] = useState(startInEditMode);
+  const [saveEnabled, setSaveEnabled] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Record<EditSectionKey, boolean>>(collapsedEditSections);
   const [textResetKey, setTextResetKey] = useState(0);
   const textDraftsRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     setEditing(startInEditMode);
+    setSaveEnabled(false);
+    if (startInEditMode) {
+      setCollapsedSections(collapsedEditSections);
+    }
   }, [reportId, startInEditMode]);
+
+  useEffect(() => {
+    if (!editing) {
+      setSaveEnabled(false);
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSaveEnabled(true);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [editing]);
 
   const clearTextDrafts = useCallback(() => {
     textDraftsRef.current = {};
@@ -1544,6 +2105,13 @@ function PatientGeneticReportBuilder({
     setEditing(false);
   }, [clearTextDrafts, report, variant]);
 
+  const toggleSection = useCallback((section: EditSectionKey) => {
+    setCollapsedSections((current) => ({
+      ...current,
+      [section]: !current[section],
+    }));
+  }, []);
+
   if (loading) {
     return (
       <Paper sx={{ p: 2.5, borderRadius: 2 }}>
@@ -1562,11 +2130,8 @@ function PatientGeneticReportBuilder({
             <Typography variant="h6" sx={{ color: '#0a8f2f', fontWeight: 700 }}>
               {variantConfig.title}
             </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              {variantConfig.builderDescription}
-            </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
             {editing ? (
               <Button color="inherit" onClick={handleCancelEdit} disabled={saving || downloading}>
                 Cancelar
@@ -1576,17 +2141,24 @@ function PatientGeneticReportBuilder({
                 Cerrar
               </Button>
             )}
-            {!editing ? (
+            {!editing && variantConfig.supportsDownload ? (
               <Button variant="outlined" onClick={() => void handleDownload()} disabled={saving || downloading}>
                 {downloading ? 'Descargando...' : 'Descargar DOCX'}
               </Button>
             ) : null}
             {editing ? (
-              <Button variant="contained" onClick={() => void persistReport()} disabled={saving}>
+              <Button variant="contained" onClick={() => void persistReport()} disabled={saving || !saveEnabled}>
                 {saving ? 'Guardando...' : 'Guardar'}
               </Button>
             ) : (
-              <Button variant="contained" onClick={() => setEditing(true)}>
+              <Button
+                variant="contained"
+                onClick={() => {
+                  setCollapsedSections(collapsedEditSections);
+                  setSaveEnabled(false);
+                  setEditing(true);
+                }}
+              >
                 Editar
               </Button>
             )}
@@ -1595,7 +2167,24 @@ function PatientGeneticReportBuilder({
 
         {editing ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <SectionTitle title="1. Contexto del estudio" description="Define el numero de fetos y el feto activo." />
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
+              <SectionTitle title="Contexto del estudio" description="Define el numero de fetos y el feto activo." />
+              <Box
+                sx={{
+                  px: 1.25,
+                  py: 0.5,
+                  borderRadius: 999,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#fff',
+                  backgroundColor: '#ef6c00',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.4,
+                }}
+              >
+                Modo edición
+              </Box>
+            </Box>
             <SectionCard background="rgba(10, 143, 47, 0.04)">
               <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 1.5 }}>
                 <BufferedTextInput
@@ -1603,14 +2192,15 @@ function PatientGeneticReportBuilder({
                   value={payload.study_context.reference_physician}
                   onCommit={(value) => rememberTextDraft('study_context.reference_physician', value)}
                   resetKey={textResetKey}
+                  sx={whiteFieldSx}
                 />
-                <TextField select label="Numero de fetos" value={payload.study_context.fetus_count} onChange={(event) => handleStudyContextChange('fetus_count', event.target.value)} fullWidth>
+                <TextField select label="Numero de fetos" value={payload.study_context.fetus_count} onChange={(event) => handleStudyContextChange('fetus_count', event.target.value)} fullWidth sx={whiteFieldSx}>
                   {fetusCountOptions.map((option) => (
                     <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                   ))}
                 </TextField>
                 {payload.study_context.fetus_count > 1 && (
-                  <TextField select label="Feto activo" value={payload.study_context.selected_fetus} onChange={(event) => handleStudyContextChange('selected_fetus', event.target.value)} fullWidth>
+                  <TextField select label="Feto activo" value={payload.study_context.selected_fetus} onChange={(event) => handleStudyContextChange('selected_fetus', event.target.value)} fullWidth sx={whiteFieldSx}>
                     {payload.fetuses.map((fetus: any) => (
                       <MenuItem key={fetus.fetus_number} value={fetus.fetus_number}>Feto {fetus.fetus_number}</MenuItem>
                     ))}
@@ -1619,78 +2209,113 @@ function PatientGeneticReportBuilder({
               </Box>
             </SectionCard>
 
-            <GrowthEditingSection title={`2. Tamizaje de alteraciones en el crecimiento - ${selectedFetusLabel}`} icon="/img/reports/sdg5.png" description="Biometrias y estimaciones del estudio." background="rgba(25, 118, 210, 0.04)" source={selectedFetus?.growth_screening} hiddenFields={hiddenFields} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.growth_screening.${path}`, value)} resetKey={textResetKey} />
-            <EditableFieldsSection title={`3. Tamizaje obstetrico basico - ${selectedFetusLabel}`} icon="/img/reports/tob.png" background="rgba(255, 152, 0, 0.06)" fields={basicFields} source={selectedFetus?.basic_screening} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('basic_screening', path, value)} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.basic_screening.${path}`, value)} resetKey={textResetKey} />
-            <AnatomyEditingSection title={`4. Tamizaje defectos estructurales - ${selectedFetusLabel}`} background="rgba(0, 150, 136, 0.06)" source={selectedFetus?.anatomical_screening} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('anatomical_screening', path, value)} />
-            <ScreeningEditingSection background="rgba(156, 39, 176, 0.05)" source={selectedFetus?.screenings} groups={variantConfig.screeningGroups} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('screenings', path, value)} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.screenings.${path}`, value)} resetKey={textResetKey} startNumber={5} selectedFetusLabel={selectedFetusLabel} />
+            <GrowthEditingSection title={`1. Tamizaje de alteraciones en el crecimiento - ${selectedFetusLabel}`} icon="/img/reports/sdg5.png" description="Biometrias y estimaciones del estudio." collapsed={collapsedSections.growth} onToggle={() => toggleSection('growth')} background="rgba(25, 118, 210, 0.04)" source={selectedFetus?.growth_screening} hiddenFields={hiddenFields} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.growth_screening.${path}`, value)} resetKey={textResetKey} fields={variantConfig.growthFields} />
+            <EditableFieldsSection title={`2. Tamizaje obstetrico basico - ${selectedFetusLabel}`} icon="/img/reports/tob.png" collapsed={collapsedSections.basic} onToggle={() => toggleSection('basic')} background="rgba(255, 152, 0, 0.03)" fields={variantConfig.basicFields} source={selectedFetus?.basic_screening} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('basic_screening', path, value)} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.basic_screening.${path}`, value)} resetKey={textResetKey} />
+            <AnatomyEditingSection title={`3. Tamizaje defectos estructurales - ${selectedFetusLabel}`} icon="/img/reports/tamizajedefectosestructurales.png" collapsed={collapsedSections.anatomy} onToggle={() => toggleSection('anatomy')} background="rgba(0, 150, 136, 0.03)" source={selectedFetus?.anatomical_screening} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('anatomical_screening', path, value)} />
+            {variant === 'wellbeing' ? (
+              <>
+                <WellbeingHemodynamicEditingSection title={`4. Tamizajes hemodinamico - ${selectedFetusLabel}`} icon={getScreeningGroupIcon('Tamizajes hemodinamico')} collapsed={collapsedSections.hemodynamic} onToggle={() => toggleSection('hemodynamic')} background="rgba(156, 39, 176, 0.03)" source={selectedFetus?.screenings} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('screenings', path, value)} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.screenings.${path}`, value)} resetKey={textResetKey} />
+                <ScreeningEditingSection title={`5. Tamizajes perfil biofisico - ${selectedFetusLabel}`} icon={getScreeningGroupIcon('Tamizajes perfil biofisico')} collapsed={collapsedSections.biophysical} onToggle={() => toggleSection('biophysical')} background="rgba(156, 39, 176, 0.03)" source={selectedFetus?.screenings} groups={[variantConfig.screeningGroups[1]]} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('screenings', path, value)} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.screenings.${path}`, value)} resetKey={textResetKey} startNumber={5} selectedFetusLabel={selectedFetusLabel} wrapInSectionCard={false} />
+              </>
+            ) : (
+              <ScreeningEditingSection title={variantConfig.screeningSectionTitle.replace('Feto 1', selectedFetusLabel)} icon={variantConfig.screeningIcon} collapsed={collapsedSections.screenings} onToggle={() => toggleSection('screenings')} background="rgba(156, 39, 176, 0.05)" source={selectedFetus?.screenings} groups={variantConfig.screeningGroups} hiddenFields={hiddenFields} onCommit={(path, value) => updateSelectedFetusSection('screenings', path, value)} onTextDraft={(path, value) => rememberTextDraft(`fetuses.${selectedFetusIndex}.screenings.${path}`, value)} resetKey={textResetKey} startNumber={4} selectedFetusLabel={selectedFetusLabel} />
+            )}
 
-            <Divider />
-            <SectionTitle title={variantConfig.interpretationTitle} icon="/img/reports/1721936.png" />
-            <UltrasoundInterpretationSection items={payload.interpretation_ultrasounds} onChange={handleInterpretationChange} showHeader={false} />
+            <EditableSectionCard title={variantConfig.interpretationTitle} icon="/img/reports/1721936.png" collapsed={collapsedSections.interpretation} onToggle={() => toggleSection('interpretation')} background="rgba(33, 150, 243, 0.04)" wrapInSectionCard={false}>
+              <UltrasoundInterpretationSection items={payload.interpretation_ultrasounds} onChange={handleInterpretationChange} showHeader={false} />
+            </EditableSectionCard>
 
-            <Divider />
-            <SectionTitle title={variantConfig.conclusionTitle} description="Valoracion final y estudio recomendado." />
-            <SectionCard background="rgba(76, 175, 80, 0.05)">
+            <EditableSectionCard title={variantConfig.conclusionTitle} description="Valoracion final y estudio recomendado." collapsed={collapsedSections.conclusion} onToggle={() => toggleSection('conclusion')} background="rgba(76, 175, 80, 0.05)" wrapInSectionCard={false}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 1.5 }}>
                 {variantConfig.conclusionFields.filter((field) => isFieldVisible(hiddenFields, field.hiddenKey)).map((field) => (
-                  <TextField key={field.key} select label={field.label} value={String(getDeepValue(payload.conclusion, field.key) ?? '')} onChange={(event) => handleConclusionChange(field.key as keyof GeneticReportPayload['conclusion'], event.target.value)} fullWidth>
+                  <TextField key={field.key} select label={field.label} value={String(getDeepValue(payload.conclusion, field.key) ?? '')} onChange={(event) => handleConclusionChange(field.key as keyof GeneticReportPayload['conclusion'], event.target.value)} fullWidth sx={whiteFieldSx}>
                     {field.options?.map((option) => (
                       <MenuItem key={`${field.key}-${option.value}`} value={option.value}>{option.label}</MenuItem>
                     ))}
                   </TextField>
                 ))}
                 </Box>
+                {isFieldVisible(hiddenFields, 'uobccomentarios') && (
+                  <Box>
+                    <BufferedTextInput label="Comentarios" value={payload.conclusion.comments} onCommit={(value) => rememberTextDraft('conclusion.comments', value)} multiline minRows={3} resetKey={textResetKey} sx={whiteFieldSx} />
+                  </Box>
+                )}
                 <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 1.5 }}>
                 {isFieldVisible(hiddenFields, 'estudiorecomendadio') && (
-                  <TextField select label="Siguiente estudio recomendado" value={payload.conclusion.recommended_next_study} onChange={(event) => handleConclusionChange('recommended_next_study', event.target.value)} fullWidth>
+                  <TextField select label="Siguiente estudio recomendado" value={payload.conclusion.recommended_next_study} onChange={(event) => handleConclusionChange('recommended_next_study', event.target.value)} fullWidth sx={whiteFieldSx}>
                     {recommendedStudyOptions.map((option) => (
                       <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                     ))}
                   </TextField>
                 )}
                 {isFieldVisible(hiddenFields, 'auxfechastudio') && (
-                  <DatePicker label="Fecha inicio del siguiente estudio" value={toDayjsValue(payload.conclusion.recommended_start_date)} onChange={(value) => handleConclusionChange('recommended_start_date', value && value.isValid() ? value.format('YYYY-MM-DD') : '')} format="DD/MM/YYYY" slotProps={{ textField: { fullWidth: true } }} />
+                  <DatePicker label="Fecha inicio del siguiente estudio" value={toDayjsValue(payload.conclusion.recommended_start_date)} onChange={(value) => handleConclusionChange('recommended_start_date', value && value.isValid() ? value.format('YYYY-MM-DD') : '')} format="DD/MM/YYYY" slotProps={{ textField: { fullWidth: true, sx: whiteFieldSx } }} />
                 )}
                 {isFieldVisible(hiddenFields, 'auxfechastudio2') && (
-                  <DatePicker label="Fecha fin del siguiente estudio" value={toDayjsValue(payload.conclusion.recommended_end_date)} minDate={toDayjsValue(payload.conclusion.recommended_start_date)?.add(1, 'day') ?? undefined} onChange={(value) => handleConclusionChange('recommended_end_date', value && value.isValid() ? value.format('YYYY-MM-DD') : '')} format="DD/MM/YYYY" slotProps={{ textField: { fullWidth: true } }} />
-                )}
-                {isFieldVisible(hiddenFields, 'uobccomentarios') && (
-                  <Box>
-                    <BufferedTextInput label="Comentarios" value={payload.conclusion.comments} onCommit={(value) => rememberTextDraft('conclusion.comments', value)} multiline minRows={3} resetKey={textResetKey} />
-                  </Box>
+                  <DatePicker label="Fecha fin del siguiente estudio" value={toDayjsValue(payload.conclusion.recommended_end_date)} minDate={toDayjsValue(payload.conclusion.recommended_start_date)?.add(1, 'day') ?? undefined} onChange={(value) => handleConclusionChange('recommended_end_date', value && value.isValid() ? value.format('YYYY-MM-DD') : '')} format="DD/MM/YYYY" slotProps={{ textField: { fullWidth: true, sx: whiteFieldSx } }} />
                 )}
                 </Box>
               </Box>
-            </SectionCard>
+            </EditableSectionCard>
 
             <Alert severity="info">
               {variantConfig.sectionNote}
             </Alert>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
               <Button color="inherit" onClick={handleCancelEdit} disabled={saving || downloading}>Cancelar</Button>
-              <Button variant="contained" onClick={() => void persistReport()} disabled={saving}>
+              <Button variant="contained" onClick={() => void persistReport()} disabled={saving || !saveEnabled}>
                 {saving ? 'Guardando...' : 'Guardar'}
               </Button>
             </Box>
           </Box>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <DisplaySectionCard title="1. Contexto del estudio">
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
+              <SectionTitle title="Contexto del estudio" description="Define el numero de fetos y el feto activo." />
+              <Box
+                sx={{
+                  px: 1.25,
+                  py: 0.5,
+                  borderRadius: 999,
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  color: '#2e7d32',
+                  backgroundColor: '#fff',
+                  border: '1px solid #2e7d32',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.4,
+                }}
+              >
+                Modo lectura
+              </Box>
+            </Box>
+            <SectionCard background="rgba(10, 143, 47, 0.04)">
               <Grid container spacing={{ xs: 1.5, md: 2 }}>
                 <DisplayField label="Medico de referencia" value={payload.study_context.reference_physician} />
                 <DisplayField label="Numero de fetos" value={getOptionLabel(fetusCountOptions, payload.study_context.fetus_count)} md={3} />
                 {payload.study_context.fetus_count > 1 && <DisplayField label="Feto activo" value={`Feto ${payload.study_context.selected_fetus}`} md={3} />}
               </Grid>
-            </DisplaySectionCard>
-            <DisplayFieldsSection title={`2. Tamizaje de alteraciones en el crecimiento - ${selectedFetusLabel}`} icon="/img/reports/sdg5.png" fields={growthFields} source={selectedFetus?.growth_screening} hiddenFields={hiddenFields} />
-            <DisplayFieldsSection title={`3. Tamizaje obstetrico basico - ${selectedFetusLabel}`} icon="/img/reports/tob.png" fields={basicFields} source={selectedFetus?.basic_screening} hiddenFields={hiddenFields} />
-            <AnatomyDisplaySection title={`4. Tamizaje defectos estructurales - ${selectedFetusLabel}`} source={selectedFetus?.anatomical_screening} hiddenFields={hiddenFields} />
-            <ScreeningDisplaySection source={selectedFetus?.screenings} groups={variantConfig.screeningGroups} hiddenFields={hiddenFields} startNumber={5} selectedFetusLabel={selectedFetusLabel} />
+            </SectionCard>
+            <DisplayFieldsSection title={`1. Tamizaje de alteraciones en el crecimiento - ${selectedFetusLabel}`} icon="/img/reports/sdg5.png" fields={variantConfig.growthFields} source={selectedFetus?.growth_screening} hiddenFields={hiddenFields} showEmpty />
+            <DisplayFieldsSection title={`2. Tamizaje obstetrico basico - ${selectedFetusLabel}`} icon="/img/reports/tob.png" fields={variantConfig.basicFields} source={selectedFetus?.basic_screening} hiddenFields={hiddenFields} showEmpty />
+            <AnatomyDisplaySection title={`3. Tamizaje defectos estructurales - ${selectedFetusLabel}`} icon="/img/reports/tamizajedefectosestructurales.png" source={selectedFetus?.anatomical_screening} hiddenFields={hiddenFields} showEmpty />
+            {variant === 'wellbeing' ? (
+              <>
+                <WellbeingHemodynamicDisplaySection title={`4. Tamizajes hemodinamico - ${selectedFetusLabel}`} icon={getScreeningGroupIcon('Tamizajes hemodinamico')} source={selectedFetus?.screenings} hiddenFields={hiddenFields} />
+                <ScreeningDisplaySection source={selectedFetus?.screenings} groups={[variantConfig.screeningGroups[1]]} hiddenFields={hiddenFields} startNumber={5} selectedFetusLabel={selectedFetusLabel} singleGroupIcon={getScreeningGroupIcon('Tamizajes perfil biofisico')} showEmptySingleGroup />
+              </>
+            ) : (
+              <ScreeningDisplaySection source={selectedFetus?.screenings} groups={variantConfig.screeningGroups} hiddenFields={hiddenFields} startNumber={4} selectedFetusLabel={selectedFetusLabel} singleGroupIcon={variantConfig.screeningIcon} showEmptySingleGroup />
+            )}
             <DisplaySectionCard title={variantConfig.interpretationTitle} icon="/img/reports/1721936.png"><UltrasoundInterpretationDisplay items={payload.interpretation_ultrasounds} showHeader={false} /></DisplaySectionCard>
-            <DisplayFieldsSection title={variantConfig.conclusionTitle} fields={variantConfig.conclusionFields} source={payload.conclusion} hiddenFields={hiddenFields} />
-            <DisplaySectionCard title="Estudio recomendado">
+            <DisplaySectionCard title={variantConfig.conclusionTitle}>
               <Grid container spacing={{ xs: 1.5, md: 2 }}>
+                {variantConfig.conclusionFields.filter((field) => isFieldVisible(hiddenFields, field.hiddenKey)).map((field) => {
+                  const value = getDeepValue(payload.conclusion, field.key) as string | number | null | undefined;
+                  const displayValue = field.options ? getOptionLabel(field.options, value) : value;
+                  return <DisplayField key={field.key} label={field.label} value={displayValue} md={3} />;
+                })}
                 {isFieldVisible(hiddenFields, 'estudiorecomendadio') && <DisplayField label="Siguiente estudio recomendado" value={getOptionLabel(recommendedStudyOptions, payload.conclusion.recommended_next_study)} />}
                 {isFieldVisible(hiddenFields, 'auxfechastudio') && <DisplayField label="Fecha inicio del siguiente estudio" value={payload.conclusion.recommended_start_date ? formatDateDisplay(new Date(`${payload.conclusion.recommended_start_date}T00:00:00`)) : ''} />}
                 {isFieldVisible(hiddenFields, 'auxfechastudio2') && <DisplayField label="Fecha fin del siguiente estudio" value={payload.conclusion.recommended_end_date ? formatDateDisplay(new Date(`${payload.conclusion.recommended_end_date}T00:00:00`)) : ''} />}
@@ -1699,9 +2324,11 @@ function PatientGeneticReportBuilder({
             </DisplaySectionCard>
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
               <Button color="inherit" onClick={onClose}>Cerrar</Button>
-              <Button variant="outlined" onClick={() => void handleDownload()} disabled={downloading}>
-                {downloading ? 'Descargando...' : 'Descargar DOCX'}
-              </Button>
+              {variantConfig.supportsDownload ? (
+                <Button variant="outlined" onClick={() => void handleDownload()} disabled={downloading}>
+                  {downloading ? 'Descargando...' : 'Descargar DOCX'}
+                </Button>
+              ) : null}
               <Button variant="contained" onClick={() => setEditing(true)}>Editar</Button>
             </Box>
           </Box>

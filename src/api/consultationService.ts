@@ -572,7 +572,7 @@ export const consultationService = {
     type_label: string;
     created_at?: string | null;
     created_at_label: string;
-    next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'v2_report_builder_pending';
+    next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'v2_report_builder_pending';
     editor_url?: string | null;
   }> {
     const resolvedOfficeId = officeId ?? (await resolveOfficeId());
@@ -585,7 +585,7 @@ export const consultationService = {
         type_label: string;
         created_at?: string | null;
         created_at_label: string;
-        next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'v2_report_builder_pending';
+        next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'v2_report_builder_pending';
         editor_url?: string | null;
       };
     }>(`/v2/patients/${patientId}/reports`, {

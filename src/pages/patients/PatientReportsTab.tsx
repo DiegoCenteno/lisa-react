@@ -34,6 +34,7 @@ import {
 } from '../../api/consultationService';
 import { patientService } from '../../api/patientService';
 import PatientBasicObstetricReportBuilder from './PatientBasicObstetricReportBuilder';
+import PatientFetalWellbeingReportBuilder from './PatientFetalWellbeingReportBuilder';
 import PatientGeneticReportBuilder from './PatientGeneticReportBuilder';
 import PatientNuchalTranslucencyReportBuilder from './PatientNuchalTranslucencyReportBuilder';
 import PatientStructuralReportBuilder from './PatientStructuralReportBuilder';
@@ -55,6 +56,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const [activeNuchalTranslucencyReportId, setActiveNuchalTranslucencyReportId] = useState<number | null>(null);
   const [activeGeneticReportId, setActiveGeneticReportId] = useState<number | null>(null);
   const [activeStructuralReportId, setActiveStructuralReportId] = useState<number | null>(null);
+  const [activeWellbeingReportId, setActiveWellbeingReportId] = useState<number | null>(null);
   const [reportBuilderStartInEditMode, setReportBuilderStartInEditMode] = useState(true);
   const [colposcopyBuilder, setColposcopyBuilder] = useState<ColposcopyReportBuilderData | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<number[]>([]);
@@ -72,8 +74,9 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const isBuildingNuchalTranslucencyReport = activeNuchalTranslucencyReportId !== null;
   const isBuildingGeneticReport = activeGeneticReportId !== null;
   const isBuildingStructuralReport = activeStructuralReportId !== null;
+  const isBuildingWellbeingReport = activeWellbeingReportId !== null;
   const isBuildingReport =
-    isBuildingColposcopyReport || isBuildingBasicObstetricReport || isBuildingNuchalTranslucencyReport || isBuildingGeneticReport || isBuildingStructuralReport;
+    isBuildingColposcopyReport || isBuildingBasicObstetricReport || isBuildingNuchalTranslucencyReport || isBuildingGeneticReport || isBuildingStructuralReport || isBuildingWellbeingReport;
 
   useEffect(() => {
     imagePreviewUrlsRef.current = imagePreviewUrls;
@@ -132,6 +135,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
       setSelectedSessionIds(defaultSessionIds);
       setSelectedFileIds(data.selected_file_ids);
       setActiveStructuralReportId(null);
+      setActiveWellbeingReportId(null);
       setShowCreate(false);
     } catch (loadError) {
       console.error('Error cargando builder de colposcopia:', loadError);
@@ -151,6 +155,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveNuchalTranslucencyReportId(null);
     setActiveGeneticReportId(null);
     setActiveStructuralReportId(null);
+    setActiveWellbeingReportId(null);
     setActiveBasicObstetricReportId(reportId);
   }, []);
 
@@ -164,6 +169,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveBasicObstetricReportId(null);
     setActiveGeneticReportId(null);
     setActiveStructuralReportId(null);
+    setActiveWellbeingReportId(null);
     setActiveNuchalTranslucencyReportId(reportId);
   }, []);
 
@@ -177,6 +183,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveBasicObstetricReportId(null);
     setActiveNuchalTranslucencyReportId(null);
     setActiveStructuralReportId(null);
+    setActiveWellbeingReportId(null);
     setActiveGeneticReportId(reportId);
   }, []);
 
@@ -190,7 +197,22 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveBasicObstetricReportId(null);
     setActiveNuchalTranslucencyReportId(null);
     setActiveGeneticReportId(null);
+    setActiveWellbeingReportId(null);
     setActiveStructuralReportId(reportId);
+  }, []);
+
+  const loadWellbeingBuilder = useCallback((reportId: number, startInEditMode = true) => {
+    setActiveColposcopyReportId(null);
+    setColposcopyBuilder(null);
+    setSelectedSessionIds([]);
+    setSelectedFileIds([]);
+    setShowCreate(false);
+    setReportBuilderStartInEditMode(startInEditMode);
+    setActiveBasicObstetricReportId(null);
+    setActiveNuchalTranslucencyReportId(null);
+    setActiveGeneticReportId(null);
+    setActiveStructuralReportId(null);
+    setActiveWellbeingReportId(reportId);
   }, []);
 
   const handleCreateReport = useCallback(async () => {
@@ -217,6 +239,8 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
         loadGeneticBuilder(created.id);
       } else if (created.next_view === 'structural') {
         loadStructuralBuilder(created.id);
+      } else if (created.next_view === 'wellbeing') {
+        loadWellbeingBuilder(created.id);
       } else {
         setShowCreate(false);
         setMessage('Este tipo de reporte se integrara en la siguiente fase V2.');
@@ -227,7 +251,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     } finally {
       setCreating(false);
     }
-  }, [loadBasicObstetricBuilder, loadColposcopyBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadReports, loadStructuralBuilder, patientId, selectedReportKey]);
+  }, [loadBasicObstetricBuilder, loadColposcopyBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadReports, loadStructuralBuilder, loadWellbeingBuilder, patientId, selectedReportKey]);
 
   const availableBuilderFiles = useMemo(
     () =>
@@ -414,6 +438,19 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
         return;
       }
 
+      if (report.type_key === 'tipoest5') {
+        setActiveColposcopyReportId(null);
+        setColposcopyBuilder(null);
+        setSelectedSessionIds([]);
+        setSelectedFileIds([]);
+        setActiveBasicObstetricReportId(null);
+        setActiveNuchalTranslucencyReportId(null);
+        setActiveGeneticReportId(null);
+        setActiveStructuralReportId(null);
+        loadWellbeingBuilder(report.id, false);
+        return;
+      }
+
       if (report.type_key === 'tipoest9') {
         await handleDownloadExistingReport(report);
         return;
@@ -421,7 +458,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
 
       setMessage('Este tipo de reporte se integrara en la siguiente fase V2.');
     },
-    [handleDownloadExistingReport, loadBasicObstetricBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadStructuralBuilder]
+    [handleDownloadExistingReport, loadBasicObstetricBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadStructuralBuilder, loadWellbeingBuilder]
   );
 
   const handleBasicObstetricSaved = useCallback(
@@ -579,7 +616,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
                       <TableCell>{item.created_at_label}</TableCell>
                       <TableCell>{item.type_label}</TableCell>
                       <TableCell align="right">
-                        {item.type_key === 'tipoest1' || item.type_key === 'tipoest2' || item.type_key === 'tipoest3' || item.type_key === 'tipoest4' ? (
+                        {item.type_key === 'tipoest1' || item.type_key === 'tipoest2' || item.type_key === 'tipoest3' || item.type_key === 'tipoest4' || item.type_key === 'tipoest5' ? (
                           <Button
                             size="small"
                             variant="outlined"
@@ -873,6 +910,21 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
             startInEditMode={reportBuilderStartInEditMode}
             onClose={() => {
               setActiveStructuralReportId(null);
+              setReportBuilderStartInEditMode(true);
+              void loadReports();
+            }}
+            onSaved={handleGeneticSaved}
+            onError={setError}
+            onSuccess={setMessage}
+          />
+        )}
+
+        {activeWellbeingReportId && (
+          <PatientFetalWellbeingReportBuilder
+            reportId={activeWellbeingReportId}
+            startInEditMode={reportBuilderStartInEditMode}
+            onClose={() => {
+              setActiveWellbeingReportId(null);
               setReportBuilderStartInEditMode(true);
               void loadReports();
             }}

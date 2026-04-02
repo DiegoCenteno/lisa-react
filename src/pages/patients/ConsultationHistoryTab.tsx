@@ -70,7 +70,7 @@ function ConsultationHistoryTabInner({ soapNotes, canEditConsultationHistory, on
         </Box>
         <TextField
           fullWidth
-          placeholder="Buscar en motivo, an\u00e1lisis, plan o notas..."
+          placeholder="Buscar en motivo, análisis, plan o notas..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           size="small"
@@ -98,7 +98,7 @@ function ConsultationHistoryTabInner({ soapNotes, canEditConsultationHistory, on
                     <TableCell>Fecha</TableCell>
                     <TableCell>Motivo</TableCell>
                     <TableCell>Resumen</TableCell>
-                    <TableCell align="right">Acci\u00f3n</TableCell>
+                    <TableCell align="right">Acción</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
