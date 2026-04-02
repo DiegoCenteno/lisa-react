@@ -963,6 +963,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
         slides={lightboxSlides}
         index={lightboxIndex}
         plugins={[Zoom]}
+        zoom={{ maxZoomPixelRatio: 6, scrollToZoom: true }}
       />
     </>
   );

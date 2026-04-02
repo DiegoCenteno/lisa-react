@@ -21,8 +21,6 @@ import {
   History as HistoryIcon,
   Sms as WhatsAppIcon,
   Settings as SettingsIcon,
-  LocalHospital as HospitalIcon,
-  Sms as SmsIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -100,8 +98,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [isHovered, setIsHovered] = useState(false);
-  const monitorBaseUrl = import.meta.env.VITE_BACKEND_URL || 'http://lisa.test';
-  const mockWhatsappUrl = `${monitorBaseUrl.replace(/\/$/, '')}/smsmasivos/mock-whatsapp`;
   const desktopDrawerWidth = isHovered ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
   const filteredItems = menuItems.filter((item) => hasRole(item.roles) && (!item.permission || can(item.permission)));
@@ -117,7 +113,12 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           justifyContent: isMobile || isHovered ? 'flex-start' : 'center',
         }}
       >
-        <HospitalIcon sx={{ color: 'primary.main', fontSize: 32 }} />
+        <Box
+          component="img"
+          src="/img/lisalogo.png"
+          alt="LisaMedic"
+          sx={{ width: 34, height: 34, objectFit: 'contain', flexShrink: 0 }}
+        />
         <Box
           sx={{
             opacity: isMobile || isHovered ? 1 : 0,
@@ -188,51 +189,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             </ListItem>
           );
         })}
-      </List>
-      <Divider />
-      <List sx={{ px: 1, py: 1.25 }}>
-        <ListItem disablePadding>
-          <ListItemButton
-            onClick={() => {
-              window.open(mockWhatsappUrl, '_blank', 'noopener,noreferrer');
-              if (isMobile) onClose();
-            }}
-            sx={{
-              borderRadius: 1,
-              backgroundColor: 'rgba(76, 175, 80, 0.08)',
-              color: 'text.primary',
-              minHeight: 48,
-              justifyContent: isMobile || isHovered ? 'initial' : 'center',
-              px: isMobile || isHovered ? 2 : 1.5,
-              '&:hover': {
-                backgroundColor: 'rgba(76, 175, 80, 0.14)',
-              },
-            }}
-          >
-            <ListItemIcon
-              sx={{
-                color: 'success.main',
-                minWidth: 40,
-                mr: isMobile || isHovered ? 1 : 0,
-                justifyContent: 'center',
-              }}
-            >
-              <SmsIcon />
-            </ListItemIcon>
-            <ListItemText
-              primary="Mock WhatsApp"
-              secondary="Temporal"
-              sx={{
-                opacity: isMobile || isHovered ? 1 : 0,
-                width: isMobile || isHovered ? 'auto' : 0,
-                overflow: 'hidden',
-                whiteSpace: 'nowrap',
-                transition: 'opacity 180ms ease',
-              }}
-              secondaryTypographyProps={{ sx: { lineHeight: 1.1 } }}
-            />
-          </ListItemButton>
-        </ListItem>
       </List>
     </Box>
   );

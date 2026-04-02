@@ -636,6 +636,7 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
         slides={lightboxSlides}
         index={lightboxIndex}
         plugins={[Zoom]}
+        zoom={{ maxZoomPixelRatio: 6, scrollToZoom: true }}
       />
 
       <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>

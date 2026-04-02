@@ -523,6 +523,7 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
           },
         }}
         plugins={[Zoom]}
+        zoom={{ maxZoomPixelRatio: 6, scrollToZoom: true }}
       />
       <Dialog open={Boolean(pdfPreviewUrl)} onClose={handleClosePdfPreview} maxWidth="lg" fullWidth>
         <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>

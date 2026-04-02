@@ -50,6 +50,20 @@ const SETTINGS_TABS: Array<{ value: SettingsTab; label: string }> = [
   { value: 'etiquetas', label: 'ETIQUETAS' },
 ];
 
+const TAG_STATUS_VISIBLE_DAYS_OPTIONS: Array<{ value: number | 'always'; label: string }> = [
+  { value: 'always', label: 'Siempre activa' },
+  { value: 1, label: '1 día' },
+  { value: 2, label: '2 días' },
+  { value: 3, label: '3 días' },
+  { value: 5, label: '5 días' },
+  { value: 7, label: '7 días' },
+  { value: 10, label: '10 días' },
+  { value: 15, label: '15 días' },
+  { value: 30, label: '30 días' },
+  { value: 60, label: '60 días' },
+  { value: 90, label: '90 días' },
+];
+
 type FormFieldDefinition = {
   key: string;
   label: string;
@@ -672,6 +686,7 @@ function LabelsPanel({
   const [newLabelName, setNewLabelName] = useState('');
   const [newStatusName, setNewStatusName] = useState('');
   const [newStatusColor, setNewStatusColor] = useState<number>(0);
+  const [newStatusVisibleDays, setNewStatusVisibleDays] = useState<number | 'always'>('always');
   const [savingLabel, setSavingLabel] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [editingLabelId, setEditingLabelId] = useState<number | null>(null);
@@ -679,6 +694,7 @@ function LabelsPanel({
   const [editingStatusId, setEditingStatusId] = useState<number | null>(null);
   const [editingStatusName, setEditingStatusName] = useState('');
   const [editingStatusColor, setEditingStatusColor] = useState<number>(0);
+  const [editingStatusVisibleDays, setEditingStatusVisibleDays] = useState<number | 'always'>('always');
 
   const createLabel = async () => {
     const trimmedName = newLabelName.trim();
@@ -802,6 +818,31 @@ function LabelsPanel({
     }
   };
 
+  const resolveStatusVisibleDays = (statusItem: SettingsLabelStatusItem): number | 'always' => {
+    const rawData = statusItem.data;
+    const parsed = typeof rawData === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(rawData) as { visible_days?: number | null };
+          } catch {
+            return null;
+          }
+        })()
+      : rawData;
+
+    const visibleDays = parsed?.visible_days;
+    return typeof visibleDays === 'number' ? visibleDays : 'always';
+  };
+
+  const formatStatusVisibleDaysLabel = (value: number | 'always'): string => {
+    if (value === 'always') {
+      return 'Siempre activa';
+    }
+
+    return value === 1 ? '1 día' : `${value} días`;
+  };
+  const hasFiniteStatuses = statuses.some((statusItem) => resolveStatusVisibleDays(statusItem) !== 'always');
+
   return (
     <Grid container spacing={3}>
       <Grid size={{ xs: 12 }}>
@@ -839,6 +880,12 @@ function LabelsPanel({
         <>
           <Grid size={{ xs: 12 }}>
             <CardShell title="Catálogo de etiquetas">
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Las etiquetas te permiten clasificar y dar seguimiento a cada paciente. Cada etiqueta puede pasar por distintos estados conforme avanza su proceso, por lo que es recomendable configurar también estados de etiquetas para que puedan cambiar de uno a otro.
+              </Alert>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                Como buena práctica, define primero tus estados de etiquetas antes de usar ampliamente el catálogo. Esto te ayudará a que cada etiqueta tenga una evolución clara dentro del seguimiento del paciente.
+              </Alert>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
                 <TextField
                   label="Nueva etiqueta"
@@ -961,6 +1008,12 @@ function LabelsPanel({
           </Grid>
           <Grid size={{ xs: 12 }}>
             <CardShell title="Estados de etiquetas">
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Define aquí los estados que podrá tomar cada etiqueta durante el seguimiento del paciente. Si un estado se configura con días activos, la etiqueta seguirá visible hasta esa fecha límite; si se deja como <strong>Siempre activa</strong>, continuará mostrándose sin vencimiento.
+              </Alert>
+              <Alert severity={hasFiniteStatuses ? 'success' : 'warning'} sx={{ mb: 3 }}>
+                Se recomienda dejar al menos un estado final con días definidos para que algunas etiquetas dejen de mostrarse de forma automática. Como buena práctica, procura tener solo 1 o máximo 2 estados finales con vigencia definida.
+              </Alert>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
                 <TextField
                   label="Nuevo estado"
@@ -983,6 +1036,24 @@ function LabelsPanel({
                     <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                   ))}
                 </TextField>
+                <TextField
+                  select
+                  label="Días activa"
+                  variant="standard"
+                  value={newStatusVisibleDays}
+                  onChange={(event) => setNewStatusVisibleDays(event.target.value === 'always' ? 'always' : Number(event.target.value))}
+                  sx={{ minWidth: 190 }}
+                  disabled={savingStatus}
+                >
+                  {TAG_STATUS_VISIBLE_DAYS_OPTIONS.map((option) => (
+                    <MenuItem key={String(option.value)} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+                {newStatusVisibleDays !== 'always' ? (
+                  <Alert severity="warning" sx={{ width: '100%', mt: 1 }}>
+                    Este estado hará que la etiqueta siga visible durante {formatStatusVisibleDaysLabel(newStatusVisibleDays).toLowerCase()} y después dejará de mostrarse como opción activa para ese paciente.
+                  </Alert>
+                ) : null}
                 <Button
                   variant="contained"
                   disabled={savingStatus || !newStatusName.trim()}
@@ -993,11 +1064,15 @@ function LabelsPanel({
                       office_id: selectedOfficeId,
                       code: newStatusName.trim(),
                       identify: newStatusColor,
+                      data: {
+                        visible_days: newStatusVisibleDays === 'always' ? null : newStatusVisibleDays,
+                      },
                       status: 1,
                     }).then((created) => {
                       setStatuses((current) => [...current, created].sort((a, b) => a.identify - b.identify || a.id - b.id));
                       setNewStatusName('');
                       setNewStatusColor(0);
+                      setNewStatusVisibleDays('always');
                       onSuccess('Estado creado correctamente.');
                     }).catch((err) => {
                       setLocalError(err instanceof Error ? err.message : 'No fue posible crear el estado.');
@@ -1043,6 +1118,24 @@ function LabelsPanel({
                                 <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
                               ))}
                             </TextField>
+                            <TextField
+                              select
+                              label="Días activa"
+                              variant="standard"
+                              value={editingStatusVisibleDays}
+                              onChange={(event) => setEditingStatusVisibleDays(event.target.value === 'always' ? 'always' : Number(event.target.value))}
+                              sx={{ minWidth: 190 }}
+                              disabled={savingStatus}
+                            >
+                              {TAG_STATUS_VISIBLE_DAYS_OPTIONS.map((option) => (
+                                <MenuItem key={String(option.value)} value={option.value}>{option.label}</MenuItem>
+                              ))}
+                            </TextField>
+                            {editingStatusVisibleDays !== 'always' ? (
+                              <Alert severity="warning" sx={{ width: '100%', mt: 1 }}>
+                                Este estado hará que la etiqueta siga visible durante {formatStatusVisibleDaysLabel(editingStatusVisibleDays).toLowerCase()} y después dejará de mostrarse como opción activa para ese paciente.
+                              </Alert>
+                            ) : null}
                             <Button
                               variant="contained"
                               disabled={savingStatus || !editingStatusName.trim()}
@@ -1053,12 +1146,16 @@ function LabelsPanel({
                                   office_id: selectedOfficeId,
                                   code: editingStatusName.trim(),
                                   identify: editingStatusColor,
+                                  data: {
+                                    visible_days: editingStatusVisibleDays === 'always' ? null : editingStatusVisibleDays,
+                                  },
                                   status: isActive ? undefined : 1,
                                 }).then((updated) => {
                                   setStatuses((current) => current.map((item) => (item.id === updated.id ? updated : item)).sort((a, b) => a.identify - b.identify || a.id - b.id));
                                   setEditingStatusId(null);
                                   setEditingStatusName('');
                                   setEditingStatusColor(0);
+                                  setEditingStatusVisibleDays('always');
                                   onSuccess(isActive ? 'Estado actualizado correctamente.' : 'Estado actualizado y activado correctamente.');
                                 }).catch((err) => {
                                   setLocalError(err instanceof Error ? err.message : 'No fue posible actualizar el estado.');
@@ -1074,6 +1171,7 @@ function LabelsPanel({
                                 setEditingStatusId(null);
                                 setEditingStatusName('');
                                 setEditingStatusColor(0);
+                                setEditingStatusVisibleDays('always');
                               }}
                               disabled={savingStatus}
                             >
@@ -1099,6 +1197,9 @@ function LabelsPanel({
                               <Typography variant="body2" color="text.secondary">
                                 {isActive ? 'Activo' : 'Inactivo'}
                               </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {formatStatusVisibleDaysLabel(resolveStatusVisibleDays(statusItem))}
+                              </Typography>
                             </Box>
                             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                               <Button
@@ -1107,6 +1208,7 @@ function LabelsPanel({
                                   setEditingStatusId(statusItem.id);
                                   setEditingStatusName(statusItem.code);
                                   setEditingStatusColor(Number(statusItem.identify));
+                                  setEditingStatusVisibleDays(resolveStatusVisibleDays(statusItem));
                                 }}
                                 disabled={savingStatus}
                               >
@@ -3563,3 +3665,5 @@ export default function SettingsPage() {
     </Box>
   );
 }
+
+

@@ -17,8 +17,10 @@ import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
 import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 
 export default function AppRouter() {
+  const routerBase = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
+
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBase}>
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
@@ -28,7 +30,7 @@ export default function AppRouter() {
         <Route path="/cita/:token" element={<PublicAppointmentPage />} />
         <Route path="/nuevacita/:code" element={<PublicAppointmentPage />} />
         <Route path="/historia/:token" element={<PublicHistoryFormPage />} />
-        <Route path="/app/:code" element={<PublicStudyResultPage />} />
+        <Route path="/:code" element={<PublicStudyResultPage />} />
 
         {/* Protected routes */}
         <Route

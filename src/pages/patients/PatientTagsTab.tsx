@@ -77,6 +77,24 @@ function getTagHistoryActorLabel(roleId?: number) {
   return 'Observaciones';
 }
 
+function formatVisibleUntil(value?: string | null) {
+  if (!value) return null;
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(parsed);
+}
+
 function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
   const navigate = useNavigate();
   const [tagControl, setTagControl] = useState<PatientTagControlData | null>(patientTagControl);
@@ -202,6 +220,7 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
               <TableBody>
                 {tagControl.tags.map((tag, index) => {
                   const tagHistory = [...(tag.history ?? [])].reverse();
+                  const visibleUntilLabel = formatVisibleUntil(tag.visible_until);
 
                   return (
                     <TableRow key={tag.id} hover>
@@ -234,6 +253,12 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
                               {tag.current_status.code || 'Indefinido'}
                             </Box>
                           </Box>
+
+                          {visibleUntilLabel ? (
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              Visible hasta: <Box component="span" sx={{ fontWeight: 700 }}>{visibleUntilLabel}</Box>
+                            </Typography>
+                          ) : null}
 
                           <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700 }}>
                             Históricos de cambio de estatus de las etiquetas:
@@ -287,3 +312,5 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
 }
 
 export default memo(PatientTagsTabInner);
+
+

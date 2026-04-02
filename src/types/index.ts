@@ -441,6 +441,7 @@ export interface PatientTagControlTag {
   consultation_id?: number | null;
   created_at?: string | null;
   created_at_label?: string;
+  visible_until?: string | null;
   is_undefined: boolean;
   current_status: {
     code: string;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Alert,
@@ -37,7 +37,6 @@ import {
   Snackbar,
 } from '@mui/material';
 import {
-  Attachment as AttachmentIcon,
   ContentCopy as ContentCopyIcon,
   DescriptionOutlined as DescriptionOutlinedIcon,
   Search as SearchIcon,
@@ -129,6 +128,7 @@ export default function PatientsPage() {
   const [attachSaving, setAttachSaving] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachMessage, setAttachMessage] = useState<string | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [attachFiles, setAttachFiles] = useState<PatientFile[]>([]);
   const [templateMessage, setTemplateMessage] = useState<string | null>(null);
   const [openTagIds, setOpenTagIds] = useState<number[]>([]);
@@ -229,7 +229,7 @@ export default function PatientsPage() {
     }
 
     const timeoutId = window.setTimeout(() => {
-      attachSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 60);
 
     return () => {
@@ -262,6 +262,7 @@ export default function PatientsPage() {
 
     try {
       await navigator.clipboard.writeText(phone);
+      setCopyMessage('Información copiada');
     } catch (error) {
       console.error('Error copiando telefono:', error);
     }
@@ -543,7 +544,7 @@ export default function PatientsPage() {
     const description = newTemplateDescription.trim();
 
     if (!title || !description || !attachPatientId) {
-      setAttachError('Captura el título y la descripción de la plantilla.');
+      setAttachError('Captura el tÃ­tulo y la descripciÃ³n de la plantilla.');
       return;
     }
 
@@ -578,7 +579,7 @@ export default function PatientsPage() {
 
   const handleSendStatuses = async () => {
     if (!attachPatientId) {
-      setAttachError('No se encontró el paciente para actualizar etiquetas.');
+      setAttachError('No se encontrÃ³ el paciente para actualizar etiquetas.');
       return;
     }
 
@@ -588,7 +589,7 @@ export default function PatientsPage() {
     }
 
     if (sendResultToPatient && !selectedTemplateId) {
-      setAttachError('Selecciona una plantilla para preparar el envío del resultado al paciente.');
+      setAttachError('Selecciona una plantilla para preparar el envÃ­o del resultado al paciente.');
       return;
     }
 
@@ -839,7 +840,7 @@ export default function PatientsPage() {
                               variant="caption"
                               sx={{ display: 'block', color: 'error.main', mb: 1.5, fontSize: '0.8rem' }}
                             >
-                              Al seleccionar esta casilla se enviará una notificación al paciente
+                              Al seleccionar esta casilla se enviarÃ¡ una notificaciÃ³n al paciente
                               sobre el resultado de su estudio. Es necesario seleccionar un template
                               previamente configurado.
                             </Typography>
@@ -892,7 +893,7 @@ export default function PatientsPage() {
                                 variant="body2"
                                 sx={{ color: 'text.secondary', fontSize: '0.85rem', mb: 1 }}
                               >
-                                Todavía no hay plantillas configuradas para este consultorio.
+                                TodavÃ­a no hay plantillas configuradas para este consultorio.
                               </Typography>
                             ) : null}
 
@@ -924,7 +925,7 @@ export default function PatientsPage() {
                               >
                                 <TextField
                                   size="small"
-                                  label="Título"
+                                  label="TÃ­tulo"
                                   value={newTemplateTitle}
                                   onChange={(event) => setNewTemplateTitle(event.target.value)}
                                 />
@@ -932,7 +933,7 @@ export default function PatientsPage() {
                                   size="small"
                                   multiline
                                   minRows={3}
-                                  label="Descripción"
+                                  label="DescripciÃ³n"
                                   value={newTemplateDescription}
                                   onChange={(event) => setNewTemplateDescription(event.target.value)}
                                 />
@@ -1000,7 +1001,7 @@ export default function PatientsPage() {
                       },
                     }}
                   >
-                    Aún no hay estados configurados para las etiquetas. Los estados te permiten indicar en qué etapa se
+                    AÃºn no hay estados configurados para las etiquetas. Los estados te permiten indicar en quÃ© etapa se
                     encuentra cada etiqueta, por ejemplo: pendiente, en proceso o concluido.
                   </Alert>
                 ) : null}
@@ -1260,7 +1261,6 @@ export default function PatientsPage() {
                           <Button
                             size="small"
                             variant="outlined"
-                            startIcon={<AttachmentIcon />}
                             onClick={() => void handleOpenAttach(patient.id)}
                           >
                             Más opciones
@@ -1350,7 +1350,6 @@ export default function PatientsPage() {
                         <Button
                           size="small"
                           variant="outlined"
-                          startIcon={<AttachmentIcon />}
                           onClick={() => void handleOpenAttach(patient.id)}
                         >
                           Más opciones
@@ -1416,7 +1415,7 @@ export default function PatientsPage() {
         </DialogTitle>
         <DialogContent dividers>
           <Typography>
-            Si finalizas la etiqueta cambiará su estado a inactiva y ya no podrías asignarle
+            Si finalizas la etiqueta cambiará su estado a inactiva y ya no podrás asignarle
             ningún estado. ¿Continuar?
           </Typography>
         </DialogContent>
@@ -1480,6 +1479,22 @@ export default function PatientsPage() {
       </Dialog>
 
       <Snackbar
+        open={Boolean(copyMessage)}
+        autoHideDuration={2500}
+        onClose={() => setCopyMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          severity="success"
+          variant="filled"
+          onClose={() => setCopyMessage(null)}
+          sx={{ width: '100%' }}
+        >
+          {copyMessage}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
         open={Boolean(attachMessage)}
         autoHideDuration={2500}
         onClose={() => setAttachMessage(null)}
@@ -1523,7 +1538,7 @@ export default function PatientsPage() {
             />
 
             <TextField
-              label="Teléfono"
+              label="TelÃ©fono"
               value={quickEditPhone}
               onChange={(event) => setQuickEditPhone(event.target.value)}
               fullWidth
@@ -1542,7 +1557,7 @@ export default function PatientsPage() {
 
             <TextField
               select
-              label="Género"
+              label="GÃ©nero"
               value={quickEditGender}
               onChange={(event) =>
                 setQuickEditGender(event.target.value as 'M' | 'F' | '')
@@ -1572,3 +1587,5 @@ export default function PatientsPage() {
     </Box>
   );
 }
+
+

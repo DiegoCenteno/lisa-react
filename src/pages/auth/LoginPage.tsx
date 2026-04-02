@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -15,7 +15,6 @@ import {
 import {
   Visibility,
   VisibilityOff,
-  LocalHospital as HospitalIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -55,22 +54,27 @@ export default function LoginPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'linear-gradient(135deg, #00897B 0%, #1565C0 100%)',
+        backgroundImage: 'url(/img/hero-bg2.jpg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
         p: 2,
       }}
     >
       <Card sx={{ maxWidth: 420, width: '100%' }}>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{ textAlign: 'center', mb: 4 }}>
-            <HospitalIcon
-              sx={{ fontSize: 48, color: 'primary.main', mb: 1 }}
+            <Box
+              component="img"
+              src="/img/lisacompleto.png"
+              alt="LisaMedic"
+              sx={{
+                width: '100%',
+                maxWidth: 240,
+                height: 'auto',
+                display: 'inline-block',
+              }}
             />
-            <Typography variant="h4" sx={{ color: 'primary.main', fontWeight: 700 }}>
-              LisaMedic
-            </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Asistente Médico Digital
-            </Typography>
           </Box>
 
           {error && (
@@ -136,7 +140,7 @@ export default function LoginPage() {
               onClick={() => navigate('/registrar')}
               sx={{ mb: 1 }}
             >
-              Crear cuenta medica
+              Crear cuenta médica
             </Button>
           </Box>
 
@@ -150,3 +154,4 @@ export default function LoginPage() {
     </Box>
   );
 }
+

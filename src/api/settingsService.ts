@@ -117,6 +117,9 @@ export interface SettingsLabelStatusItem {
   identify: number;
   status?: number | null;
   created_at?: string;
+  data?: {
+    visible_days?: number | null;
+  } | string | null;
 }
 
 const settingsService = {
@@ -309,6 +312,9 @@ const settingsService = {
     office_id: number;
     code: string;
     identify: number;
+    data?: {
+      visible_days?: number | null;
+    };
     status?: number;
   }): Promise<SettingsLabelStatusItem> {
     const response = await apiClient.post<{ status: string; data: SettingsLabelStatusItem }>(
@@ -325,6 +331,9 @@ const settingsService = {
       office_id: number;
       code?: string;
       identify?: number;
+      data?: {
+        visible_days?: number | null;
+      };
       status?: number;
     }
   ): Promise<SettingsLabelStatusItem> {

@@ -200,7 +200,7 @@ export default function PatientDetailPage() {
     if (!patient?.phone) return;
     try {
       await navigator.clipboard.writeText(patient.phone);
-      setCopyMessage('Telefono copiado');
+      setCopyMessage('Información copiada');
     } catch (error) {
       console.error('Error copiando telefono:', error);
       setCopyError('No se pudo copiar el telefono');

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
+﻿import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -17,6 +17,9 @@ import {
   FormControl,
   InputLabel,
   Alert,
+  Snackbar,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   ContentCopy as CopyIcon,
@@ -134,11 +137,13 @@ export default function NewAppointmentDialog({
   consultationReasons = [],
   defaultAvailabilityMinutes = 50,
 }: Props) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
-  // ── Wizard state ──
+  // â”€â”€ Wizard state â”€â”€
   const [step, setStep] = useState<WizardStep>('dates');
 
-  // ── Step 1: dates + slots ──
+  // â”€â”€ Step 1: dates + slots â”€â”€
   const [availableDates, setAvailableDates] = useState<string[]>([]);
   const [availableTxt, setAvailableTxt] = useState('');
   const [datesLoading, setDatesLoading] = useState(false);
@@ -150,7 +155,7 @@ export default function NewAppointmentDialog({
   const [showConsultationReasonPicker, setShowConsultationReasonPicker] = useState(false);
   const [selectedConsultationReasonKey, setSelectedConsultationReasonKey] = useState('');
 
-  // ── Step 2: patient ──
+  // â”€â”€ Step 2: patient â”€â”€
   const [patients, setPatients] = useState<PatientSimple[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(false);
   const [patientSearch, setPatientSearch] = useState('');
@@ -184,7 +189,7 @@ export default function NewAppointmentDialog({
   const [manualDurationTotal, setManualDurationTotal] = useState<number | null>(null);
   const manualContentRef = useRef<HTMLDivElement | null>(null);
 
-  // ── Step 3: summary ──
+  // â”€â”€ Step 3: summary â”€â”€
   const [reason, setReason] = useState('');
   const [notifyPatient, setNotifyPatient] = useState(true);
   const [futureActiveAppointment, setFutureActiveAppointment] = useState<FutureActiveAppointmentWarning | null>(null);
@@ -192,8 +197,9 @@ export default function NewAppointmentDialog({
   const [replacePreviousAppointment, setReplacePreviousAppointment] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
 
-  // ── Reset on open ──
+  // â”€â”€ Reset on open â”€â”€
   useEffect(() => {
     if (open) {
       setStep('dates');
@@ -351,7 +357,7 @@ export default function NewAppointmentDialog({
     [effectiveAvailabilityMinutes, officeId]
   );
 
-  // ── Load patients ──
+  // â”€â”€ Load patients â”€â”€
   const loadPatients = useCallback(async () => {
     if (!officeId) return;
     setPatientsLoading(true);
@@ -365,7 +371,7 @@ export default function NewAppointmentDialog({
     }
   }, [officeId]);
 
-  // ── Handle date click → expand/collapse slots ──
+  // â”€â”€ Handle date click â†’ expand/collapse slots â”€â”€
   const handleDateClick = (date: string) => {
     if (expandedDate === date) {
       setExpandedDate(null);
@@ -376,7 +382,7 @@ export default function NewAppointmentDialog({
     }
   };
 
-  // ── Handle slot selection → go to patient step ──
+  // â”€â”€ Handle slot selection â†’ go to patient step â”€â”€
   const handleSlotSelect = (slot: AvailableSlot) => {
     if (slot.estatus === 0) return; // occupied
     setSelectedSlot(slot);
@@ -388,14 +394,14 @@ export default function NewAppointmentDialog({
     loadPatients();
   };
 
-  // ── Handle patient selection → go to summary step ──
+  // â”€â”€ Handle patient selection â†’ go to summary step â”€â”€
   const handlePatientSelect = (patient: PatientSimple) => {
     setSelectedPatient(patient);
     setShowNewPatientForm(false);
     setStep('summary');
   };
 
-  // ── Validate new patient form ──
+  // â”€â”€ Validate new patient form â”€â”€
   const validateNewPatient = (): boolean => {
     const errors: Record<string, string> = {};
     if (newPatient.phone && !/^\d{10}$/.test(newPatient.phone)) {
@@ -405,13 +411,13 @@ export default function NewAppointmentDialog({
       errors.name = 'El nombre es requerido';
     }
     if (newPatient.name.length > 80) {
-      errors.name = 'Máximo 80 caracteres';
+      errors.name = 'MÃ¡ximo 80 caracteres';
     }
     if (!newPatient.last_name.trim()) {
       errors.last_name = 'Los apellidos son requeridos';
     }
     if (newPatient.last_name.length > 80) {
-      errors.last_name = 'Máximo 80 caracteres';
+      errors.last_name = 'MÃ¡ximo 80 caracteres';
     }
     setNewPatientErrors(errors);
     return Object.keys(errors).length === 0;
@@ -451,10 +457,11 @@ export default function NewAppointmentDialog({
     setStep('summary');
   };
 
-  // ── Copy available dates text ──
+  // â”€â”€ Copy available dates text â”€â”€
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(availableTxt);
+      setCopyMessage('Horarios copiados');
     } catch {
       // Fallback: create a textarea and copy
       const textarea = document.createElement('textarea');
@@ -463,10 +470,11 @@ export default function NewAppointmentDialog({
       textarea.select();
       document.execCommand('copy');
       document.body.removeChild(textarea);
+      setCopyMessage('Horarios copiados');
     }
   };
 
-  // ── Save appointment ──
+  // â”€â”€ Save appointment â”€â”€
   const handleSave = async () => {
     if (!selectedSlot) return;
     setSaving(true);
@@ -589,7 +597,7 @@ export default function NewAppointmentDialog({
     };
   }, [mode, officeId, open, selectedPatient?.id, step]);
 
-  // ── Filtered patients (client-side search with deferred value for instant typing) ──
+  // â”€â”€ Filtered patients (client-side search with deferred value for instant typing) â”€â”€
   const deferredSearch = useDeferredValue(patientSearch);
   const filteredPatients = useMemo(() => {
     if (!deferredSearch.trim()) return patients.slice(0, 5);
@@ -602,10 +610,10 @@ export default function NewAppointmentDialog({
     );
   }, [patients, deferredSearch]);
 
-  // ── Dates to display ──
+  // â”€â”€ Dates to display â”€â”€
   const datesToShow = showAllDates ? availableDates : availableDates.slice(0, 6);
 
-  // ── Back button: in manual form goes all the way back to dates screen ──
+  // â”€â”€ Back button: in manual form goes all the way back to dates screen â”€â”€
   const handleBack = () => {
     if (step === 'dates' && showManualForm) {
       setShowManualForm(false);
@@ -954,7 +962,7 @@ export default function NewAppointmentDialog({
     if (manualStep === 'duration') {
       return (
         <Box>
-          <Typography sx={{ ...stickyTitleSx, color: DURATION_COLOR }}>Duración de la cita</Typography>
+          <Typography sx={{ ...stickyTitleSx, color: DURATION_COLOR }}>DuraciÃ³n de la cita</Typography>
           <Box
             sx={{
               display: 'grid',
@@ -982,9 +990,9 @@ export default function NewAppointmentDialog({
     return null;
   };
 
-  // ═══════════════════════════════════════════════
-  //  RENDER: Step 1 – Available Dates + Slots
-  // ═══════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  RENDER: Step 1 â€“ Available Dates + Slots
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const renderDatesStep = () => showManualForm ? renderManualForm() : (
     <Box>
       {consultationReasonPickerOptions.length > 0 && (
@@ -1162,9 +1170,9 @@ export default function NewAppointmentDialog({
     </Box>
   );
 
-  // ═══════════════════════════════════════════════
-  //  RENDER: Step 2 – Patient Selection
-  // ═══════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  RENDER: Step 2 â€“ Patient Selection
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const renderPatientStep = () => (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       {showNewPatientForm ? (
@@ -1305,10 +1313,10 @@ export default function NewAppointmentDialog({
             disabled={!!selectedExistingPatient}
           />
           <FormControl size="small" fullWidth disabled={!!selectedExistingPatient}>
-            <InputLabel>GÃ©nero</InputLabel>
+            <InputLabel>Género</InputLabel>
             <Select
               value={newPatient.gender}
-              label="GÃ©nero"
+              label="Género"
               onChange={(e) =>
                 setNewPatient({
                   ...newPatient,
@@ -1323,7 +1331,7 @@ export default function NewAppointmentDialog({
           </FormControl>
         </Box>
       ) : (
-        // ── Patient List ──
+        // â”€â”€ Patient List â”€â”€
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
           <TextField
             placeholder="Buscar paciente por nombre o teléfono..."
@@ -1379,9 +1387,9 @@ export default function NewAppointmentDialog({
     </Box>
   );
 
-  // ═══════════════════════════════════════════════
-  //  RENDER: Step 3 – Summary
-  // ═══════════════════════════════════════════════
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  //  RENDER: Step 3 â€“ Summary
+  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   const renderSummaryStep = () => {
     const patientName = selectedPatient
       ? selectedPatient.full_name
@@ -1427,7 +1435,7 @@ export default function NewAppointmentDialog({
         {showManualForm && selectedSlot ? (
           <Box sx={{ borderTop: '1px solid #eee', pt: 1 }}>
             <Typography sx={{ color: TEAL, fontSize: '0.85rem', textDecoration: 'underline', mb: 0.5 }}>
-              Duración de la consulta:
+              DuraciÃ³n de la consulta:
             </Typography>
             <TextField
               select
@@ -1529,63 +1537,71 @@ export default function NewAppointmentDialog({
     );
   };
 
-  // ── Step label ──
+  // â”€â”€ Step label â”€â”€
   const stepNumber = step === 'dates' ? 1 : step === 'patient' ? 2 : 3;
 
-  // ── Footer buttons per step ──
+  // â”€â”€ Footer buttons per step â”€â”€
   const renderFooter = () => {
     if (step === 'dates') {
       if (showManualForm) {
         return null;
       }
-        return (
-          <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2, gap: 2 }}>
-            {availableConsultationReasons.length === 0 ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: '0.78rem', color: '#6a7d88', lineHeight: 1.35 }}>
-                  Configura motivos de consulta con minutos preestablecidos
-                </Typography>
-                <Button
-                  variant="text"
-                  size="small"
-                  onClick={() => {
-                    onClose();
-                    navigate('/configuracion?tab=agenda#agenda-consultation-reasons');
-                  }}
-                  sx={{
-                    minWidth: 'auto',
-                    px: 0.4,
-                    py: 0,
-                    textTransform: 'none',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    lineHeight: 1.35,
-                  }}
-                >
-                  aquí
-                </Button>
-              </Box>
-            ) : (
-              <Box />
-            )}
-          <Button
-            variant="outlined"
-            size="small"
-            onClick={() => {
-              setShowManualForm(true);
-              setManualStep('day');
-            }}
-            sx={{
-              borderColor: TEAL,
-              color: TEAL,
-              textTransform: 'none',
-              fontWeight: 500,
-              '&:hover': { borderColor: '#00796b', backgroundColor: 'rgba(0,137,123,0.04)' },
-            }}
-          >
-            Día y hora específica
-          </Button>
-        </DialogActions>
+      return (
+        <Box sx={{ px: 3, pb: 2, display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+          <DialogActions sx={{ justifyContent: 'space-between', px: 0, pb: 0, gap: 2 }}>
+            <Button
+              variant="contained"
+              size="small"
+              onClick={onClose}
+              sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
+            >
+              Salir
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => {
+                setShowManualForm(true);
+                setManualStep('day');
+              }}
+              sx={{
+                borderColor: TEAL,
+                color: TEAL,
+                textTransform: 'none',
+                fontWeight: 500,
+                '&:hover': { borderColor: '#00796b', backgroundColor: 'rgba(0,137,123,0.04)' },
+              }}
+            >
+              Día y hora específica
+            </Button>
+          </DialogActions>
+          {availableConsultationReasons.length === 0 ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+              <Typography sx={{ fontSize: '0.78rem', color: '#6a7d88', lineHeight: 1.35 }}>
+                Configura motivos de consulta con minutos preestablecidos
+              </Typography>
+              <Button
+                variant="text"
+                size="small"
+                onClick={() => {
+                  onClose();
+                  navigate('/configuracion?tab=agenda#agenda-consultation-reasons');
+                }}
+                sx={{
+                  minWidth: 'auto',
+                  px: 0.4,
+                  py: 0,
+                  textTransform: 'none',
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
+                  lineHeight: 1.35,
+                }}
+              >
+                aquí
+              </Button>
+            </Box>
+          ) : null}
+        </Box>
       );
     }
 
@@ -1679,12 +1695,21 @@ export default function NewAppointmentDialog({
       onClose={onClose}
       maxWidth="sm"
       fullWidth
-      sx={{ '& .MuiDialog-container': { alignItems: 'flex-start', pt: '8vh' } }}
+      sx={{
+        '& .MuiDialog-container': {
+          alignItems: 'flex-start',
+          pt: { xs: '6px', sm: '8vh' },
+        },
+        '& .MuiDialog-paper': {
+          width: isMobile ? 'calc(100vw - 8px)' : undefined,
+          maxWidth: isMobile ? 'calc(100vw - 8px)' : 620,
+          margin: isMobile ? '4px' : undefined,
+        },
+      }}
       PaperProps={{
         sx: {
-          borderRadius: 2,
+          borderRadius: { xs: 1.5, sm: 2 },
           height: futureActiveAppointment ? 610 : 500,
-          maxWidth: 700,
           display: 'flex',
           flexDirection: 'column',
         },
@@ -1748,6 +1773,24 @@ export default function NewAppointmentDialog({
         {step === 'summary' && renderSummaryStep()}
       </DialogContent>
       {renderFooter()}
+      <Snackbar
+        open={Boolean(copyMessage)}
+        autoHideDuration={2500}
+        onClose={() => setCopyMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setCopyMessage(null)}
+          severity="success"
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {copyMessage}
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 }
+
+
+

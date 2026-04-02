@@ -501,6 +501,7 @@ export default function AgendaPage() {
     if (!phone) return;
     try {
       await navigator.clipboard.writeText(String(phone));
+      setActionToast('Información copiada');
     } catch (error) {
       console.error('Error copiando telefono:', error);
     }
@@ -551,7 +552,7 @@ export default function AgendaPage() {
 
     try {
       await navigator.clipboard.writeText(text);
-      setActionToast('Datos de la cita copiados correctamente');
+      setActionToast('Información copiada');
       handleCloseSelectedEvent();
     } catch (error) {
       console.error('Error copiando datos de la cita:', error);
@@ -569,7 +570,7 @@ export default function AgendaPage() {
 
     try {
       await navigator.clipboard.writeText(historyLink);
-      setActionToast('Enlace de historia clínica copiado correctamente');
+      setActionToast('Información copiada');
     } catch (error) {
       console.error('Error copiando enlace de historia clínica:', error);
     }
@@ -1003,12 +1004,17 @@ export default function AgendaPage() {
         sx={{
           '& .MuiDialog-container': {
             alignItems: 'flex-start',
-            pt: '4vh',
+            pt: { xs: '6px', sm: '6px' },
+          },
+          '& .MuiDialog-paper': {
+            width: isMobile ? 'calc(100vw - 8px)' : undefined,
+            maxWidth: isMobile ? 'calc(100vw - 8px)' : 444,
+            margin: isMobile ? '4px' : '60px auto 32px',
           },
         }}
         PaperProps={{
           sx: {
-            borderRadius: 2,
+            borderRadius: { xs: 1.5, sm: 2 },
             overflow: 'hidden',
           },
         }}
@@ -1614,10 +1620,19 @@ export default function AgendaPage() {
         onClose={() => setSummaryOpen(false)}
         maxWidth="sm"
         fullWidth
+        sx={{
+          '& .MuiDialog-container': {
+            alignItems: 'flex-start',
+            pt: { xs: '6px', sm: '10px' },
+          },
+        }}
         PaperProps={{
           sx: {
             borderRadius: 2,
             overflow: 'hidden',
+            width: { xs: 'calc(100% - 6px)', sm: 'auto' },
+            maxWidth: { xs: 'calc(100% - 6px)', sm: 640 },
+            m: { xs: '3px', sm: '60px auto 32px' },
           },
         }}
       >

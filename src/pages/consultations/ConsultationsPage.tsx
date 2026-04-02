@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
   Button,
@@ -42,6 +43,7 @@ function truncateText(value?: string, limit: number = 140) {
 }
 
 export default function ConsultationsPage() {
+  const navigate = useNavigate();
   const [consultations, setConsultations] = useState<ConsultationListItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -158,6 +160,7 @@ export default function ConsultationsPage() {
                         <Button
                           variant="contained"
                           size="small"
+                          onClick={() => navigate(`/pacientes/${consultation.patient_id}`)}
                           sx={{
                             backgroundColor: '#394b63',
                             '&:hover': { backgroundColor: '#314157' },

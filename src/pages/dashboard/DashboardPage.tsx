@@ -106,6 +106,15 @@ export default function DashboardPage() {
         Bienvenido, {user?.name}
       </Typography>
 
+      <Typography
+        variant="body2"
+        sx={{ mb: 3, color: 'text.secondary', maxWidth: 760, lineHeight: 1.6 }}
+      >
+        Nos actualizamos para ti. Queremos darte el mejor servicio, cualquier duda o
+        inconveniente que observes en este nuevo sistema te rogamos nos lo hagas saber.
+        WhatsApp: 3123097282.
+      </Typography>
+
       <Grid container spacing={2} sx={{ mb: 4 }}>
         {statCards.map((card) => (
           <Grid key={card.title} size={{ xs: 6, sm: 4, md: 2 }}>
