@@ -133,7 +133,7 @@ function appointmentToEvent(apt: Appointment): EventInput {
       status: apt.status,
       smscode: apt.smscode,
       confirmed: apt.confirmed,
-      smsstatus: apt.smsstatus,
+      confirmation_whatsapp_status: apt.confirmation_whatsapp_status,
       is_first_time: apt.is_first_time,
       history_form_required: apt.history_form_required,
       patientId: apt.patient?.id ?? apt.patient_id,
@@ -146,13 +146,14 @@ function appointmentToEvent(apt: Appointment): EventInput {
 }
 
 function renderEventContent(arg: EventContentArg) {
-  const { confirmed, smsstatus, phone, status } = arg.event.extendedProps;
+  const { confirmed, confirmation_whatsapp_status, phone, status } = arg.event.extendedProps;
   const isListView = arg.view.type.startsWith('list');
   const bgColor = arg.event.backgroundColor;
   const normalizedStatus = Number(status);
   const isNoShow = normalizedStatus === 2;
   const isCancelled = normalizedStatus === 3;
   const isConfirmed = !isNoShow && !isCancelled && (confirmed || normalizedStatus === 1);
+  const hasConfirmationNotification = Number(confirmation_whatsapp_status ?? 0) === 2;
 
   // In list view, pick icon color that contrasts with row background
   const confirmedColor = '#00aeff';
@@ -172,7 +173,7 @@ function renderEventContent(arg: EventContentArg) {
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <EventBusyIcon sx={{ color: cancelledColor, fontSize: 21 }} />
     </span>
-  ) : smsstatus === 1 ? (
+  ) : hasConfirmationNotification ? (
     <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <CheckIcon sx={{ color: smsColor, fontSize: 'medium' }} />
     </span>

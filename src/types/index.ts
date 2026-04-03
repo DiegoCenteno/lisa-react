@@ -59,7 +59,7 @@ export interface Appointment {
   reason?: string;
   smscode?: string | null;
   confirmed?: boolean;
-  smsstatus?: number;
+  confirmation_whatsapp_status?: number | null;
   is_first_time?: boolean;
   history_form_required?: boolean;
   patient?: {
