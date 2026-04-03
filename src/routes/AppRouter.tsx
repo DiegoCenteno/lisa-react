@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from '../components/layout/MainLayout';
 import ProtectedRoute from './ProtectedRoute';
 import LoginPage from '../pages/auth/LoginPage';
+import ClearStoragePage from '../pages/auth/ClearStoragePage';
 import DashboardPage from '../pages/dashboard/DashboardPage';
 import AgendaPage from '../pages/agenda/AgendaPage';
 import ActivityLogsPage from '../pages/activity/ActivityLogsPage';
@@ -24,6 +25,7 @@ export default function AppRouter() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/clear-storage" element={<ClearStoragePage />} />
         <Route path="/registrar" element={<PublicDoctorRegisterPage />} />
         <Route path="/asistente" element={<PublicAssistantRegisterPage />} />
         <Route path="/asistente/:code" element={<PublicAssistantRegisterPage />} />
