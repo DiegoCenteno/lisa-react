@@ -214,6 +214,7 @@ export default function PatientDetailPage() {
 
     setDailyNoteEditRequest(note);
     setTab(2);
+    setSearchParams({ tab: 'soap' }, { replace: true });
   };
 
   useEffect(() => {
