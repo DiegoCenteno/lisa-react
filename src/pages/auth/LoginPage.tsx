@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -27,6 +27,12 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    const cleanupUntil = new Date('2026-04-10T23:59:59');
+    if (new Date() <= cleanupUntil) {
+      localStorage.clear();
+    }
+  }, []);
   if (isAuthenticated) {
     navigate('/dashboard', { replace: true });
     return null;
@@ -41,7 +47,7 @@ export default function LoginPage() {
       await login(emailOrPhone, password);
       navigate('/dashboard', { replace: true });
     } catch {
-      setError('Credenciales inválidas. Verifica tu email/teléfono y contraseña.');
+      setError('Credenciales inválidas. Verifica tu email/teléfono y Contraseña.');
     } finally {
       setLoading(false);
     }
@@ -154,4 +160,7 @@ export default function LoginPage() {
     </Box>
   );
 }
+
+
+
 
