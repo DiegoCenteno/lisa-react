@@ -17,7 +17,7 @@ import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
 import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 
 export default function AppRouter() {
-  const routerBase = (import.meta.env.BASE_URL || '/').replace(/\/$/, '') || '/';
+  const routerBase = window.location.pathname.startsWith('/app') ? '/app' : '/';
 
   return (
     <BrowserRouter basename={routerBase}>
