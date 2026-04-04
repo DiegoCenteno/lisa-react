@@ -662,7 +662,7 @@ export default function AgendaPage() {
       console.error('Error actualizando estatus de la cita:', error);
       setActionLoading(false);
     }
-  }, [selectedEvent, pendingAction, dateRange, loadAppointments, handleCloseSelectedEvent]);
+  }, [selectedEvent, pendingAction, notifyPatientAction, dateRange, loadAppointments, handleCloseSelectedEvent]);
 
   const handleOpenAppointmentMore = useCallback(async () => {
     if (!selectedEvent) return;

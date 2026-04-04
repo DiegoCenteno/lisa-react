@@ -1338,9 +1338,6 @@ function PatientNuchalTranslucencyReportBuilder({
             <Typography variant="h6" sx={{ color: '#0a8f2f', fontWeight: 700 }}>
               Ultrasonido translucencia nucal
             </Typography>
-            <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-              Builder V2 del estudio usando patient_reports.report_payload.
-            </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             {editing ? (
@@ -1433,9 +1430,9 @@ function PatientNuchalTranslucencyReportBuilder({
               </Box>
             </SectionCard>
 
-            <Alert severity="info">
+            {false ? <Alert severity="info">
               Esta primera versión de tipoest2 ya queda sobre la estructura V2 y reutiliza la interpretación compartida.
-            </Alert>
+            </Alert> : null}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
               <Button color="inherit" onClick={handleCancelEdit} disabled={saving || downloading}>Cancelar</Button>
               <Button variant="contained" onClick={() => void persistReport()} disabled={saving}>

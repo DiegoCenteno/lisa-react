@@ -1775,7 +1775,7 @@ export default function NewAppointmentDialog({
       {renderFooter()}
       <Snackbar
         open={Boolean(copyMessage)}
-        autoHideDuration={2500}
+        autoHideDuration={2000}
         onClose={() => setCopyMessage(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       >
