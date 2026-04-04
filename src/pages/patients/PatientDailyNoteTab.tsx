@@ -235,7 +235,7 @@ const AnalysisSection = memo(function AnalysisSection({
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <TextField fullWidth size="small" label={`Diagn\u00f3stico ${index + 1}`} value={diagnostic} onChange={(e) => onChange({ ...form, diagnostics: form.diagnostics.map((item, i) => i === index ? e.target.value : item) })} />
               {index === 0 ? (
-                <IconButton color="primary" onClick={() => onChange({ ...form, diagnostics: form.diagnostics.length >= 5 ? form.diagnostics : [...form.diagnostics, ''] })}><AddIcon /></IconButton>
+                <IconButton color="primary" onClick={() => onChange({ ...form, diagnostics: form.diagnostics.length >= 10 ? form.diagnostics : [...form.diagnostics, ''] })}><AddIcon /></IconButton>
               ) : (
                 <IconButton color="error" onClick={() => onChange({ ...form, diagnostics: form.diagnostics.filter((_, i) => i !== index) })}><CancelIcon /></IconButton>
               )}
@@ -297,7 +297,7 @@ const PlanSection = memo(function PlanSection({
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
               <TextField fullWidth size="small" label={`Medicamento ${index + 1}`} value={row.medicament} onChange={(e) => onChange({ ...form, medications: form.medications.map((item, i) => i === index ? { ...item, medicament: e.target.value } : item) })} />
               {index === 0 ? (
-                <IconButton color="primary" onClick={() => onChange({ ...form, medications: form.medications.length >= 6 ? form.medications : [...form.medications, { medicament: '', prescription: '' }] })}><AddIcon /></IconButton>
+                <IconButton color="primary" onClick={() => onChange({ ...form, medications: form.medications.length >= 10 ? form.medications : [...form.medications, { medicament: '', prescription: '' }] })}><AddIcon /></IconButton>
               ) : (
                 <IconButton color="error" onClick={() => onChange({ ...form, medications: form.medications.filter((_, i) => i !== index) })}><CancelIcon /></IconButton>
               )}

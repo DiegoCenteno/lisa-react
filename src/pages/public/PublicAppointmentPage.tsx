@@ -86,6 +86,7 @@ export default function PublicAppointmentPage() {
   const [selectedCandidateId, setSelectedCandidateId] = useState<number | null>(null);
   const [candidateDecisionMade, setCandidateDecisionMade] = useState(false);
   const [candidateLookupLimitReached, setCandidateLookupLimitReached] = useState(false);
+  const [candidateLookupRequestKey, setCandidateLookupRequestKey] = useState(0);
 
   const isBookingMode = linkData?.mode === 'booking';
 
@@ -164,6 +165,7 @@ export default function PublicAppointmentPage() {
       setSelectedCandidateId(null);
       setCandidateDecisionMade(false);
       setCandidateLookupLimitReached(false);
+      setCheckingCandidates(false);
       return;
     }
 
@@ -181,10 +183,14 @@ export default function PublicAppointmentPage() {
       return;
     }
 
+    if (candidateLookupRequestKey === 0) {
+      return;
+    }
+
     let active = true;
     setCheckingCandidates(true);
 
-    const timeoutId = window.setTimeout(async () => {
+    (async () => {
       try {
         const response = await publicStudyService.checkPublicBookingCandidates(code, {
           name: bookingForm.name.trim(),
@@ -218,13 +224,12 @@ export default function PublicAppointmentPage() {
           setCheckingCandidates(false);
         }
       }
-    }, 450);
+    })();
 
     return () => {
       active = false;
-      window.clearTimeout(timeoutId);
     };
-  }, [bookingForm.last_name, bookingForm.name, bookingForm.phone, code, isBookingMode, selectedCandidateId]);
+  }, [bookingForm.last_name, bookingForm.name, bookingForm.phone, candidateLookupRequestKey, code, isBookingMode, selectedCandidateId]);
 
   const officeWhatsAppUrl = useMemo(() => {
     const normalized = normalizePhoneForWhatsApp(linkData?.office.phone);
@@ -244,9 +249,7 @@ export default function PublicAppointmentPage() {
         selectedSlot &&
           bookingForm.name.trim() &&
           bookingForm.last_name.trim() &&
-          bookingForm.phone.trim().length === 10 &&
-          candidateDecisionMade &&
-          !checkingCandidates
+          bookingForm.phone.trim().length === 10
       )
     : Boolean(selectedSlot && linkData?.can_reschedule);
 
@@ -255,6 +258,27 @@ export default function PublicAppointmentPage() {
       ...current,
       [field]: field === 'phone' ? normalizePhoneInput(value) : value,
     }));
+    setBookingCandidates([]);
+    setSelectedCandidateId(null);
+    setCandidateDecisionMade(false);
+    setCandidateLookupLimitReached(false);
+  };
+
+  const handleBookingFieldBlur = () => {
+    if (!isBookingMode || checkingCandidates || candidateLookupLimitReached) {
+      return;
+    }
+
+    const hasEnoughData =
+      bookingForm.name.trim().length >= 2 &&
+      bookingForm.last_name.trim().length >= 2 &&
+      bookingForm.phone.trim().length === 10;
+
+    if (!hasEnoughData) {
+      return;
+    }
+
+    setCandidateLookupRequestKey((current) => current + 1);
   };
 
   const handleSubmit = async () => {
@@ -575,18 +599,21 @@ export default function PublicAppointmentPage() {
                         label="Nombre(s)"
                         value={bookingForm.name}
                         onChange={(event) => handleBookingFieldChange('name', event.target.value)}
+                        onBlur={handleBookingFieldBlur}
                         fullWidth
                       />
                       <TextField
                         label="Apellidos"
                         value={bookingForm.last_name}
                         onChange={(event) => handleBookingFieldChange('last_name', event.target.value)}
+                        onBlur={handleBookingFieldBlur}
                         fullWidth
                       />
                       <TextField
                         label="Teléfono"
                         value={bookingForm.phone}
                         onChange={(event) => handleBookingFieldChange('phone', event.target.value)}
+                        onBlur={handleBookingFieldBlur}
                         fullWidth
                       />
                     </>

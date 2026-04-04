@@ -57,7 +57,7 @@ type DisplayFieldProps = {
 
 const riskOptions = ['bajo riesgo', 'alto riesgo'];
 const conclusionFetusCountOptions = [
-  { value: 'unico', label: 'Unico' },
+  { value: 'unico', label: 'Único' },
   { value: 'bicorial - biamniotico', label: 'Bicorial - biamniotico' },
   { value: 'monocorial - biamniotico', label: 'Monocorial - biamniotico' },
   { value: 'monocorial - monoamniotico', label: 'Monocorial - monoamniotico' },

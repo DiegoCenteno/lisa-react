@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   AppBar,
   Toolbar,
@@ -32,6 +33,7 @@ const roleLabels: Record<string, string> = {
 
 export default function Navbar({ onMenuClick }: NavbarProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -47,6 +49,11 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
   const handleLogout = () => {
     handleMenuClose();
     logout();
+  };
+
+  const handleProfile = () => {
+    handleMenuClose();
+    navigate('/configuracion?tab=profile');
   };
 
   return (
@@ -105,7 +112,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
-          <MenuItem onClick={handleMenuClose}>
+          <MenuItem onClick={handleProfile}>
             <PersonIcon sx={{ mr: 1, fontSize: 20 }} />
             Mi Perfil
           </MenuItem>

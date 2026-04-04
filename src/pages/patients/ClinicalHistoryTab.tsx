@@ -111,11 +111,89 @@ type DocumentFieldProps = {
   hidden?: boolean;
 };
 
+type PregnancySummary = {
+  fur: string;
+  fpp: string;
+  gestation: string;
+};
+
 const INFO_ALERT_TEXT =
   'Se recuperó un borrador local de historia clínica. Puedes continuar editando o cancelar para volver a la versión guardada.';
 
 function getDraftKey(patientId: number) {
   return `clinical-history-draft:${patientId}`;
+}
+
+function capitalizeEs(value: string) {
+  if (!value) return '';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function parseIsoDateOnly(value?: string | null): Date | null {
+  if (!value) return null;
+
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day] = match;
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getFullYear() !== Number(year) ||
+    parsed.getMonth() !== Number(month) - 1 ||
+    parsed.getDate() !== Number(day)
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function addDays(date: Date, days: number): Date {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function diffInDays(from: Date, to: Date): number {
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.floor((startOfDay(to).getTime() - startOfDay(from).getTime()) / msPerDay);
+}
+
+function formatSpanishDate(date: Date, withWeekday = false): string {
+  const day = date.getDate();
+  const month = capitalizeEs(date.toLocaleString('es-MX', { month: 'long' }));
+  const year = date.getFullYear();
+
+  if (!withWeekday) {
+    return `${day} ${month} ${year}`;
+  }
+
+  const weekday = capitalizeEs(date.toLocaleString('es-MX', { weekday: 'long' }));
+  return `${weekday}, ${day} ${month} ${year}`;
+}
+
+function buildPregnancySummary(lastMenstruationDate?: string | null): PregnancySummary | null {
+  const furDate = parseIsoDateOnly(lastMenstruationDate);
+  if (!furDate) return null;
+
+  const elapsedDays = diffInDays(furDate, new Date());
+  if (elapsedDays < 0) return null;
+
+  const weeks = Math.floor(elapsedDays / 7);
+  const days = elapsedDays % 7;
+  const fppDate = addDays(furDate, 280);
+
+  return {
+    fur: formatSpanishDate(furDate),
+    fpp: formatSpanishDate(fppDate, true),
+    gestation: `${weeks} semana${weeks === 1 ? '' : 's'} ${days} día${days === 1 ? '' : 's'}`,
+  };
 }
 
 function getStoredOfficeId(): number | null {
@@ -884,6 +962,10 @@ const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
 }: GynecologicalSectionProps) {
   const isVisible = (key: string) => fieldVisible?.(key) ?? true;
   const isPregnant = Boolean(value.pregnant);
+  const pregnancySummary = useMemo(
+    () => (isPregnant ? buildPregnancySummary(value.last_menstruation_date) : null),
+    [isPregnant, value.last_menstruation_date]
+  );
 
   return (
     <SubsectionCard title="Embarazo y control">
@@ -908,6 +990,29 @@ const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
         )}
         <Grid size={{ xs: 12, sm: 6 }} />
         <Field label="FUR" value={value.last_menstruation_date} disabled={disabled} hidden={!isVisible('fur')} onChange={(last_menstruation_date) => onPatch({ last_menstruation_date })} type="date" />
+        {isPregnant && pregnancySummary && (
+          <Grid size={{ xs: 12 }}>
+            <Box sx={{ px: 1, py: 0.5, color: 'text.secondary' }}>
+              <Box component="ul" sx={{ m: 0, pl: 3 }}>
+                <li>
+                  <Typography variant="body2" component="span">
+                    Fecha de última menstruación: {pregnancySummary.fur}
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2" component="span">
+                    Fecha probable de parto: {pregnancySummary.fpp}
+                  </Typography>
+                </li>
+                <li>
+                  <Typography variant="body2" component="span">
+                    Gestación: {pregnancySummary.gestation}
+                  </Typography>
+                </li>
+              </Box>
+            </Box>
+          </Grid>
+        )}
 
         {isPregnant && (
           <>

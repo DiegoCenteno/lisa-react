@@ -229,6 +229,20 @@ export const patientService = {
     return normalizePatient(response.data.data);
   },
 
+  async createPatient(data: {
+    name: string;
+    last_name: string;
+    phone?: string;
+    birth?: string;
+  }): Promise<Patient> {
+    const officeId = await resolveOfficeId();
+    const response = await apiClient.post<{ status: string; data: ApiPatientRecord }>('/v2/patients', {
+      ...data,
+      office_id: officeId,
+    });
+    return normalizePatient(response.data.data);
+  },
+
   async updatePatient(
     id: number,
     data: {

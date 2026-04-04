@@ -45,6 +45,7 @@ import { patientService } from '../../api/patientService';
 import type { Patient, PatientFile, PatientTagControlData } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
 import { useAuth } from '../../hooks/useAuth';
+import ClickableDateField from '../../components/ClickableDateField';
 
 function formatPhone(phone?: string) {
   if (!phone) return '-';
@@ -113,7 +114,7 @@ function getStatusButtonSx(colorClass?: string, active = false) {
 
 export default function PatientsPage() {
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { user, can } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -155,6 +156,13 @@ export default function PatientsPage() {
   const [quickEditGender, setQuickEditGender] = useState<'M' | 'F' | ''>('');
   const [quickEditSaving, setQuickEditSaving] = useState(false);
   const [quickEditError, setQuickEditError] = useState<string | null>(null);
+  const [createPatientOpen, setCreatePatientOpen] = useState(false);
+  const [createPatientName, setCreatePatientName] = useState('');
+  const [createPatientLastName, setCreatePatientLastName] = useState('');
+  const [createPatientPhone, setCreatePatientPhone] = useState('');
+  const [createPatientBirthDate, setCreatePatientBirthDate] = useState('');
+  const [createPatientSaving, setCreatePatientSaving] = useState(false);
+  const [createPatientError, setCreatePatientError] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState('');
   const [previewFileType, setPreviewFileType] = useState('');
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
@@ -163,6 +171,15 @@ export default function PatientsPage() {
   const attachSectionRef = useRef<HTMLDivElement | null>(null);
   const canViewPatientDetail = can('patients.detail.view');
   const canQuickEditPatient = can('patients.quick_edit');
+
+  const sortPatientsByName = (items: Patient[]) =>
+    [...items].sort((left, right) =>
+      `${left.full_name ?? `${left.name} ${left.last_name}`}`.localeCompare(
+        `${right.full_name ?? `${right.name} ${right.last_name}`}`,
+        'es',
+        { sensitivity: 'base' }
+      )
+    );
 
   useEffect(() => {
     const loadPatients = async () => {
@@ -336,6 +353,24 @@ export default function PatientsPage() {
     setQuickEditError(null);
   };
 
+  const handleOpenCreatePatient = () => {
+    setCreatePatientName('');
+    setCreatePatientLastName('');
+    setCreatePatientPhone('');
+    setCreatePatientBirthDate('');
+    setCreatePatientError(null);
+    setCreatePatientOpen(true);
+  };
+
+  const handleCloseCreatePatient = () => {
+    if (createPatientSaving) {
+      return;
+    }
+
+    setCreatePatientOpen(false);
+    setCreatePatientError(null);
+  };
+
   const handleSelectPatient = (patient: Patient) => {
     if (canViewPatientDetail) {
       navigate(`/pacientes/${patient.id}`);
@@ -380,6 +415,43 @@ export default function PatientsPage() {
       setQuickEditError('No se pudieron guardar los cambios del paciente.');
     } finally {
       setQuickEditSaving(false);
+    }
+  };
+
+  const handleCreatePatient = async () => {
+    const normalizedName = createPatientName.trim();
+    const normalizedLastName = createPatientLastName.trim();
+    const normalizedPhone = createPatientPhone.trim();
+
+    if (!normalizedName || !normalizedLastName) {
+      setCreatePatientError('Ingresa nombre y apellido del paciente.');
+      return;
+    }
+
+    setCreatePatientSaving(true);
+    setCreatePatientError(null);
+
+    try {
+      const createdPatient = await patientService.createPatient({
+        name: normalizedName,
+        last_name: normalizedLastName,
+        phone: normalizedPhone || undefined,
+        birth: createPatientBirthDate || undefined,
+      });
+
+      setPatients((current) => sortPatientsByName([...current, createdPatient]));
+      setCreatePatientOpen(false);
+
+      if (user?.role === 'medico') {
+        navigate(`/pacientes/${createdPatient.id}?tab=history`);
+      } else {
+        setCopyMessage('Registro guardado');
+      }
+    } catch (error) {
+      console.error('Error creando paciente:', error);
+      setCreatePatientError('No se pudo guardar el paciente.');
+    } finally {
+      setCreatePatientSaving(false);
     }
   };
 
@@ -1193,22 +1265,27 @@ export default function PatientsPage() {
 
       <Card sx={{ mb: 3 }}>
         <CardContent sx={{ py: 2 }}>
-          <TextField
-            fullWidth
-            placeholder={'Buscar por nombre o tel\u00e9fono...'}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon color="action" />
-                  </InputAdornment>
-                ),
-              },
-            }}
-            size="small"
-          />
+          <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' } }}>
+            <TextField
+              fullWidth
+              placeholder={'Buscar por nombre o tel\u00e9fono...'}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon color="action" />
+                    </InputAdornment>
+                  ),
+                },
+              }}
+              size="small"
+            />
+            <Button variant="contained" onClick={handleOpenCreatePatient} sx={{ minWidth: { sm: 180 } }}>
+              Nuevo paciente
+            </Button>
+          </Box>
         </CardContent>
       </Card>
 
@@ -1509,6 +1586,64 @@ export default function PatientsPage() {
           {attachMessage}
         </Alert>
       </Snackbar>
+
+      <Dialog
+        open={createPatientOpen}
+        onClose={handleCloseCreatePatient}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Nuevo paciente</DialogTitle>
+        <DialogContent dividers>
+          <Box sx={{ display: 'grid', gap: 2, mt: 0.5 }}>
+            {createPatientError && <Alert severity="error">{createPatientError}</Alert>}
+
+            <TextField
+              label="Nombre"
+              value={createPatientName}
+              onChange={(event) => setCreatePatientName(event.target.value)}
+              fullWidth
+              disabled={createPatientSaving}
+            />
+
+            <TextField
+              label="Apellido"
+              value={createPatientLastName}
+              onChange={(event) => setCreatePatientLastName(event.target.value)}
+              fullWidth
+              disabled={createPatientSaving}
+            />
+
+            <TextField
+              label="Teléfono"
+              value={createPatientPhone}
+              onChange={(event) => setCreatePatientPhone(event.target.value)}
+              fullWidth
+              disabled={createPatientSaving}
+            />
+
+            <ClickableDateField
+              label="Fecha de nacimiento"
+              value={createPatientBirthDate}
+              onChange={setCreatePatientBirthDate}
+              disabled={createPatientSaving}
+              fullWidth
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCreatePatient} disabled={createPatientSaving}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => void handleCreatePatient()}
+            disabled={createPatientSaving}
+          >
+            {createPatientSaving ? 'Guardando...' : 'Guardar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={quickEditOpen}

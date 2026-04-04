@@ -157,17 +157,23 @@ export default function DashboardPage() {
               ) : (
                 <List>
                   {todayAppointments.map((appointment) => (
+                    (() => {
+                      const patientId = appointment.patient_id ?? appointment.patient?.id;
+                      const patientName = `${appointment.patient?.name ?? ''} ${appointment.patient?.last_name ?? ''}`.trim();
+
+                      return (
                     <ListItem
                       key={appointment.id}
                       sx={{
                         borderRadius: 1,
                         mb: 0.5,
-                        cursor: 'pointer',
+                        cursor: patientId ? 'pointer' : 'default',
                         '&:hover': { bgcolor: 'action.hover' },
                       }}
-                      onClick={() =>
-                        navigate(`/pacientes/${appointment.patient_id}`)
-                      }
+                      onClick={() => {
+                        if (!patientId) return;
+                        navigate(`/pacientes/${patientId}`);
+                      }}
                     >
                       <ListItemAvatar>
                         <Avatar sx={{ bgcolor: 'primary.main' }}>
@@ -176,7 +182,7 @@ export default function DashboardPage() {
                         </Avatar>
                       </ListItemAvatar>
                       <ListItemText
-                        primary={`${appointment.patient?.name} ${appointment.patient?.last_name}`}
+                        primary={patientName || 'Paciente sin nombre'}
                         secondary={`${appointment.datestart ? new Date(appointment.datestart).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''} - ${appointment.dateend ? new Date(appointment.dateend).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : ''} | ${appointment.reason ?? ''}`}
                       />
                       <Chip
@@ -188,6 +194,8 @@ export default function DashboardPage() {
                         size="small"
                       />
                     </ListItem>
+                      );
+                    })()
                   ))}
                 </List>
               )}
