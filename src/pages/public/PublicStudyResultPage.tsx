@@ -280,9 +280,7 @@ function AppointmentConfirmationView({
   onRespond: (action: 'confirm' | 'cancel') => void;
 }) {
   const statusAlert =
-    appointment.status === 'confirmed'
-      ? { severity: 'success' as const, text: 'Tu cita ya está confirmada.' }
-      : appointment.status === 'cancelled'
+    appointment.status === 'cancelled'
         ? { severity: 'error' as const, text: 'Tu cita ya está cancelada.' }
         : null;
 
@@ -420,6 +418,8 @@ function AppointmentConfirmationView({
             </Stack>
           ) : null}
 
+          {historyMessage ? <Alert severity="success">{historyMessage}</Alert> : null}
+
           {appointment.show_history_form && appointment.history_form ? (
             <Box
               ref={historyFormRef}
@@ -441,8 +441,6 @@ function AppointmentConfirmationView({
                     </Typography>
                   ) : null}
                 </Box>
-
-                {historyMessage ? <Alert severity="success">{historyMessage}</Alert> : null}
 
                 <Stack spacing={2}>
                   <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
@@ -822,7 +820,7 @@ export default function PublicStudyResultPage() {
       setError(null);
       const response = await publicStudyService.saveAppointmentHistoryForm(code, historyFormState);
       setAppointment(response);
-      setHistoryMessage('Tus respuestas se guardaron correctamente.');
+      setHistoryMessage('Gracias por contestar la encuesta.');
     } catch (requestError) {
       console.error('Error guardando historia clínica pública:', requestError);
       setError('No se pudieron guardar tus respuestas de historia clínica.');

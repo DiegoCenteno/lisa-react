@@ -567,7 +567,7 @@ export default function AgendaPage() {
     if (!smscode) return;
 
     const baseUrl = (import.meta.env.VITE_PUBLIC_APP_BASE_URL as string | undefined)?.trim() || 'http://lisa.test';
-    const historyLink = `${baseUrl.replace(/\/$/, '')}/app/${smscode}`;
+    const historyLink = `${baseUrl.replace(/\/$/, '')}/wsapp/${smscode}`;
 
     try {
       await navigator.clipboard.writeText(historyLink);
@@ -1280,7 +1280,8 @@ export default function AgendaPage() {
                     Regresar
                   </Button>
 
-                  {selectedEvent.event.extendedProps.smscode ? (
+                  {selectedEvent.event.extendedProps.smscode &&
+                  selectedEvent.event.extendedProps.is_first_time ? (
                     <Box
                       sx={{
                         mt: 1.5,
@@ -1289,36 +1290,50 @@ export default function AgendaPage() {
                         gap: 1.25,
                       }}
                     >
-                      <Typography sx={{ fontSize: '0.95rem', color: '#5f6a76', lineHeight: 1.6 }}>
-                        {selectedEvent.event.extendedProps.history_form_required
-                          ? 'Comparte un enlace con tu paciente para que conteste las preguntas de su historia clínica.'
-                          : 'Este enlace público también abre la ficha de la cita. Si la historia clínica del paciente ya fue respondida, el cuestionario ya no se mostrará.'}
-                      </Typography>
-                      <Stack
-                        direction="row"
-                        spacing={1.25}
-                        alignItems="center"
-                        justifyContent="flex-end"
-                        sx={{ flexWrap: 'wrap', width: '100%' }}
-                      >
-                        <Typography sx={{ fontSize: '0.9rem', color: '#5b6470', fontWeight: 600 }}>
-                          Link de historia clínica
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={handleCopyHistoryFormLink}
+                      {selectedEvent.event.extendedProps.history_form_required ? (
+                        <>
+                          <Typography sx={{ fontSize: '0.95rem', color: '#5f6a76', lineHeight: 1.6 }}>
+                            Comparte un enlace con tu paciente para que conteste las preguntas de su historia clínica.
+                          </Typography>
+                          <Stack
+                            direction="row"
+                            spacing={1.25}
+                            alignItems="center"
+                            justifyContent="flex-end"
+                            sx={{ flexWrap: 'wrap', width: '100%' }}
+                          >
+                            <Typography sx={{ fontSize: '0.9rem', color: '#5b6470', fontWeight: 600 }}>
+                              Link de historia clínica
+                            </Typography>
+                            <IconButton
+                              size="small"
+                              onClick={handleCopyHistoryFormLink}
+                              sx={{
+                                alignSelf: 'flex-start',
+                                border: '1px solid #49c5ff',
+                                borderRadius: 1,
+                                color: '#49c5ff',
+                                width: 42,
+                                height: 36,
+                              }}
+                            >
+                              <ContentCopyIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                          </Stack>
+                        </>
+                      ) : (
+                        <Typography
                           sx={{
-                            alignSelf: 'flex-start',
-                            border: '1px solid #49c5ff',
-                            borderRadius: 1,
-                            color: '#49c5ff',
-                            width: 42,
-                            height: 36,
+                            fontSize: '0.95rem',
+                            color: '#2e7d32',
+                            fontWeight: 700,
+                            textAlign: 'right',
+                            width: '100%',
                           }}
                         >
-                          <ContentCopyIcon sx={{ fontSize: 18 }} />
-                        </IconButton>
-                      </Stack>
+                          HC contestada!
+                        </Typography>
+                      )}
                     </Box>
                   ) : null}
                 </Box>

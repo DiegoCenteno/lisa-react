@@ -962,7 +962,7 @@ export default function NewAppointmentDialog({
     if (manualStep === 'duration') {
       return (
         <Box>
-          <Typography sx={{ ...stickyTitleSx, color: DURATION_COLOR }}>DuraciÃ³n de la cita</Typography>
+          <Typography sx={{ ...stickyTitleSx, color: DURATION_COLOR }}>Duración de la cita</Typography>
           <Box
             sx={{
               display: 'grid',
@@ -1435,7 +1435,7 @@ export default function NewAppointmentDialog({
         {showManualForm && selectedSlot ? (
           <Box sx={{ borderTop: '1px solid #eee', pt: 1 }}>
             <Typography sx={{ color: TEAL, fontSize: '0.85rem', textDecoration: 'underline', mb: 0.5 }}>
-              DuraciÃ³n de la consulta:
+              Duración de la consulta:
             </Typography>
             <TextField
               select

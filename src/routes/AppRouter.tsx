@@ -32,6 +32,7 @@ export default function AppRouter() {
         <Route path="/cita/:token" element={<PublicAppointmentPage />} />
         <Route path="/nuevacita/:code" element={<PublicAppointmentPage />} />
         <Route path="/historia/:token" element={<PublicHistoryFormPage />} />
+        <Route path="/wsapp/:code" element={<PublicStudyResultPage />} />
         <Route path="/:code" element={<PublicStudyResultPage />} />
 
         {/* Protected routes */}
