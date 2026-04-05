@@ -74,6 +74,7 @@ export interface SettingsFormsData {
   office_id: number;
   clinical_history: Record<string, boolean>;
   daily_note: Record<string, boolean>;
+  daily_note_clinical_history_visibility: Record<string, boolean>;
   patient_detail: {
     camera_menu_enabled: boolean;
     camera_menu_title: string;

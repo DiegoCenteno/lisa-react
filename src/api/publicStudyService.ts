@@ -13,7 +13,7 @@ import type {
 type PublicAppointmentPayload = NonNullable<PublicAppLinkResponse['appointment']>;
 
 const publicApiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://lisa.test/api',
+  baseURL: import.meta.env.VITE_API_URL || 'https://lisamedic.com/api',
   headers: {
     'Content-Type': 'application/json',
     Accept: 'application/json',

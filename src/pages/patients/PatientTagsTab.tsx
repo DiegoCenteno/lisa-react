@@ -6,6 +6,11 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   Link,
   Paper,
   Table,
@@ -71,6 +76,23 @@ function getTagHistoryBadgeSx(colorClass?: string) {
   };
 }
 
+function getStatusButtonSx(colorClass?: string, active?: boolean) {
+  const palette = tagStatusColorMap[colorClass ?? 'btn-default'] ?? tagStatusColorMap['btn-default'];
+
+  return {
+    textTransform: 'none',
+    fontWeight: 700,
+    borderRadius: 999,
+    boxShadow: active ? '0 0 0 2px rgba(38,50,56,0.18)' : 'none',
+    backgroundColor: palette.bg,
+    color: palette.text,
+    '&:hover': {
+      backgroundColor: palette.bg,
+      opacity: 0.92,
+    },
+  };
+}
+
 function getTagHistoryActorLabel(roleId?: number) {
   if (roleId === 1) return 'Observaciones del médico';
   if (roleId === 2) return 'Observaciones del asistente';
@@ -102,6 +124,10 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
   const [saving, setSaving] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [localSuccess, setLocalSuccess] = useState<string | null>(null);
+  const [openTagIds, setOpenTagIds] = useState<number[]>([]);
+  const [tagStatusSavingId, setTagStatusSavingId] = useState<number | null>(null);
+  const [finalizeTag, setFinalizeTag] = useState<{ id: number; code: string } | null>(null);
+  const [finalizingTagId, setFinalizingTagId] = useState<number | null>(null);
 
   useEffect(() => {
     setTagControl(patientTagControl);
@@ -143,6 +169,51 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
       }
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleTagStatuses = (tagId: number) => {
+    setOpenTagIds((current) =>
+      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]
+    );
+  };
+
+  const handleSelectStatus = async (tagId: number, statusId: number) => {
+    setTagStatusSavingId(tagId);
+    setLocalError(null);
+    setLocalSuccess(null);
+
+    try {
+      const updated = await patientService.updatePatientTagStatuses(patientId, [
+        { tag_id: tagId, status_id: statusId },
+      ]);
+      setTagControl(updated);
+      setOpenTagIds((current) => current.filter((id) => id !== tagId));
+      setLocalSuccess('Estatus de etiqueta actualizado correctamente.');
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : 'No se pudo actualizar el estatus de la etiqueta.');
+    } finally {
+      setTagStatusSavingId(null);
+    }
+  };
+
+  const handleConfirmFinalizeTag = async () => {
+    if (!finalizeTag) return;
+
+    setFinalizingTagId(finalizeTag.id);
+    setLocalError(null);
+    setLocalSuccess(null);
+
+    try {
+      const updated = await patientService.finalizePatientTag(patientId, finalizeTag.id);
+      setTagControl(updated);
+      setFinalizeTag(null);
+      setOpenTagIds((current) => current.filter((id) => id !== finalizeTag.id));
+      setLocalSuccess('Etiqueta finalizada correctamente.');
+    } catch (error) {
+      setLocalError(error instanceof Error ? error.message : 'No se pudo finalizar la etiqueta.');
+    } finally {
+      setFinalizingTagId(null);
     }
   };
 
@@ -221,6 +292,10 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
                 {tagControl.tags.map((tag, index) => {
                   const tagHistory = [...(tag.history ?? [])].reverse();
                   const visibleUntilLabel = formatVisibleUntil(tag.visible_until);
+                  const isOpen = openTagIds.includes(tag.id);
+                  const availableStatuses = tagControl.statuses.filter(
+                    (status) => status.code !== tag.current_status.code
+                  );
 
                   return (
                     <TableRow key={tag.id} hover>
@@ -249,9 +324,40 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
                             <Typography variant="body1" sx={{ color: 'text.secondary' }}>
                               Estatus actual:
                             </Typography>
-                            <Box component="span" sx={getTagStatusBadgeSx(tag.current_status.color_class)}>
-                              {tag.current_status.code || 'Indefinido'}
-                            </Box>
+                            <Chip
+                              label={tag.current_status.code || 'Indefinido'}
+                              size="small"
+                              onClick={() => handleToggleTagStatuses(tag.id)}
+                              clickable
+                              sx={{
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                boxShadow: isOpen ? '0 0 0 2px rgba(38,50,56,0.16)' : 'none',
+                                color:
+                                  tagStatusColorMap[tag.current_status.color_class]?.text ??
+                                  tagStatusColorMap['btn-default'].text,
+                                backgroundColor:
+                                  tagStatusColorMap[tag.current_status.color_class]?.bg ??
+                                  tagStatusColorMap['btn-default'].bg,
+                              }}
+                            />
+                          </Box>
+
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                            {isOpen
+                              ? availableStatuses.map((status) => (
+                                <Button
+                                  key={status.id}
+                                  size="small"
+                                  variant="contained"
+                                  onClick={() => void handleSelectStatus(tag.id, status.id)}
+                                  disabled={tagStatusSavingId === tag.id}
+                                  sx={getStatusButtonSx(status.color_class, tag.current_status.code === status.code)}
+                                >
+                                  {status.code}
+                                </Button>
+                              ))
+                              : null}
                           </Box>
 
                           {visibleUntilLabel ? (
@@ -260,16 +366,17 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
                             </Typography>
                           ) : null}
 
-                          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700 }}>
-                            Históricos de cambio de estatus de las etiquetas:
-                          </Typography>
-
-                          {tagHistory.length === 0 ? (
-                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                              No hay cambios registrados para esta etiqueta.
+                          <Box sx={{ border: '1px solid #d8e8ef', borderRadius: 2, px: 1.5, py: 1.25 }}>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 700, mb: 1 }}>
+                              Históricos de cambio de estatus de las etiquetas:
                             </Typography>
-                          ) : (
-                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+
+                            {tagHistory.length === 0 ? (
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                No hay cambios registrados para esta etiqueta.
+                              </Typography>
+                            ) : (
+                              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
                               {tagHistory.map((entry, historyIndex) => (
                                 <Box
                                   key={`${tag.id}-${historyIndex}-${entry.date ?? 'sin-fecha'}-${entry.code ?? 'sin-codigo'}`}
@@ -295,8 +402,21 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
                                   </Typography>
                                 </Box>
                               ))}
-                            </Box>
-                          )}
+                              </Box>
+                            )}
+                          </Box>
+
+                          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                            <Button
+                              variant="text"
+                              color="error"
+                              sx={{ px: 0, minWidth: 'auto' }}
+                              onClick={() => setFinalizeTag({ id: tag.id, code: tag.code })}
+                              disabled={finalizingTagId === tag.id}
+                            >
+                              finalizar etiqueta
+                            </Button>
+                          </Box>
                         </Box>
                       </TableCell>
                     </TableRow>
@@ -307,6 +427,44 @@ function PatientTagsTabInner({ patientId, patientTagControl }: Props) {
           </TableContainer>
         )}
       </CardContent>
+      <Dialog
+        open={Boolean(finalizeTag)}
+        onClose={() => {
+          if (!finalizingTagId) {
+            setFinalizeTag(null);
+          }
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          Finalizar etiqueta
+          {finalizeTag ? (
+            <Typography component="div" sx={{ mt: 0.75, fontWeight: 700, color: '#5f6f7a', fontSize: '0.9rem' }}>
+              {finalizeTag.code}
+            </Typography>
+          ) : null}
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Si finalizas la etiqueta cambiará su estado a inactiva y ya no podrás asignarle
+            ningún estado. ¿Continuar?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setFinalizeTag(null)} disabled={Boolean(finalizingTagId)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => void handleConfirmFinalizeTag()}
+            disabled={Boolean(finalizingTagId)}
+          >
+            {finalizingTagId ? 'Finalizando...' : 'Sí, finalizar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }

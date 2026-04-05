@@ -569,7 +569,7 @@ export default function AgendaPage() {
     const smscode = String(selectedEvent.event.extendedProps.smscode || '').trim();
     if (!smscode) return;
 
-    const baseUrl = (import.meta.env.VITE_PUBLIC_APP_BASE_URL as string | undefined)?.trim() || 'http://lisa.test';
+    const baseUrl = (import.meta.env.VITE_PUBLIC_APP_BASE_URL as string | undefined)?.trim() || 'https://lisamedic.com';
     const historyLink = `${baseUrl.replace(/\/$/, '')}/wsapp/${smscode}`;
 
     try {

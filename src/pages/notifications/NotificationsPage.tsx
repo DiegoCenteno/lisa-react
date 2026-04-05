@@ -559,10 +559,10 @@ export default function NotificationsPage() {
                     >
                       <Box>
                         <Typography sx={{ fontWeight: 600 }}>
-                          {user?.name || 'Medico titular'}
+                          {assistantData?.doctor?.name || user?.name || 'Medico titular'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {user?.phone || 'Recibe alertas por configuracion principal'}
+                          {assistantData?.doctor?.phone || 'Recibe alertas por configuracion principal'}
                         </Typography>
                       </Box>
                       <FormControlLabel

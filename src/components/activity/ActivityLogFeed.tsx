@@ -20,6 +20,41 @@ function getAppointmentStatusLabel(status: unknown): string {
   return labels[numericStatus] ?? String(numericStatus);
 }
 
+function toCamelCaseWords(value: string): string {
+  return value
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+function getActionTitleChipSx(title: string) {
+  const normalized = title.trim().toLowerCase();
+
+  if (normalized === 'cita cancelada') {
+    return {
+      borderColor: 'rgba(211, 47, 47, 0.35)',
+      backgroundColor: 'rgba(211, 47, 47, 0.08)',
+      color: '#c62828',
+    };
+  }
+
+  if (normalized === 'cita creada') {
+    return {
+      borderColor: 'rgba(25, 118, 210, 0.35)',
+      backgroundColor: 'rgba(25, 118, 210, 0.08)',
+      color: '#245b9e',
+    };
+  }
+
+  return {
+    borderColor: 'rgba(107, 119, 133, 0.35)',
+    backgroundColor: 'rgba(107, 119, 133, 0.06)',
+    color: '#51606e',
+  };
+}
+
 function getActivityMetaLines(log: ActivityLogItem): string[] {
   const meta = log.meta ?? {};
   const lines: string[] = [];
@@ -48,6 +83,34 @@ function getActivityMetaLines(log: ActivityLogItem): string[] {
   return lines;
 }
 
+function getActorLineLabel(action: string): string {
+  const normalized = action.toLowerCase();
+
+  if (normalized === 'cancelled') return 'Quién canceló';
+  if (normalized === 'confirmed') return 'Quién confirmó';
+  if (normalized === 'rescheduled') return 'Quién reagendó';
+  if (normalized === 'created') return 'Quién creó';
+  if (normalized === 'updated') return 'Quién actualizó';
+
+  return 'Quién realizó la acción';
+}
+
+function getActorDisplayName(log: ActivityLogItem): string {
+  if (log.user_role_id === 1 || log.user_role_id === 2) {
+    return toCamelCaseWords(log.user_name?.trim() || 'Sistema');
+  }
+
+  if (log.user_name?.trim()) {
+    return toCamelCaseWords(log.user_name.trim());
+  }
+
+  if (log.patient_id) {
+    return 'Paciente';
+  }
+
+  return 'Sistema';
+}
+
 interface Props {
   logs: ActivityLogItem[];
   emptyText: string;
@@ -59,7 +122,6 @@ export default function ActivityLogFeed({
   logs,
   emptyText,
   showPatient = false,
-  showOffice = false,
 }: Props) {
   if (logs.length === 0) {
     return (
@@ -73,6 +135,7 @@ export default function ActivityLogFeed({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       {logs.map((log) => {
         const metaLines = getActivityMetaLines(log);
+        const title = toCamelCaseWords(log.message || log.action);
 
         return (
           <Box
@@ -96,34 +159,28 @@ export default function ActivityLogFeed({
               }}
             >
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 700, color: '#3f4a56' }}>
-                  {log.message || log.action}
-                </Typography>
+                <Chip
+                  size="medium"
+                  label={title}
+                  variant="outlined"
+                  sx={{
+                    mb: 0.5,
+                    fontSize: '0.98rem',
+                    fontWeight: 600,
+                    borderRadius: 999,
+                    ...getActionTitleChipSx(title),
+                  }}
+                />
                 <Typography sx={{ fontSize: '0.9rem', color: '#6b7785', mt: 0.25 }}>
-                  {log.user_name || 'Sistema'}
-                  {log.created_at ? ` (${formatDisplayDateTimeLongEs(log.created_at)})` : ''}
+                  {log.created_at ? formatDisplayDateTimeLongEs(log.created_at) : ''}
                 </Typography>
               </Box>
 
               <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                {showPatient && log.patient_name ? (
-                  <Chip
-                    size="small"
-                    label={log.patient_name}
-                    sx={{ backgroundColor: 'rgba(0, 137, 123, 0.08)', color: '#0b6d61' }}
-                  />
-                ) : null}
-                {showOffice && log.office_title ? (
-                  <Chip
-                    size="small"
-                    label={log.office_title}
-                    sx={{ backgroundColor: 'rgba(25, 118, 210, 0.08)', color: '#245b9e' }}
-                  />
-                ) : null}
                 {log.entity_type ? (
                   <Chip
                     size="small"
-                    label={log.entity_type}
+                    label={toCamelCaseWords(log.entity_type)}
                     variant="outlined"
                     sx={{ color: '#6b7785' }}
                   />
@@ -133,13 +190,32 @@ export default function ActivityLogFeed({
 
             {metaLines.length > 0 ? (
               <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
+                <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                  {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
+                </Typography>
+                {(showPatient || log.patient_id) && log.patient_name ? (
+                  <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                    Paciente: {toCamelCaseWords(log.patient_name)}
+                  </Typography>
+                ) : null}
                 {metaLines.map((line, index) => (
                   <Typography key={`${log.id}-${index}`} sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
                     {line}
                   </Typography>
                 ))}
               </Box>
-            ) : null}
+            ) : (
+              <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
+                <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                  {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
+                </Typography>
+                {(showPatient || log.patient_id) && log.patient_name ? (
+                  <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                    Paciente: {toCamelCaseWords(log.patient_name)}
+                  </Typography>
+                ) : null}
+              </Box>
+            )}
           </Box>
         );
       })}

@@ -689,6 +689,11 @@ export interface NotificationAssistantRecipientsData {
     id: number;
     title: string;
   };
+  doctor: {
+    name: string;
+    phone: string;
+    enabled: boolean;
+  };
   assistants: NotificationAssistantItem[];
   preassistants: NotificationPreassistantItem[];
   legacy_recipients: NotificationLegacyRecipient[];

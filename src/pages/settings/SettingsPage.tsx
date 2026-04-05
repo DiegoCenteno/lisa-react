@@ -155,12 +155,17 @@ const CLINICAL_HISTORY_GROUPS: FormFieldGroup[] = [
 
 const DAILY_NOTE_GROUPS: FormFieldGroup[] = [
   {
-    title: 'Nota diaria',
+    title: 'Subjetivo',
     fields: [
       { key: 'consulhiscli', label: 'Resumen de historia clínica' },
       { key: 'consulupdatefur', label: 'Fecha de última menstruación' },
       { key: 'consulfechaip', label: 'Fecha de inicio del padecimiento' },
       { key: 'consulmotivoconsulta', label: 'Motivo de consulta' },
+    ],
+  },
+  {
+    title: 'Objetivo',
+    fields: [
       { key: 'consulestatura', label: 'Estatura' },
       { key: 'consulpeso', label: 'Peso' },
       { key: 'consulhta', label: 'T. A.' },
@@ -168,8 +173,18 @@ const DAILY_NOTE_GROUPS: FormFieldGroup[] = [
       { key: 'consulfc', label: 'F. C.' },
       { key: 'consuloxigeno', label: 'O2' },
       { key: 'consulresultadosestudio', label: 'Resultados de estudios' },
+    ],
+  },
+  {
+    title: 'Análisis',
+    fields: [
       { key: 'consulanalisis', label: 'Análisis' },
       { key: 'consuldiagnostico', label: 'Diagnósticos' },
+    ],
+  },
+  {
+    title: 'Plan',
+    fields: [
       { key: 'consulindicaciones', label: 'Indicaciones adicionales' },
       { key: 'consulanotaciones', label: 'Anotaciones personales' },
     ],
@@ -461,13 +476,13 @@ function getBackendOrigin(): string {
     const apiHost = new URL(apiUrl).hostname;
 
     if (apiHost === 'localhost' || apiHost === '127.0.0.1') {
-      return 'http://lisa.test';
+      return 'https://lisamedic.com';
     }
 
     return apiOrigin;
   } catch {
     return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? 'http://lisa.test'
+      ? 'https://lisamedic.com'
       : window.location.origin;
   }
 }
@@ -1268,6 +1283,10 @@ function FormSettingsPanel({
     personales_no_patologicos: true,
     personales_patologicos: true,
     ginecologicos: true,
+    daily_note_history_heredofamiliares: true,
+    daily_note_history_personales_no_patologicos: true,
+    daily_note_history_personales_patologicos: true,
+    daily_note_history_ginecologicos: true,
     daily_note: true,
     new_appointment_default_gender: true,
     patient_detail_menu: true,
@@ -1323,7 +1342,11 @@ function FormSettingsPanel({
     return <PlaceholderPanel title="Formularios" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para personalizar los formularios clínicos." />;
   }
 
-  const persistSection = (section: 'clinical_history' | 'daily_note', key: string, checked: boolean) => {
+  const persistSection = (
+    section: 'clinical_history' | 'daily_note' | 'daily_note_clinical_history_visibility',
+    key: string,
+    checked: boolean
+  ) => {
     if (!data) return;
 
     const previousData = data;
@@ -1563,10 +1586,14 @@ function FormSettingsPanel({
           </Grid>
         ) : (
           <>
-            <Grid size={{ xs: 12, lg: 7 }}>
+            <Grid size={{ xs: 12, lg: 4 }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
                   Historia clínica
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Define qué campos estarán disponibles dentro de la historia clínica del paciente y
+                  qué información podrá capturarse por módulo durante la consulta.
                 </Typography>
                 {CLINICAL_HISTORY_GROUPS_WITH_MODULE.map((group) => (
                   <FormFieldGroupCard
@@ -1756,10 +1783,15 @@ function FormSettingsPanel({
                 ))}
               </Box>
             </Grid>
-            <Grid size={{ xs: 12, lg: 5 }}>
+            <Grid size={{ xs: 12, lg: 4 }}>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
                 <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
                   Nota diaria
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Configura qué secciones y campos estarán visibles y editables dentro de la nota
+                  diaria para organizar mejor la captura clínica en Subjetivo, Objetivo, Análisis y
+                  Plan.
                 </Typography>
                 {DAILY_NOTE_GROUPS.map((group) => (
                   <FormFieldGroupCard
@@ -1769,98 +1801,144 @@ function FormSettingsPanel({
                     values={data.daily_note}
                     disabled={saving}
                     onToggle={(key, checked) => persistSection('daily_note', key, checked)}
-                    collapsed={collapsedGroups.daily_note ?? true}
+                    collapsed={collapsedGroups[`daily_note_${group.title}`] ?? true}
                     onCollapsedChange={(collapsed) =>
-                      setCollapsedGroups((current) => ({ ...current, daily_note: collapsed }))
+                      setCollapsedGroups((current) => ({
+                        ...current,
+                        [`daily_note_${group.title}`]: collapsed,
+                      }))
                     }
                   />
                 ))}
-                <FormFieldGroupCard
-                  title="Género por defecto"
-                  fields={[]}
-                  values={{}}
-                  disabled={saving}
-                  onToggle={() => undefined}
-                  collapsed={collapsedGroups.new_appointment_default_gender ?? true}
-                  onCollapsedChange={(collapsed) =>
-                    setCollapsedGroups((current) => ({ ...current, new_appointment_default_gender: collapsed }))
-                  }
-                >
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      El select de género seguirá visible al agendar una cita, pero se precargará automáticamente con la opción elegida.
-                    </Typography>
-                    <TextField
-                      select
-                      label="Género por defecto en nueva cita"
-                      value={data.new_appointment.default_gender}
-                      fullWidth
-                      variant="standard"
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 4 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
+                  Historia clínica visible en nota diaria
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Elige qué datos de historia clínica se mostrarán como referencia visual
+                  dentro de la nota diaria para consultar contexto del paciente sin tener que ir al
+                  apartado de la historia clínica.
+                </Typography>
+                {CLINICAL_HISTORY_GROUPS_WITH_MODULE.map((group) => (
+                  <FormFieldGroupCard
+                    key={`daily_note_history_${group.module}`}
+                    title={group.title}
+                    fields={group.fields}
+                    values={data.daily_note_clinical_history_visibility}
+                    disabled={saving}
+                    onToggle={(key, checked) => persistSection('daily_note_clinical_history_visibility', key, checked)}
+                    collapsed={collapsedGroups[`daily_note_history_${group.module}`] ?? true}
+                    onCollapsedChange={(collapsed) =>
+                      setCollapsedGroups((current) => ({ ...current, [`daily_note_history_${group.module}`]: collapsed }))
+                    }
+                  />
+                ))}
+              </Box>
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                <Typography variant="h6" sx={{ color: '#1e8b2d', fontWeight: 500 }}>
+                  Configuraciones adicionales
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Ajusta opciones generales que complementan la captura clínica y la experiencia en
+                  otras pantallas del sistema.
+                </Typography>
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormFieldGroupCard
+                      title="Género por defecto"
+                      fields={[]}
+                      values={{}}
                       disabled={saving}
-                      onChange={(event) => persistNewAppointmentDefaultGender(event.target.value as 'M' | 'F' | '')}
+                      onToggle={() => undefined}
+                      collapsed={collapsedGroups.new_appointment_default_gender ?? true}
+                      onCollapsedChange={(collapsed) =>
+                        setCollapsedGroups((current) => ({ ...current, new_appointment_default_gender: collapsed }))
+                      }
                     >
-                      <MenuItem value="">Ninguno</MenuItem>
-                      <MenuItem value="F">Femenino</MenuItem>
-                      <MenuItem value="M">Masculino</MenuItem>
-                    </TextField>
-                  </Box>
-                </FormFieldGroupCard>
-                <FormFieldGroupCard
-                  title="Menú del detalle del paciente"
-                  fields={[]}
-                  values={{}}
-                  disabled={saving}
-                  onToggle={() => undefined}
-                  collapsed={collapsedGroups.patient_detail_menu ?? true}
-                  onCollapsedChange={(collapsed) =>
-                    setCollapsedGroups((current) => ({ ...current, patient_detail_menu: collapsed }))
-                  }
-                >
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Activa el acceso al módulo de cámara dentro del submenú del detalle del paciente y personaliza su título.
-                    </Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                      <Checkbox
-                        checked={data.patient_detail.camera_menu_enabled}
-                        disabled={saving}
-                        onChange={(event) => handlePatientDetailCameraToggle(event.target.checked)}
-                      />
-                      <Typography>Mostrar menú de cámara</Typography>
-                    </Box>
-                    {data.patient_detail.camera_menu_enabled ? (
-                      <TextField
-                        inputRef={cameraMenuTitleInputRef}
-                        label="Título del menú"
-                        value={data.patient_detail.camera_menu_title}
-                        fullWidth
-                        variant="standard"
-                        disabled={saving}
-                        inputProps={{ maxLength: 14 }}
-                        onChange={(event) => {
-                          const nextValue = event.target.value.slice(0, 14);
-                          setData((current) => current ? ({
-                            ...current,
-                            patient_detail: {
-                              ...current.patient_detail,
-                              camera_menu_title: nextValue,
-                            },
-                          }) : current);
-                          setCameraMenuDirty(true);
-                        }}
-                      />
-                    ) : null}
-                    <Box>
-                      <Button
-                        variant="contained"
-                        disabled={saving || !cameraMenuDirty}
-                        onClick={() => persistPatientDetailCameraMenu(data.patient_detail)}
-                      >
-                        Guardar
-                      </Button>
-                    </Box>
-                  </Box>
-                </FormFieldGroupCard>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          El select de género seguirá visible al agendar una cita, pero se precargará automáticamente con la opción elegida.
+                        </Typography>
+                        <TextField
+                          select
+                          label="Género por defecto en nueva cita"
+                          value={data.new_appointment.default_gender}
+                          fullWidth
+                          variant="standard"
+                          disabled={saving}
+                          onChange={(event) => persistNewAppointmentDefaultGender(event.target.value as 'M' | 'F' | '')}
+                        >
+                          <MenuItem value="">Ninguno</MenuItem>
+                          <MenuItem value="F">Femenino</MenuItem>
+                          <MenuItem value="M">Masculino</MenuItem>
+                        </TextField>
+                      </Box>
+                    </FormFieldGroupCard>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormFieldGroupCard
+                      title="Menú del detalle del paciente"
+                      fields={[]}
+                      values={{}}
+                      disabled={saving}
+                      onToggle={() => undefined}
+                      collapsed={collapsedGroups.patient_detail_menu ?? true}
+                      onCollapsedChange={(collapsed) =>
+                        setCollapsedGroups((current) => ({ ...current, patient_detail_menu: collapsed }))
+                      }
+                    >
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Activa el acceso al módulo de cámara dentro del submenú del detalle del paciente y personaliza su título.
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Checkbox
+                            checked={data.patient_detail.camera_menu_enabled}
+                            disabled={saving}
+                            onChange={(event) => handlePatientDetailCameraToggle(event.target.checked)}
+                          />
+                          <Typography>Mostrar menú de cámara</Typography>
+                        </Box>
+                        {data.patient_detail.camera_menu_enabled ? (
+                          <TextField
+                            inputRef={cameraMenuTitleInputRef}
+                            label="Título del menú"
+                            value={data.patient_detail.camera_menu_title}
+                            fullWidth
+                            variant="standard"
+                            disabled={saving}
+                            inputProps={{ maxLength: 14 }}
+                            onChange={(event) => {
+                              const nextValue = event.target.value.slice(0, 14);
+                              setData((current) => current ? ({
+                                ...current,
+                                patient_detail: {
+                                  ...current.patient_detail,
+                                  camera_menu_title: nextValue,
+                                },
+                              }) : current);
+                              setCameraMenuDirty(true);
+                            }}
+                          />
+                        ) : null}
+                        <Box>
+                          <Button
+                            variant="contained"
+                            disabled={saving || !cameraMenuDirty}
+                            onClick={() => persistPatientDetailCameraMenu(data.patient_detail)}
+                          >
+                            Guardar
+                          </Button>
+                        </Box>
+                      </Box>
+                    </FormFieldGroupCard>
+                  </Grid>
+                </Grid>
               </Box>
             </Grid>
           </>

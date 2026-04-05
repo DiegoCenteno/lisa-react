@@ -37,6 +37,7 @@ import {
 } from '@mui/icons-material';
 import { consultationService } from '../../api/consultationService';
 import { patientService } from '../../api/patientService';
+import settingsService from '../../api/settingsService';
 import type { ClinicalHistory, MedicamentHistoryItem, OfficeLabelItem, Patient, PatientSoapContext, PatientTagControlData, SOAPNote } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
 import ClickableDateField from '../../components/ClickableDateField';
@@ -60,6 +61,80 @@ type SubjectiveFormData = { illnessStartDate: string; currentCondition: string }
 type ObjectiveFormData = { height: string; weight: string; ta: string; temp: string; fc: string; os: string; studies: string; lastMenstruationDate: string; pregnant: boolean };
 type AnalysisFormData = { examination: string; diagnostics: string[] };
 type PlanFormData = { medications: Array<{ medicament: string; prescription: string }>; additionalInstructions: string };
+type ClinicalHistoryVisibleItem = { label: string; value: string };
+
+const DAILY_NOTE_CLINICAL_HISTORY_GROUPS = [
+  {
+    title: 'Antecedentes heredofamiliares',
+    fields: [
+      { key: 'tiposangre', label: 'Grupo sanguíneo y RH' },
+      { key: 'cgdm', label: 'CGDM' },
+      { key: 'consanguineos', label: 'Consanguíneos' },
+      { key: 'geneticosodefectos', label: 'A. genéticos y/o defectos' },
+      { key: 'familiarpreeclampsia', label: 'Antecedente familiar de preeclampsia' },
+      { key: 'familiarpareja', label: 'Nombre pareja' },
+      { key: 'diabetes', label: 'Diabetes mellitus' },
+      { key: 'cancer', label: 'Cáncer' },
+      { key: 'hipertension', label: 'Hipertensión' },
+      { key: 'reumatica', label: 'Enfermedad reumática' },
+      { key: 'antfam', label: 'Otras' },
+    ],
+  },
+  {
+    title: 'Antecedentes personales no patológicos',
+    fields: [
+      { key: 'originaria', label: 'Originaria' },
+      { key: 'residente', label: 'Residente' },
+      { key: 'estadocivil', label: 'Estado civil' },
+      { key: 'religion', label: 'Religión' },
+      { key: 'escolaridad', label: 'Escolaridad' },
+      { key: 'ocupacion', label: 'Ocupación' },
+      { key: 'toxicomanias', label: 'Toxicomanías' },
+      { key: 'farmacos', label: 'Fármacos' },
+      { key: 'exposiciones', label: 'Exposiciones' },
+      { key: 'tabaquismo', label: 'Tabaquismo' },
+      { key: 'bebidas', label: 'Bebidas alcohólicas' },
+      { key: 'homosex', label: 'Relaciones homosexuales' },
+      { key: 'ejercicio', label: 'Realiza ejercicio' },
+      { key: 'persnopat', label: 'Otras' },
+    ],
+  },
+  {
+    title: 'Antecedentes personales patológicos',
+    fields: [
+      { key: 'alergias', label: 'Alergias' },
+      { key: 'hijosindromedown', label: 'Antecedentes hijos síndrome de down' },
+      { key: 'degenerativas', label: 'Enfermedades crónico degenerativas' },
+      { key: 'cirujias', label: 'Cirugías' },
+      { key: 'transfusiones', label: 'Transfusiones' },
+      { key: 'fracturas', label: 'Fracturas' },
+      { key: 'perspat', label: 'Otras' },
+    ],
+  },
+  {
+    title: 'Antecedentes ginecológicos',
+    fields: [
+      { key: 'menarca', label: 'Menarca' },
+      { key: 'ciclosmestruales', label: 'Ciclos menstruales' },
+      { key: 'embarazada', label: 'Embarazada' },
+      { key: 'fur', label: 'Fecha de última menstruación' },
+      { key: 'ultrasonido1', label: 'Ultrasonido 1' },
+      { key: 'ultrasonido2', label: 'Ultrasonido 2' },
+      { key: 'ultrasonido3', label: 'Ultrasonido 3' },
+      { key: 'ultrasonido4', label: 'Ultrasonido 4' },
+      { key: 'ultrasonido5', label: 'Ultrasonido 5' },
+      { key: 'ivsa', label: 'IVSA' },
+      { key: 'parejassexuales', label: 'Parejas sexuales' },
+      { key: 'ets', label: 'Enfermedades de transmisión sexual' },
+      { key: 'citologia', label: 'Citología' },
+      { key: 'planificacionfamiliar', label: 'Método de planificación familiar' },
+      { key: 'gestaciones', label: 'Gestaciones' },
+      { key: 'txtdejoreglar', label: 'Edad en la que dejó de reglar' },
+      { key: 'climaterio', label: 'Síntomas de climaterio' },
+      { key: 'controlprenatal', label: 'Control prenatal' },
+    ],
+  },
+] as const;
 
 type DraftData = {
   subjectiveForm: SubjectiveFormData;
@@ -152,6 +227,115 @@ function buildPregnancySummary(lastMenstruationDate?: string | null): { fur: str
     fpp: formatSpanishDate(fppDate, true),
     gestation: `${weeks} semana${weeks === 1 ? '' : 's'} ${days} d${days === 1 ? 'ía' : 'ías'}`,
   };
+}
+
+function resolveCurrentOfficeId(): number | null {
+  const cachedOfficeId = localStorage.getItem('cached_office_id');
+  if (cachedOfficeId) {
+    const parsed = Number(cachedOfficeId);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  const userRaw = localStorage.getItem('user');
+  if (!userRaw) {
+    return null;
+  }
+
+  try {
+    const user = JSON.parse(userRaw) as { consultorio_id?: number };
+    return user.consultorio_id && user.consultorio_id > 0 ? user.consultorio_id : null;
+  } catch {
+    return null;
+  }
+}
+
+function buildClinicalHistoryVisibleGroups(
+  clinicalHistory: ClinicalHistory | null,
+  visibility: Record<string, boolean>
+): ClinicalHistoryVisibleItem[] {
+  if (!clinicalHistory) {
+    return [];
+  }
+
+  const hereditary = clinicalHistory.hereditary_background;
+  const nonPathological = clinicalHistory.personal_non_pathological;
+  const pathological = clinicalHistory.personal_pathological;
+  const gynecological = clinicalHistory.gynecological ?? {};
+
+  const ultrasoundSummary = (index: 1 | 2 | 3 | 4 | 5): string => {
+    const date = gynecological[`ultrasound${index}_date` as const];
+    const weeks = gynecological[`ultrasound${index}_weeks` as const];
+    const days = gynecological[`ultrasound${index}_days` as const];
+    const notes = gynecological[`ultrasound${index}_notes` as const];
+    const parts = [
+      date ? formatDisplayDate(date) : '',
+      [weeks ? `${weeks} sem` : '', days ? `${days} días` : ''].filter(Boolean).join(' '),
+      notes ?? '',
+    ].filter(Boolean);
+    return parts.join(' | ');
+  };
+
+  const valueByKey: Record<string, string> = {
+    tiposangre: hereditary.blood_type_rh ?? '',
+    cgdm: hereditary.cgdm ?? '',
+    consanguineos: hereditary.consanguineous ?? '',
+    geneticosodefectos: hereditary.genetic_defects ?? '',
+    familiarpreeclampsia: hereditary.family_preeclampsia ?? '',
+    familiarpareja: [hereditary.partner_history_name ?? '', hereditary.partner_history_age ? `${hereditary.partner_history_age} años` : ''].filter(Boolean).join(', '),
+    diabetes: hereditary.diabetes ?? '',
+    cancer: hereditary.cancer ?? '',
+    hipertension: hereditary.hypertension ?? '',
+    reumatica: hereditary.rheumatic_disease ?? '',
+    antfam: hereditary.others ?? '',
+    originaria: nonPathological.origin ?? '',
+    residente: nonPathological.residence ?? '',
+    estadocivil: nonPathological.civil_status ?? '',
+    religion: nonPathological.religion ?? '',
+    escolaridad: nonPathological.education ?? '',
+    ocupacion: nonPathological.occupation ?? '',
+    toxicomanias: nonPathological.substance_use ?? '',
+    farmacos: nonPathological.medications ?? '',
+    exposiciones: nonPathological.exposures ?? '',
+    tabaquismo: nonPathological.smoking ?? '',
+    bebidas: nonPathological.alcohol ?? '',
+    homosex: nonPathological.homosexual_relations ?? '',
+    ejercicio: nonPathological.exercise ?? '',
+    persnopat: nonPathological.others ?? '',
+    alergias: pathological.allergies ?? '',
+    hijosindromedown: pathological.down_syndrome_child ?? '',
+    degenerativas: pathological.chronic_diseases ?? '',
+    cirujias: pathological.surgeries ?? '',
+    transfusiones: pathological.transfusions ?? '',
+    fracturas: pathological.fractures ?? '',
+    perspat: pathological.others ?? '',
+    menarca: gynecological.menarche ?? '',
+    ciclosmestruales: gynecological.menstrual_cycles ?? '',
+    embarazada: gynecological.pregnant ? 'Sí' : 'No',
+    fur: gynecological.last_menstruation_date ? formatDisplayDate(gynecological.last_menstruation_date) : '',
+    ultrasonido1: gynecological.ultrasound1_checked ? ultrasoundSummary(1) : '',
+    ultrasonido2: gynecological.ultrasound2_checked ? ultrasoundSummary(2) : '',
+    ultrasonido3: gynecological.ultrasound3_checked ? ultrasoundSummary(3) : '',
+    ultrasonido4: gynecological.ultrasound4_checked ? ultrasoundSummary(4) : '',
+    ultrasonido5: gynecological.ultrasound5_checked ? ultrasoundSummary(5) : '',
+    ivsa: gynecological.ivsa ?? '',
+    parejassexuales: gynecological.sexual_partners ?? '',
+    ets: gynecological.std ?? '',
+    citologia: gynecological.cytology ?? '',
+    planificacionfamiliar: gynecological.family_planning ?? '',
+    gestaciones: gynecological.gestations ?? '',
+    txtdejoreglar: gynecological.menopause_age ?? '',
+    climaterio: gynecological.climacteric_symptoms ?? '',
+    controlprenatal: gynecological.prenatal_care ?? '',
+  };
+
+  return DAILY_NOTE_CLINICAL_HISTORY_GROUPS.flatMap((group) =>
+    group.fields
+      .filter((field) => visibility[field.key])
+      .map((field) => ({ label: field.label, value: valueByKey[field.key] ?? '' }))
+      .filter((item) => item.value.trim().length > 0)
+  );
 }
 
 function getSuggestedHeight(patientAge?: number | string | null, previousHeight?: string | null): string {
@@ -651,6 +835,8 @@ function PatientDailyNoteTab({
   const [medicamentHistory, setMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
   const [officeLabels, setOfficeLabels] = useState<OfficeLabelItem[]>([]);
   const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
+  const [dailyNoteClinicalHistoryVisibility, setDailyNoteClinicalHistoryVisibility] = useState<Record<string, boolean>>({});
+  const [clinicalHistoryPanelOpen, setClinicalHistoryPanelOpen] = useState(false);
   const [tabLoading, setTabLoading] = useState(true);
   const [subjectiveForm, setSubjectiveForm] = useState<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
   const [objectiveForm, setObjectiveForm] = useState<ObjectiveFormData>({ height: '', weight: '', ta: '', temp: '', fc: '', os: '', studies: '', lastMenstruationDate: '', pregnant: false });
@@ -673,6 +859,10 @@ function PatientDailyNoteTab({
 
   const lastConsultation = soapContext?.last_consultation ?? null;
   const lastConsultationDateLabel = lastConsultation?.created_at ? `[${formatHistoricalDate(lastConsultation.created_at)}]` : null;
+  const visibleClinicalHistoryGroups = useMemo(
+    () => buildClinicalHistoryVisibleGroups(clinicalHistory, dailyNoteClinicalHistoryVisibility),
+    [clinicalHistory, dailyNoteClinicalHistoryVisibility]
+  );
 
   const refreshFormInstance = useCallback(() => setFormInstanceKey((current) => current + 1), []);
 
@@ -682,12 +872,14 @@ function PatientDailyNoteTab({
     const loadTabData = async () => {
       setTabLoading(true);
       try {
-        const [historyData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData] = await Promise.all([
+        const officeId = resolveCurrentOfficeId();
+        const [historyData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData, formSettingsData] = await Promise.all([
           patientService.getClinicalHistory(patient.id),
           patientService.getPatientSoapContext(patient.id),
           patientService.getMedicamentHistory(),
           patientService.getOfficeLabels(),
           patientService.getPatientTagControl(patient.id),
+          officeId ? settingsService.getFormSettings(officeId) : Promise.resolve(null),
         ]);
 
         if (cancelled) return;
@@ -697,6 +889,7 @@ function PatientDailyNoteTab({
         setMedicamentHistory(medicamentHistoryData);
         setOfficeLabels(officeLabelsData);
         setPatientTagControl(tagControlData);
+        setDailyNoteClinicalHistoryVisibility(formSettingsData?.daily_note_clinical_history_visibility ?? {});
       } catch (error) {
         if (cancelled) return;
         console.error('Error cargando datos de nota diaria:', error);
@@ -1138,6 +1331,49 @@ function PatientDailyNoteTab({
           <Alert severity="info" action={canCreateDailyNote ? <Button color="inherit" size="small" onClick={handleStartNewConsultation}>Nueva consulta</Button> : undefined}>
             Editando la consulta del {formatDisplayDate(editingConsultation.created_at)}
           </Alert>
+        )}
+
+        {visibleClinicalHistoryGroups.length > 0 && (
+          <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid #cfe0e8', backgroundColor: '#f9fdff' }}>
+            <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, cursor: 'pointer' }}
+                onClick={() => setClinicalHistoryPanelOpen((current) => !current)}
+              >
+                <Typography variant="subtitle1" sx={{ color: '#1e8b2d', fontWeight: 700 }}>
+                  Historia clínica
+                </Typography>
+                <IconButton size="small" sx={{ color: '#245160' }}>
+                  {clinicalHistoryPanelOpen ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
+              <Collapse in={clinicalHistoryPanelOpen}>
+                <Grid container spacing={1.25}>
+                  {visibleClinicalHistoryGroups.map((item) => (
+                    <Grid key={item.label} size={{ xs: 12, md: 6 }}>
+                      <Box
+                        sx={{
+                          px: 0.25,
+                          py: 0.35,
+                          display: 'grid',
+                          gridTemplateColumns: { xs: '1fr', sm: '160px minmax(0, 1fr)' },
+                          gap: { xs: 0.35, sm: 1 },
+                          alignItems: 'start',
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ color: '#7a9098' }}>
+                          {item.label}:
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: '#183844', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {item.value}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Collapse>
+            </CardContent>
+          </Card>
         )}
 
         <Typography variant="body2" sx={{ color: '#2f2f2f' }}>
