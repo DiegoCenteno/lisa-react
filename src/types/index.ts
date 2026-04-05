@@ -394,6 +394,8 @@ export interface PatientSoapContext {
   last_consultation: {
     id: number;
     created_at: string;
+    ailingdate?: string;
+    subjective?: string;
     currentcondition?: string;
     height?: string;
     weight?: string;
@@ -404,9 +406,14 @@ export interface PatientSoapContext {
     studies?: string;
     examination?: string;
     indicaciones?: string;
+    notes?: string;
     medicament_text?: string;
     diagnostic_text?: string;
     diagnostic_items?: string[];
+    medications?: Array<{
+      medicament: string;
+      prescription: string;
+    }>;
   } | null;
 }
 
@@ -617,6 +624,7 @@ export interface PublicAssistantLinkResponse {
   code: string;
   name: string;
   phone: string;
+  expires_at?: string;
   can_register: boolean;
   message: string | null;
   office: {
@@ -672,6 +680,7 @@ export interface NotificationPreassistantItem {
   phone: string;
   code: string;
   link: string;
+  expires_at?: string;
   template_pending: boolean;
 }
 

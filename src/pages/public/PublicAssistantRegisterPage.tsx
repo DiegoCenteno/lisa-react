@@ -43,7 +43,7 @@ function normalizeCode(value: string): string {
 
 export default function PublicAssistantRegisterPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
+  const { login } = useAuth();
   const params = useParams<{ code?: string }>();
   const routeCode = normalizeCode(params.code ?? '');
 
@@ -56,6 +56,7 @@ export default function PublicAssistantRegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [linkStatus, setLinkStatus] = useState<'idle' | 'ready' | 'not_found' | 'expired' | 'used' | 'error'>('idle');
 
   useEffect(() => {
     setForm((current) => ({
@@ -67,6 +68,7 @@ export default function PublicAssistantRegisterPage() {
   useEffect(() => {
     if (!routeCode) {
       setResolved(null);
+      setLinkStatus('not_found');
       setLoading(false);
       return;
     }
@@ -82,19 +84,27 @@ export default function PublicAssistantRegisterPage() {
         if (!active) return;
 
         setResolved(data);
+        setLinkStatus('ready');
         setForm((current) => ({
           ...current,
           code: data.code,
           name: current.name || data.name || '',
-          phone: data.phone || '',
         }));
       } catch (requestError) {
         if (!active) return;
+        const responseStatus = axios.isAxiosError(requestError) ? requestError.response?.status : undefined;
         const backendMessage = axios.isAxiosError(requestError)
           ? (requestError.response?.data as { message?: string } | undefined)?.message
           : undefined;
+        const nextStatus = responseStatus === 404
+          ? 'not_found'
+          : responseStatus === 410
+            ? (backendMessage?.toLowerCase().includes('utilizado') ? 'used' : 'expired')
+            : 'error';
+
         setResolved(null);
-        setError(backendMessage || 'No fue posible validar el enlace de registro.');
+        setLinkStatus(nextStatus);
+        setError(nextStatus === 'error' ? (backendMessage || 'No fue posible validar el link de registro.') : '');
       } finally {
         if (active) {
           setLoading(false);
@@ -120,11 +130,6 @@ export default function PublicAssistantRegisterPage() {
     );
   }, [form, resolved]);
 
-  if (isAuthenticated) {
-    navigate('/dashboard', { replace: true });
-    return null;
-  }
-
   const handleFieldChange = (field: keyof RegisterFormState, value: string) => {
     setForm((current) => ({
       ...current,
@@ -132,21 +137,11 @@ export default function PublicAssistantRegisterPage() {
     }));
   };
 
-  const handleResolve = async () => {
-    const nextCode = normalizeCode(form.code);
-    if (!nextCode) {
-      setError('Ingresa la clave de registro del asistente.');
-      return;
-    }
-
-    navigate(`/asistente/${nextCode}`);
-  };
-
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!resolved) {
-      setError('Primero valida la clave de registro del asistente.');
+      setError('No fue posible validar el link de registro del asistente.');
       return;
     }
 
@@ -155,7 +150,8 @@ export default function PublicAssistantRegisterPage() {
       setError('');
       setSuccess('');
 
-      const response = await publicStudyService.registerAssistant(resolved.code, {
+      await publicStudyService.registerAssistant(resolved.code, {
+        code: resolved.code,
         name: form.name.trim(),
         last_name: form.last_name.trim(),
         email: form.email.trim(),
@@ -165,11 +161,11 @@ export default function PublicAssistantRegisterPage() {
       });
 
       try {
-        await login(response.phone, form.password);
+        await login(form.email.trim(), form.password);
         navigate('/dashboard', { replace: true });
         return;
       } catch {
-        setSuccess('Registro completado correctamente. Ahora puedes iniciar sesion con tu telefono y contrasena.');
+        setSuccess('Registro completado correctamente. Ahora puedes iniciar sesion con tu correo y contrasena.');
       }
     } catch (requestError) {
       const backendMessage = axios.isAxiosError(requestError)
@@ -228,35 +224,25 @@ export default function PublicAssistantRegisterPage() {
               </Button>
             ) : null}
 
-            <Box>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                Ingresa la clave que recibiste o abre directamente el link de invitacion.
-              </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                <TextField
-                  label="Clave de registro"
-                  value={form.code}
-                  onChange={(event) => handleFieldChange('code', event.target.value)}
-                  fullWidth
-                />
-                <Button
-                  variant="outlined"
-                  onClick={handleResolve}
-                  disabled={loading || !form.code.trim()}
-                  sx={{ minWidth: { sm: 150 } }}
-                >
-                  Continuar
-                </Button>
-              </Stack>
-            </Box>
-
             {loading ? (
               <Stack direction="row" spacing={1.5} alignItems="center">
                 <CircularProgress size={22} />
                 <Typography variant="body2" color="text.secondary">
-                  Validando enlace de registro...
+                  Validando link de registro...
                 </Typography>
               </Stack>
+            ) : null}
+
+            {!loading && !resolved && linkStatus === 'not_found' ? (
+              <Alert severity="error">404 | No encontramos un link de registro valido para asistentes.</Alert>
+            ) : null}
+
+            {!loading && !resolved && linkStatus === 'expired' ? (
+              <Alert severity="warning">Este link de registro ya vencio. Solicita a tu medico que te comparta uno nuevo.</Alert>
+            ) : null}
+
+            {!loading && !resolved && linkStatus === 'used' ? (
+              <Alert severity="warning">Este link de registro ya fue utilizado. Si necesitas registrarte de nuevo, solicita uno nuevo a tu medico.</Alert>
             ) : null}
 
             {resolved ? (
@@ -282,9 +268,6 @@ export default function PublicAssistantRegisterPage() {
                         <strong>Medico:</strong> {resolved.office.doctor_name}
                       </Typography>
                     ) : null}
-                    <Typography variant="body2">
-                      <strong>Telefono pre-asignado:</strong> {resolved.phone}
-                    </Typography>
                   </Stack>
                 </Box>
 
@@ -296,6 +279,7 @@ export default function PublicAssistantRegisterPage() {
 
                 <Box component="form" onSubmit={handleSubmit}>
                   <Stack spacing={2}>
+                    <input type="hidden" name="code" value={resolved.code} />
                     <Typography variant="h6" sx={{ fontWeight: 700 }}>
                       Datos del asistente
                     </Typography>
@@ -330,8 +314,7 @@ export default function PublicAssistantRegisterPage() {
                       value={form.phone}
                       onChange={(event) => handleFieldChange('phone', event.target.value)}
                       fullWidth
-                      disabled
-                      helperText="Este telefono corresponde al numero pre-asignado para tu registro."
+                      disabled={!resolved.can_register || submitting}
                     />
 
                     <TextField

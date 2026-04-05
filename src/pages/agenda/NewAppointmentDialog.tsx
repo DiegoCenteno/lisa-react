@@ -477,6 +477,8 @@ export default function NewAppointmentDialog({
   // â”€â”€ Save appointment â”€â”€
   const handleSave = async () => {
     if (!selectedSlot) return;
+    const currentPatientPhone = selectedPatient ? selectedPatient.phone : newPatient.phone;
+    const patientCanBeNotified = Boolean(String(currentPatientPhone ?? '').trim());
     setSaving(true);
     setSaveError('');
     try {
@@ -504,7 +506,7 @@ export default function NewAppointmentDialog({
           dateend: selectedSlot.dateend,
           reason: reason || undefined,
           activity_action: 'assign',
-          notify_patient: notifyPatient,
+          notify_patient: patientCanBeNotified ? notifyPatient : false,
           replace_previous_appointment: replacePreviousAppointment,
           previous_appointment_id: replacePreviousAppointment
             ? futureActiveAppointment?.appointment_id
@@ -518,7 +520,7 @@ export default function NewAppointmentDialog({
           dateend: selectedSlot.dateend,
           reason: reason || undefined,
           activity_action: 'create',
-          notify_patient: notifyPatient,
+          notify_patient: patientCanBeNotified ? notifyPatient : false,
           replace_previous_appointment: replacePreviousAppointment,
           previous_appointment_id: replacePreviousAppointment
             ? futureActiveAppointment?.appointment_id
@@ -537,7 +539,7 @@ export default function NewAppointmentDialog({
           gender: newPatient.gender || undefined,
           birth_date: newPatient.birth_date || undefined,
           activity_action: mode === 'assign' ? 'assign' : 'create',
-          notify_patient: notifyPatient,
+          notify_patient: patientCanBeNotified ? notifyPatient : false,
         });
       }
       onAppointmentCreated();
@@ -1397,6 +1399,7 @@ export default function NewAppointmentDialog({
     const patientPhone = selectedPatient
       ? selectedPatient.phone
       : newPatient.phone;
+    const patientCanBeNotified = Boolean(String(patientPhone ?? '').trim());
     const slotSummary = selectedSlot ? formatAppointmentSummaryDateTime(selectedSlot.datestart) : '';
     const [slotDatePart, slotTimePart] = slotSummary ? slotSummary.split('|') : ['', ''];
     const slotDuration = showManualForm
@@ -1519,6 +1522,7 @@ export default function NewAppointmentDialog({
           control={
             <Checkbox
               checked={notifyPatient}
+              disabled={!patientCanBeNotified}
               onChange={(e) => setNotifyPatient(e.target.checked)}
               sx={{ color: TEAL, '&.Mui-checked': { color: TEAL } }}
             />
@@ -1526,6 +1530,12 @@ export default function NewAppointmentDialog({
           label="Notificar al paciente (WhatsApp o SMS)"
           sx={{ mt: 1 }}
         />
+
+        {!patientCanBeNotified ? (
+          <Typography sx={{ color: 'error.main', fontSize: '0.8rem', mt: -2 }}>
+            No se puede notificar al paciente ya que no tiene teléfono registrado
+          </Typography>
+        ) : null}
 
         {saveError && (
           <Typography sx={{ color: 'error.main', fontSize: '0.85rem' }}>

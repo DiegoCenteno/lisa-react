@@ -77,6 +77,7 @@ const publicStudyService = {
   async registerAssistant(
     code: string,
     payload: {
+      code: string;
       name: string;
       last_name: string;
       email: string;

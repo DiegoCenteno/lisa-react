@@ -1,4 +1,4 @@
-import { memo, type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { memo, type ChangeEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -32,7 +32,7 @@ import { useLocation } from 'react-router-dom';
 import notificationService from '../../api/notificationService';
 import settingsService, { type SettingsAgendaData, type SettingsAgendaDayInput, type SettingsCompanyData, type SettingsFormsData, type SettingsLabelStatusItem, type SettingsPrintData, type SettingsProfileData, type SettingsReportsData, type SettingsUnavailableDayItem } from '../../api/settingsService';
 import { useAuth } from '../../hooks/useAuth';
-import type { NotificationAssistantItem, NotificationAssistantRecipientsData, Office, OfficeLabelItem } from '../../types';
+import type { NotificationAssistantItem, NotificationAssistantRecipientsData, NotificationPreassistantItem, Office, OfficeLabelItem } from '../../types';
 
 dayjs.locale('es');
 
@@ -2780,8 +2780,7 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
   const [assistantData, setAssistantData] = useState<NotificationAssistantRecipientsData | null>(null);
   const [assistantToDelete, setAssistantToDelete] = useState<NotificationAssistantItem | null>(null);
   const [preassistantIdToDelete, setPreassistantIdToDelete] = useState<number | null>(null);
-  const [assistantName, setAssistantName] = useState('');
-  const [assistantPhone, setAssistantPhone] = useState('');
+  const [createdPreassistant, setCreatedPreassistant] = useState<NotificationPreassistantItem | null>(null);
 
   useEffect(() => {
     if (ownerOffices.length === 0) {
@@ -2796,13 +2795,17 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
     const loadAssistants = async () => {
       if (!selectedOfficeId) {
         setAssistantData(null);
+        setCreatedPreassistant(null);
         return;
       }
       setLoading(true);
       setError(null);
       try {
         const data = await notificationService.getAssistantRecipients(selectedOfficeId);
-        if (mounted) setAssistantData(data);
+        if (mounted) {
+          setAssistantData(data);
+          setCreatedPreassistant((current) => current ? data.preassistants.find((item) => item.id === current.id) ?? null : null);
+        }
       } catch (err) {
         if (mounted) setError(err instanceof Error ? err.message : 'No fue posible cargar los asistentes del consultorio.');
       } finally {
@@ -2819,33 +2822,50 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
     return <PlaceholderPanel title="Asistentes" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para administrar asistentes." />;
   }
 
+  const copyLink = async (link: string) => {
+    await navigator.clipboard.writeText(link);
+    setSuccessMessage('Link copiado correctamente.');
+  };
+
+  const reachedAssistantLimit =
+    (assistantData?.limits.registered_assistants ?? 0) +
+      (assistantData?.limits.registered_preassistants ?? 0) >=
+    (assistantData?.limits.assistant_max ?? 3);
+
   return (
     <>
       <Grid container spacing={3}>
         <Grid size={{ xs: 12 }}>
           <CardShell title="Nuevo asistente">
-            <TextField select label="Selecciona un consultorio" value={selectedOfficeId} onChange={(event) => setSelectedOfficeId(Number(event.target.value))} fullWidth sx={{ mb: 3.5 }}>
+            <TextField
+              select
+              label="Selecciona un consultorio"
+              value={selectedOfficeId}
+              onChange={(event) => {
+                setSelectedOfficeId(Number(event.target.value));
+                setCreatedPreassistant(null);
+              }}
+              fullWidth
+              sx={{ mb: 3.5 }}
+            >
               {ownerOffices.map((office) => (
                 <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
               ))}
             </TextField>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-              Puedes tener hasta {assistantData?.limits.assistant_max ?? 3} asistentes registrados. Si ya existen esos 3 asistentes activos, ya no se permitirá enviar más pre-registros. El envío del template nuevo de WhatsApp quedará pendiente; por ahora solo se generará el código y el link.
+              Puedes tener hasta {assistantData?.limits.assistant_max ?? 3} asistentes activos entre registrados y pre-asignados. Cada link de asistente permanecerá vigente durante 2 días.
             </Typography>
             {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
-            <TextField label="Nombre" value={assistantName} fullWidth variant="standard" onChange={(event) => setAssistantName(event.target.value)} sx={{ mb: 3.5 }} />
-            <TextField label="Teléfono" value={assistantPhone} fullWidth variant="standard" onChange={(event) => setAssistantPhone(event.target.value)} sx={{ mb: 3.5 }} />
             <Button
               variant="contained"
-              disabled={saving || loading || !selectedOfficeId || !assistantName.trim() || !assistantPhone.trim() || (assistantData?.limits.registered_assistants ?? 0) >= (assistantData?.limits.assistant_max ?? 3)}
+              disabled={saving || loading || !selectedOfficeId || reachedAssistantLimit}
               onClick={() => {
                 setSaving(true);
                 setError(null);
-                void notificationService.addPreassistant(selectedOfficeId, assistantName, assistantPhone).then((data) => {
+                void notificationService.addPreassistant(selectedOfficeId).then((data) => {
                   setAssistantData(data);
-                  setAssistantName('');
-                  setAssistantPhone('');
-                  setSuccessMessage('Asistente pre-asignado correctamente.');
+                  setCreatedPreassistant(data.preassistants[0] ?? null);
+                  setSuccessMessage('Link de asistente creado correctamente.');
                 }).catch((err) => {
                   const backendMessage =
                     typeof err === 'object' &&
@@ -2854,15 +2874,28 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
                     typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === 'string'
                       ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message ?? '')
                       : '';
-                  setError(backendMessage || (err instanceof Error ? err.message : 'No fue posible agregar al asistente.'));
+                  setError(backendMessage || (err instanceof Error ? err.message : 'No fue posible generar el link del asistente.'));
                 }).finally(() => {
                   setSaving(false);
                 });
               }}
               sx={{ minWidth: 160, borderRadius: 1, backgroundColor: '#ea1d63', boxShadow: '0 8px 18px rgba(234, 29, 99, 0.28)', '&:hover': { backgroundColor: '#cf1857' } }}
             >
-              {saving ? 'Enviando...' : 'Enviar invitación'}
+              {saving ? 'Generando...' : 'Generar link'}
             </Button>
+            {createdPreassistant ? (
+              <Box sx={{ mt: 3, border: '1px solid #d8e8ef', borderRadius: 2, px: 2.5, py: 2.25, backgroundColor: '#fbfeff' }}>
+                <Typography variant="body2" sx={{ color: '#24404c', lineHeight: 1.7 }}>
+                  Comparte este link con tu asistente para que complete su registro en LISA y pueda comenzar a agendar citas en tu consultorio.
+                </Typography>
+                <Box sx={{ mt: 2, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'stretch', md: 'center' }, gap: 1.5 }}>
+                  <Typography sx={{ flex: 1, color: '#2f8df4', wordBreak: 'break-all' }}>{createdPreassistant.link}</Typography>
+                  <Button variant="outlined" startIcon={<ContentCopy />} onClick={() => { void copyLink(createdPreassistant.link); }} sx={{ whiteSpace: 'nowrap' }}>
+                    Copiar link
+                  </Button>
+                </Box>
+              </Box>
+            ) : null}
           </CardShell>
         </Grid>
         <Grid size={{ xs: 12, md: 6 }}>
@@ -2901,26 +2934,20 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {assistantData.preassistants.map((item) => (
                   <Box key={item.id} sx={{ borderBottom: '1px solid #e2eef3', pb: 2 }}>
-                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1.7fr auto' }, gap: 2, alignItems: 'start' }}>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1.8fr auto' }, gap: 2, alignItems: 'start' }}>
                       <Box>
-                        <Typography variant="caption" color="text.secondary">Nombre</Typography>
-                        <Typography>{item.name}</Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">Teléfono</Typography>
-                        <Typography>{item.phone}</Typography>
-                      </Box>
-                      <Box>
-                        <Typography variant="caption" color="text.secondary">Código</Typography>
-                        <Typography sx={{ color: '#164a58' }}>
-                          {item.code} es el código de acceso de tu asistente que necesita incluir en la página de registro
-                        </Typography>
-                        <Typography sx={{ mt: 0.5, color: '#2f8df4' }}>{item.link}</Typography>
+                        <Typography variant="caption" color="text.secondary">Link activo</Typography>
+                        <Typography sx={{ mt: 0.5, color: '#2f8df4', wordBreak: 'break-all' }}>{item.link}</Typography>
                         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                          El envío del template de WhatsApp para esta invitación quedará pendiente.
+                          Vigente hasta {item.expires_at ? dayjs(item.expires_at).format('DD/MM/YYYY HH:mm') : 'las próximas 48 horas'}.
                         </Typography>
                       </Box>
-                      <Button variant="text" color="error" onClick={() => setPreassistantIdToDelete(item.id)}>Eliminar</Button>
+                      <Box sx={{ display: 'flex', flexDirection: { xs: 'row', md: 'column' }, justifyContent: 'flex-start', alignItems: { xs: 'center', md: 'flex-end' }, gap: 1 }}>
+                        <Button variant="outlined" startIcon={<ContentCopy />} onClick={() => { void copyLink(item.link); }}>
+                          Copiar link
+                        </Button>
+                        <Button variant="text" color="error" onClick={() => setPreassistantIdToDelete(item.id)}>Eliminar</Button>
+                      </Box>
                     </Box>
                   </Box>
                 ))}
@@ -2963,6 +2990,7 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
             if (!preassistantIdToDelete) return;
             void notificationService.removePreassistant(preassistantIdToDelete).then((data) => {
               setAssistantData(data);
+              setCreatedPreassistant((current) => current && current.id === preassistantIdToDelete ? null : current);
               setSuccessMessage('Asistente pre-asignado eliminado correctamente.');
               setPreassistantIdToDelete(null);
             }).catch((err) => {
@@ -3665,5 +3693,8 @@ export default function SettingsPage() {
     </Box>
   );
 }
+
+
+
 
 

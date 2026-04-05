@@ -27,6 +27,11 @@ type FlatField = { key: string; label: string; hiddenKey?: string; options?: Opt
 
 const riskOptions: Option[] = ['bajo riesgo', 'alto riesgo'].map((value) => ({ value, label: value }));
 const normalOptions: Option[] = ['normal', 'anormal', 'no valorable'].map((value) => ({ value, label: value }));
+const umbilicalCordOptions: Option[] = [
+  { value: 'no circular', label: 'No circular' },
+  { value: 'si circular', label: 'Si circular' },
+  { value: 'si asa', label: 'Si asa' },
+];
 const fetusCountOptions: Option[] = [{ value: 1, label: 'Unico' }, { value: 2, label: 'Dos' }, { value: 3, label: 'Triple' }];
 const conclusionFetusCountOptions: Option[] = [
   { value: 'unico', label: 'Unico' },
@@ -73,7 +78,7 @@ const basicFields: FlatField[] = [
   { key: 'uterus_and_adnexa', label: 'Útero y anexos', hiddenKey: 'uobbuteroyanex', options: normalOptions },
   { key: 'cervical_length', label: 'Longitud cervical', hiddenKey: 'uobblongcerv', placeholder: 'cm' },
   { key: 'internal_cervical_os', label: 'Orificio cervical interno', hiddenKey: 'uobborificiocervint', options: ['cerrado', 'abierto'].map((value) => ({ value, label: value })) },
-  { key: 'umbilical_cord', label: 'Cordón umbilical', hiddenKey: 'uobbcordonumbilical', options: normalOptions },
+  { key: 'umbilical_cord', label: 'Cordón umbilical', hiddenKey: 'uobbcordonumbilical', options: umbilicalCordOptions },
 ];
 
 const screeningGroups: Array<{ title: string; fields: FlatField[] }> = [
@@ -314,7 +319,7 @@ function createDefaultFetusPayload(fetusNumber: number): NuchalTranslucencyRepor
       uterus_and_adnexa: String(normalOptions[0].value),
       cervical_length: '',
       internal_cervical_os: 'cerrado',
-      umbilical_cord: String(normalOptions[0].value),
+      umbilical_cord: String(umbilicalCordOptions[0].value),
     },
     anatomical_screening: {
       central_nervous_system: { skull: 'normal', midline: 'normal', choroid_plexuses: 'normal' },

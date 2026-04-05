@@ -71,10 +71,10 @@ const notificationService = {
     return response.data.data;
   },
 
-  async addPreassistant(officeId: number, name: string, phone: string): Promise<NotificationAssistantRecipientsData> {
+  async addPreassistant(officeId: number): Promise<NotificationAssistantRecipientsData> {
     const response = await apiClient.post<{ status: string; data: NotificationAssistantRecipientsData }>(
       '/v2/notifications/preassistants',
-      { office_id: officeId, name, phone }
+      { office_id: officeId }
     );
 
     return response.data.data;

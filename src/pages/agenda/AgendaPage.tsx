@@ -491,6 +491,9 @@ export default function AgendaPage() {
   const canConfirmSelectedEvent = selectedEvent
     ? dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day') < 3
     : false;
+  const selectedEventCanNotifyPatient = Boolean(
+    String(selectedEvent?.event.extendedProps.phone ?? '').trim()
+  );
 
   const handleAppointmentCreated = useCallback(() => {
     if (dateRange) {
@@ -648,7 +651,7 @@ export default function AgendaPage() {
         status: statusMap[pendingAction],
         notify_patient:
           pendingAction === 'confirm' || pendingAction === 'cancel'
-            ? notifyPatientAction
+            ? (selectedEventCanNotifyPatient ? notifyPatientAction : false)
             : false,
       });
 
@@ -662,7 +665,7 @@ export default function AgendaPage() {
       console.error('Error actualizando estatus de la cita:', error);
       setActionLoading(false);
     }
-  }, [selectedEvent, pendingAction, notifyPatientAction, dateRange, loadAppointments, handleCloseSelectedEvent]);
+  }, [selectedEvent, pendingAction, notifyPatientAction, selectedEventCanNotifyPatient, dateRange, loadAppointments, handleCloseSelectedEvent]);
 
   const handleOpenAppointmentMore = useCallback(async () => {
     if (!selectedEvent) return;
@@ -1558,6 +1561,7 @@ export default function AgendaPage() {
                       control={
                         <Checkbox
                           checked={notifyPatientAction}
+                          disabled={!selectedEventCanNotifyPatient}
                           onChange={(event) => setNotifyPatientAction(event.target.checked)}
                           size="small"
                           sx={{ py: 0.5 }}
@@ -1572,6 +1576,11 @@ export default function AgendaPage() {
                         },
                       }}
                     />
+                  ) : null}
+                  {pendingAction !== 'no_show' && !selectedEventCanNotifyPatient ? (
+                    <Typography sx={{ fontSize: '0.8rem', color: 'error.main', textAlign: 'center', mt: -2 }}>
+                      No se puede notificar al paciente ya que no tiene teléfono registrado
+                    </Typography>
                   ) : null}
                 </Box>
               )}
