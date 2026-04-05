@@ -35,6 +35,7 @@ interface DailyNotePayload {
 interface DownloadPrescriptionPayload {
   patient_id: number;
   office_id?: number;
+  prescription_date?: string;
   height?: string;
   weight?: string;
   ta?: string;

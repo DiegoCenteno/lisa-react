@@ -484,6 +484,7 @@ export default function PatientDetailPage() {
       {/* Tab 7: Hist\u00f3rico */}
       <TabPanel value={tab} index={7}>
         <ConsultationHistoryTab
+          patient={patient}
           soapNotes={soapNotes}
           canEditConsultationHistory={canEditConsultationHistory}
           onNavigateToBitacora={() => {
