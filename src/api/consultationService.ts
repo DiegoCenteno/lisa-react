@@ -353,12 +353,61 @@ export interface GeneticReportPayload {
   conclusion: BasicObstetricConclusionPayload;
 }
 
+export interface FetalVitalityFetusPayload {
+  fetus_number: number;
+  growth_screening: {
+    lcc: BasicObstetricMeasurementPayload;
+    dbp: BasicObstetricMeasurementPayload;
+    average_fetometry: string;
+  };
+  basic_screening: {
+    gestational_sac: string;
+    gestational_sac_characteristics: string;
+    decidual_reaction: string;
+    yolk_vesicle_mm: string;
+    yolk_vesicle_characteristics: string;
+    embryo: string;
+    embryonic_heart_rate: string;
+    uterus_and_adnexa: string;
+    cervical_length: string;
+    internal_cervical_os: string;
+  };
+}
+
+export interface FetalVitalityConclusionPayload {
+  fetus_count_risk: string;
+  growth_risk: string;
+  frequency_risk: string;
+  prognosis_data: string;
+  uterus_and_adnexa_risk: string;
+  comments: string;
+  recommended_next_study: string;
+  recommended_start_date: string;
+  recommended_end_date: string;
+}
+
+export interface FetalVitalityReportPayload {
+  study_context: {
+    reference_physician: string;
+    fetus_count: number;
+    selected_fetus: number;
+  };
+  fetuses: FetalVitalityFetusPayload[];
+  interpretation_ultrasounds: BasicObstetricInterpretationUltrasoundPayload[];
+  conclusion: FetalVitalityConclusionPayload;
+}
+
 export interface PatientReportItem {
   id: number;
   created_at?: string | null;
   created_at_label: string;
   type_key: string;
   type_label: string;
+  source_kind?: 'v2' | 'legacy';
+  legacy_source?: 'ultrasonidos';
+  can_migrate?: boolean;
+  is_migrated?: boolean;
+  migrated_report_id?: number | null;
   editor_url?: string | null;
 }
 
@@ -390,6 +439,7 @@ export interface PatientReportsData {
   last_report_type_label?: string | null;
   last_report_date_label?: string | null;
   items: PatientReportItem[];
+  legacy_items?: PatientReportItem[];
 }
 
 export interface ColposcopyReportBuilderData {
@@ -573,7 +623,7 @@ export const consultationService = {
     type_label: string;
     created_at?: string | null;
     created_at_label: string;
-    next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'v2_report_builder_pending';
+    next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'vitality' | 'v2_report_builder_pending';
     editor_url?: string | null;
   }> {
     const resolvedOfficeId = officeId ?? (await resolveOfficeId());
@@ -586,12 +636,45 @@ export const consultationService = {
         type_label: string;
         created_at?: string | null;
         created_at_label: string;
-        next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'v2_report_builder_pending';
+        next_view: 'colposcopy' | 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'vitality' | 'v2_report_builder_pending';
         editor_url?: string | null;
       };
     }>(`/v2/patients/${patientId}/reports`, {
       office_id: resolvedOfficeId,
       report_key: reportKey,
+    });
+
+    return response.data.data;
+  },
+
+  async migrateLegacyUltrasoundReport(
+    patientId: number,
+    legacyId: number,
+    officeId?: number
+  ): Promise<{
+    id: number;
+    type_key: string;
+    type_label: string;
+    created_at?: string | null;
+    created_at_label: string;
+    next_view: 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'vitality';
+    editor_url?: string | null;
+  }> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.post<{
+      status: string;
+      message: string;
+      data: {
+        id: number;
+        type_key: string;
+        type_label: string;
+        created_at?: string | null;
+        created_at_label: string;
+        next_view: 'basic_obstetric' | 'nuchal_translucency' | 'genetic' | 'structural' | 'wellbeing' | 'vitality';
+        editor_url?: string | null;
+      };
+    }>(`/v2/patients/${patientId}/legacy-ultrasounds/${legacyId}/migrate`, {
+      office_id: resolvedOfficeId,
     });
 
     return response.data.data;

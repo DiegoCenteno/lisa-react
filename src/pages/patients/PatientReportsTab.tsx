@@ -26,6 +26,7 @@ import {
   consultationService,
   type BasicObstetricReportPayload,
   type ColposcopyReportBuilderData,
+  type FetalVitalityReportPayload,
   type GeneticReportPayload,
   type NuchalTranslucencyReportPayload,
   type PatientReportItem,
@@ -34,6 +35,7 @@ import {
 } from '../../api/consultationService';
 import { patientService } from '../../api/patientService';
 import PatientBasicObstetricReportBuilder from './PatientBasicObstetricReportBuilder';
+import PatientFetalVitalityReportBuilder from './PatientFetalVitalityReportBuilder';
 import PatientFetalWellbeingReportBuilder from './PatientFetalWellbeingReportBuilder';
 import PatientGeneticReportBuilder from './PatientGeneticReportBuilder';
 import PatientNuchalTranslucencyReportBuilder from './PatientNuchalTranslucencyReportBuilder';
@@ -57,6 +59,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const [activeGeneticReportId, setActiveGeneticReportId] = useState<number | null>(null);
   const [activeStructuralReportId, setActiveStructuralReportId] = useState<number | null>(null);
   const [activeWellbeingReportId, setActiveWellbeingReportId] = useState<number | null>(null);
+  const [activeVitalityReportId, setActiveVitalityReportId] = useState<number | null>(null);
   const [reportBuilderStartInEditMode, setReportBuilderStartInEditMode] = useState(true);
   const [colposcopyBuilder, setColposcopyBuilder] = useState<ColposcopyReportBuilderData | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<number[]>([]);
@@ -75,8 +78,9 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const isBuildingGeneticReport = activeGeneticReportId !== null;
   const isBuildingStructuralReport = activeStructuralReportId !== null;
   const isBuildingWellbeingReport = activeWellbeingReportId !== null;
+  const isBuildingVitalityReport = activeVitalityReportId !== null;
   const isBuildingReport =
-    isBuildingColposcopyReport || isBuildingBasicObstetricReport || isBuildingNuchalTranslucencyReport || isBuildingGeneticReport || isBuildingStructuralReport || isBuildingWellbeingReport;
+    isBuildingColposcopyReport || isBuildingBasicObstetricReport || isBuildingNuchalTranslucencyReport || isBuildingGeneticReport || isBuildingStructuralReport || isBuildingWellbeingReport || isBuildingVitalityReport;
 
   useEffect(() => {
     imagePreviewUrlsRef.current = imagePreviewUrls;
@@ -136,6 +140,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
       setSelectedFileIds(data.selected_file_ids);
       setActiveStructuralReportId(null);
       setActiveWellbeingReportId(null);
+      setActiveVitalityReportId(null);
       setShowCreate(false);
     } catch (loadError) {
       console.error('Error cargando builder de colposcopia:', loadError);
@@ -156,6 +161,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveGeneticReportId(null);
     setActiveStructuralReportId(null);
     setActiveWellbeingReportId(null);
+    setActiveVitalityReportId(null);
     setActiveBasicObstetricReportId(reportId);
   }, []);
 
@@ -170,6 +176,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveGeneticReportId(null);
     setActiveStructuralReportId(null);
     setActiveWellbeingReportId(null);
+    setActiveVitalityReportId(null);
     setActiveNuchalTranslucencyReportId(reportId);
   }, []);
 
@@ -184,6 +191,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveNuchalTranslucencyReportId(null);
     setActiveStructuralReportId(null);
     setActiveWellbeingReportId(null);
+    setActiveVitalityReportId(null);
     setActiveGeneticReportId(reportId);
   }, []);
 
@@ -198,6 +206,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveNuchalTranslucencyReportId(null);
     setActiveGeneticReportId(null);
     setActiveWellbeingReportId(null);
+    setActiveVitalityReportId(null);
     setActiveStructuralReportId(reportId);
   }, []);
 
@@ -212,7 +221,23 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveNuchalTranslucencyReportId(null);
     setActiveGeneticReportId(null);
     setActiveStructuralReportId(null);
+    setActiveVitalityReportId(null);
     setActiveWellbeingReportId(reportId);
+  }, []);
+
+  const loadVitalityBuilder = useCallback((reportId: number, startInEditMode = true) => {
+    setActiveColposcopyReportId(null);
+    setColposcopyBuilder(null);
+    setSelectedSessionIds([]);
+    setSelectedFileIds([]);
+    setShowCreate(false);
+    setReportBuilderStartInEditMode(startInEditMode);
+    setActiveBasicObstetricReportId(null);
+    setActiveNuchalTranslucencyReportId(null);
+    setActiveGeneticReportId(null);
+    setActiveStructuralReportId(null);
+    setActiveWellbeingReportId(null);
+    setActiveVitalityReportId(reportId);
   }, []);
 
   const handleCreateReport = useCallback(async () => {
@@ -241,6 +266,8 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
         loadStructuralBuilder(created.id);
       } else if (created.next_view === 'wellbeing') {
         loadWellbeingBuilder(created.id);
+      } else if (created.next_view === 'vitality') {
+        loadVitalityBuilder(created.id);
       } else {
         setShowCreate(false);
         setMessage('Este tipo de reporte se integrara en la siguiente fase V2.');
@@ -251,7 +278,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     } finally {
       setCreating(false);
     }
-  }, [loadBasicObstetricBuilder, loadColposcopyBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadReports, loadStructuralBuilder, loadWellbeingBuilder, patientId, selectedReportKey]);
+  }, [loadBasicObstetricBuilder, loadColposcopyBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadReports, loadStructuralBuilder, loadVitalityBuilder, loadWellbeingBuilder, patientId, selectedReportKey]);
 
   const availableBuilderFiles = useMemo(
     () =>
@@ -395,6 +422,98 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
 
   const handleOpenExistingReport = useCallback(
     async (report: PatientReportItem) => {
+      if (report.source_kind === 'legacy') {
+        if (!report.can_migrate) {
+          setError('Este reporte legacy no se puede migrar porque no tiene datos disponibles.');
+          return;
+        }
+
+        setCreating(true);
+        try {
+          const migrated = await consultationService.migrateLegacyUltrasoundReport(patientId, report.id);
+          await loadReports();
+
+          if (migrated.next_view === 'basic_obstetric') {
+            setActiveColposcopyReportId(null);
+            setColposcopyBuilder(null);
+            setSelectedSessionIds([]);
+            setSelectedFileIds([]);
+            setActiveNuchalTranslucencyReportId(null);
+            loadBasicObstetricBuilder(migrated.id, false);
+            return;
+          }
+
+          if (migrated.next_view === 'nuchal_translucency') {
+            setActiveColposcopyReportId(null);
+            setColposcopyBuilder(null);
+            setSelectedSessionIds([]);
+            setSelectedFileIds([]);
+            setActiveBasicObstetricReportId(null);
+            loadNuchalTranslucencyBuilder(migrated.id, false);
+            return;
+          }
+
+          if (migrated.next_view === 'genetic') {
+            setActiveColposcopyReportId(null);
+            setColposcopyBuilder(null);
+            setSelectedSessionIds([]);
+            setSelectedFileIds([]);
+            setActiveBasicObstetricReportId(null);
+            setActiveNuchalTranslucencyReportId(null);
+            loadGeneticBuilder(migrated.id, false);
+            return;
+          }
+
+          if (migrated.next_view === 'structural') {
+            setActiveColposcopyReportId(null);
+            setColposcopyBuilder(null);
+            setSelectedSessionIds([]);
+            setSelectedFileIds([]);
+            setActiveBasicObstetricReportId(null);
+            setActiveNuchalTranslucencyReportId(null);
+            setActiveGeneticReportId(null);
+            loadStructuralBuilder(migrated.id, false);
+            return;
+          }
+
+          if (migrated.next_view === 'wellbeing') {
+            setActiveColposcopyReportId(null);
+            setColposcopyBuilder(null);
+            setSelectedSessionIds([]);
+            setSelectedFileIds([]);
+            setActiveBasicObstetricReportId(null);
+            setActiveNuchalTranslucencyReportId(null);
+            setActiveGeneticReportId(null);
+            setActiveStructuralReportId(null);
+            loadWellbeingBuilder(migrated.id, false);
+            return;
+          }
+
+          if (migrated.next_view === 'vitality') {
+            setActiveColposcopyReportId(null);
+            setColposcopyBuilder(null);
+            setSelectedSessionIds([]);
+            setSelectedFileIds([]);
+            setActiveBasicObstetricReportId(null);
+            setActiveNuchalTranslucencyReportId(null);
+            setActiveGeneticReportId(null);
+            setActiveStructuralReportId(null);
+            setActiveWellbeingReportId(null);
+            loadVitalityBuilder(migrated.id, false);
+            return;
+          }
+
+          setMessage('El reporte se migro correctamente.');
+          return;
+        } catch (migrationError) {
+          console.error('Error migrando ultrasonido legacy:', migrationError);
+          setError('No se pudo migrar el ultrasonido legacy.');
+          return;
+        } finally {
+          setCreating(false);
+        }
+      }
+
       if (report.type_key === 'tipoest1') {
         setActiveColposcopyReportId(null);
         setColposcopyBuilder(null);
@@ -451,6 +570,20 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
         return;
       }
 
+      if (report.type_key === 'tipoest7') {
+        setActiveColposcopyReportId(null);
+        setColposcopyBuilder(null);
+        setSelectedSessionIds([]);
+        setSelectedFileIds([]);
+        setActiveBasicObstetricReportId(null);
+        setActiveNuchalTranslucencyReportId(null);
+        setActiveGeneticReportId(null);
+        setActiveStructuralReportId(null);
+        setActiveWellbeingReportId(null);
+        loadVitalityBuilder(report.id, false);
+        return;
+      }
+
       if (report.type_key === 'tipoest9') {
         await handleDownloadExistingReport(report);
         return;
@@ -458,7 +591,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
 
       setMessage('Este tipo de reporte se integrara en la siguiente fase V2.');
     },
-    [handleDownloadExistingReport, loadBasicObstetricBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadStructuralBuilder, loadWellbeingBuilder]
+    [handleDownloadExistingReport, loadBasicObstetricBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadReports, loadStructuralBuilder, loadVitalityBuilder, loadWellbeingBuilder, patientId]
   );
 
   const handleBasicObstetricSaved = useCallback(
@@ -497,6 +630,23 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
 
   const handleGeneticSaved = useCallback(
     (savedReport: PatientReportRecord<GeneticReportPayload>) => {
+      setReportsData((current) => {
+        if (!current) return current;
+        return {
+          ...current,
+          last_report_type_key: savedReport.report_type_key,
+          last_report_type_label:
+            current.reports_enabled.find((report) => report.key === savedReport.report_type_key)?.label ??
+            current.last_report_type_label,
+          last_report_date_label: savedReport.updated_at ?? savedReport.created_at ?? current.last_report_date_label,
+        };
+      });
+    },
+    []
+  );
+
+  const handleVitalitySaved = useCallback(
+    (savedReport: PatientReportRecord<FetalVitalityReportPayload>) => {
       setReportsData((current) => {
         if (!current) return current;
         return {
@@ -601,7 +751,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
               Tabla de reportes previamente creados
             </Typography>
 
-            {reportsData?.items.length ? (
+            {reportsData && (reportsData.items.length ?? 0) > 0 ? (
               <Table size="small">
                 <TableHead>
                   <TableRow>
@@ -616,7 +766,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
                       <TableCell>{item.created_at_label}</TableCell>
                       <TableCell>{item.type_label}</TableCell>
                       <TableCell align="right">
-                        {item.type_key === 'tipoest1' || item.type_key === 'tipoest2' || item.type_key === 'tipoest3' || item.type_key === 'tipoest4' || item.type_key === 'tipoest5' ? (
+                        {item.type_key === 'tipoest1' || item.type_key === 'tipoest2' || item.type_key === 'tipoest3' || item.type_key === 'tipoest4' || item.type_key === 'tipoest5' || item.type_key === 'tipoest7' ? (
                           <Button
                             size="small"
                             variant="outlined"
@@ -929,6 +1079,21 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
               void loadReports();
             }}
             onSaved={handleGeneticSaved}
+            onError={setError}
+            onSuccess={setMessage}
+          />
+        )}
+
+        {activeVitalityReportId && (
+          <PatientFetalVitalityReportBuilder
+            reportId={activeVitalityReportId}
+            startInEditMode={reportBuilderStartInEditMode}
+            onClose={() => {
+              setActiveVitalityReportId(null);
+              setReportBuilderStartInEditMode(true);
+              void loadReports();
+            }}
+            onSaved={handleVitalitySaved}
             onError={setError}
             onSuccess={setMessage}
           />
