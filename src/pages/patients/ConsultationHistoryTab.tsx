@@ -26,6 +26,7 @@ import {
 } from '@mui/material';
 import {
   ArticleOutlined as LogbookIcon,
+  DownloadOutlined as DownloadIcon,
   Search as SearchIcon,
 } from '@mui/icons-material';
 import type { Patient, SOAPNote } from '../../types';
@@ -316,6 +317,7 @@ function ConsultationHistoryTabInner({
                                 size="small"
                                 variant="outlined"
                                 onClick={() => handleOpenPrescription(note)}
+                                startIcon={<DownloadIcon />}
                               >
                                 Descargar
                               </Button>
@@ -331,9 +333,14 @@ function ConsultationHistoryTabInner({
                               ) : null}
                               <Button
                                 size="small"
-                                variant="outlined"
+                                variant="contained"
                                 onClick={() => onEditNote(note)}
                                 disabled={!canEditConsultationHistory}
+                                sx={{
+                                  backgroundColor: '#2e7d32',
+                                  color: '#fff',
+                                  '&:hover': { backgroundColor: '#1b5e20' },
+                                }}
                               >
                                 Editar
                               </Button>
@@ -363,6 +370,7 @@ function ConsultationHistoryTabInner({
                             size="small"
                             variant="outlined"
                             onClick={() => handleOpenPrescription(note)}
+                            startIcon={<DownloadIcon />}
                           >
                             Descargar
                           </Button>
@@ -370,9 +378,14 @@ function ConsultationHistoryTabInner({
                         <TableCell align="right">
                           <Button
                             size="small"
-                            variant="outlined"
+                            variant="contained"
                             onClick={() => onEditNote(note)}
                             disabled={!canEditConsultationHistory}
+                            sx={{
+                              backgroundColor: '#2e7d32',
+                              color: '#fff',
+                              '&:hover': { backgroundColor: '#1b5e20' },
+                            }}
                           >
                             Editar
                           </Button>

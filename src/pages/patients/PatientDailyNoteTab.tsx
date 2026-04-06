@@ -34,6 +34,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   History as HistoryIcon,
   Lock as LockIcon,
+  Close as CloseIcon,
+  Print as PrintIcon,
   Save as SaveIcon,
 } from '@mui/icons-material';
 import { consultationService } from '../../api/consultationService';
@@ -731,7 +733,7 @@ const AnalysisSection = memo(function AnalysisSection({
 });
 
 const PlanSection = memo(function PlanSection({
-  form, formInstanceKey, onMedicationChange, onAddMedication, onRemoveMedication, onAdditionalInstructionsChange, recentMedicamentHistory, onSearchMedicamentHistory, onOpenPrescription, previousConsultation, visibility,
+  form, formInstanceKey, onMedicationChange, onAddMedication, onRemoveMedication, onAdditionalInstructionsChange, recentMedicamentHistory, onSearchMedicamentHistory, onOpenPrescription, onPrintPrescription, previousConsultation, visibility,
 }: {
   form: PlanFormData;
   formInstanceKey: number;
@@ -742,6 +744,7 @@ const PlanSection = memo(function PlanSection({
   recentMedicamentHistory: MedicamentHistoryItem[];
   onSearchMedicamentHistory: (query: string) => Promise<MedicamentHistoryItem[]>;
   onOpenPrescription: () => void;
+  onPrintPrescription: () => void;
   previousConsultation: PatientSoapContext['last_consultation'];
   visibility: DailyNoteVisibilityMap;
 }) {
@@ -1011,6 +1014,13 @@ const PlanSection = memo(function PlanSection({
             >
               Receta
             </Button>
+            <Button
+              variant="outlined"
+              startIcon={<PrintIcon />}
+              onClick={onPrintPrescription}
+            >
+              Imprimir
+            </Button>
           </Box>
         </Grid>
       </Grid>
@@ -1108,18 +1118,41 @@ const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
 void ObjectiveSection;
 
 const PersonalNotesSection = memo(function PersonalNotesSection({
-  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, officeLabels, patientTagControl, previousConsultation, visibility,
+  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility,
 }: {
   notes: string;
   formInstanceKey: number;
   onNotesChange: (next: string) => void;
   selectedLabels: number[];
   onLabelsChange: (next: number[]) => void;
+  onCreateLabel: (label: string) => Promise<void>;
   officeLabels: OfficeLabelItem[];
   patientTagControl: PatientTagControlData | null;
   previousConsultation: PatientSoapContext['last_consultation'];
   visibility: DailyNoteVisibilityMap;
 }) {
+  const [newLabel, setNewLabel] = useState('');
+  const [creatingLabel, setCreatingLabel] = useState(false);
+  const [createLabelError, setCreateLabelError] = useState<string | null>(null);
+
+  const handleCreateLabel = async () => {
+    const normalized = newLabel.trim();
+    if (!normalized || creatingLabel) {
+      return;
+    }
+
+    setCreatingLabel(true);
+    setCreateLabelError(null);
+    try {
+      await onCreateLabel(normalized);
+      setNewLabel('');
+    } catch {
+      setCreateLabelError('No se pudo agregar la etiqueta.');
+    } finally {
+      setCreatingLabel(false);
+    }
+  };
+
   return (
     <Card><CardContent>
       <Grid container spacing={2}>
@@ -1148,6 +1181,38 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
               />
             ))}
           </Box>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
+              gap: 1.5,
+              alignItems: 'end',
+              mt: 1.5,
+            }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              label="Nueva etiqueta"
+              value={newLabel}
+              disabled={creatingLabel}
+              onChange={(event) => setNewLabel(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  void handleCreateLabel();
+                }
+              }}
+            />
+            <Button
+              variant="contained"
+              onClick={() => void handleCreateLabel()}
+              disabled={creatingLabel || !newLabel.trim()}
+            >
+              Agregar etiqueta
+            </Button>
+          </Box>
+          {createLabelError ? <Alert severity="error" sx={{ mb: 1.5 }}>{createLabelError}</Alert> : null}
         </Grid>
       </Grid>
     </CardContent></Card>
@@ -1185,6 +1250,8 @@ function PatientDailyNoteTab({
   const [prescriptionFormatOpen, setPrescriptionFormatOpen] = useState(false);
   const [editingConsultation, setEditingConsultation] = useState<SOAPNote | null>(null);
   const [recentMedicamentHistory, setRecentMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
+  const [prescriptionPreviewUrl, setPrescriptionPreviewUrl] = useState<string | null>(null);
+  const [prescriptionPreviewName, setPrescriptionPreviewName] = useState('Receta PDF');
   const draftRestoredRef = useRef(false);
   const [formInstanceKey, setFormInstanceKey] = useState(0);
   const subjectiveFormRef = useRef<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
@@ -1205,6 +1272,14 @@ function PatientDailyNoteTab({
   );
 
   const refreshFormInstance = useCallback(() => setFormInstanceKey((current) => current + 1), []);
+
+  useEffect(() => {
+    return () => {
+      if (prescriptionPreviewUrl) {
+        window.URL.revokeObjectURL(prescriptionPreviewUrl);
+      }
+    };
+  }, [prescriptionPreviewUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1619,6 +1694,18 @@ function PatientDailyNoteTab({
     personalNotesRef.current = next;
   }, []);
   const handleLabelsChange = useCallback((next: number[]) => setSelectedOfficeLabels(next), []);
+  const handleCreateOfficeLabel = useCallback(async (label: string) => {
+    const created = await patientService.createOfficeLabel(label);
+    setOfficeLabels((current) => {
+      const next = [...current.filter((item) => item.id !== created.id), created];
+      return next.sort((a, b) => {
+        const left = (a.code?.trim() || a.identify?.trim() || '').toLowerCase();
+        const right = (b.code?.trim() || b.identify?.trim() || '').toLowerCase();
+        return left.localeCompare(right, 'es');
+      });
+    });
+    setSelectedOfficeLabels((current) => (current.includes(created.id) ? current : [...current, created.id]));
+  }, []);
   const handleSearchMedicamentHistory = useCallback((query: string) => patientService.searchMedicamentHistory(query), []);
   const buildPrescriptionPayload = useCallback(() => ({
     patient_id: patient.id,
@@ -1683,9 +1770,33 @@ function PatientDailyNoteTab({
     }
   }, [buildPrescriptionPayload, downloadPrescriptionBlob]);
 
-  const handleOpenPrescription = useCallback(() => {
-    setPrescriptionFormatOpen(true);
-  }, []);
+  const handleOpenPrescription = useCallback(async () => {
+    await handleDownloadPrescriptionWord();
+  }, [handleDownloadPrescriptionWord]);
+
+  const handleClosePrescriptionPreview = useCallback(() => {
+    if (prescriptionPreviewUrl) {
+      window.URL.revokeObjectURL(prescriptionPreviewUrl);
+    }
+    setPrescriptionPreviewUrl(null);
+    setPrescriptionPreviewName('Receta PDF');
+  }, [prescriptionPreviewUrl]);
+  const handlePrintPrescription = useCallback(() => {
+    setDailyNoteError(null);
+    void consultationService.downloadPrescriptionPdf(buildPrescriptionPayload())
+      .then((blob) => {
+        if (prescriptionPreviewUrl) {
+          window.URL.revokeObjectURL(prescriptionPreviewUrl);
+        }
+        const url = window.URL.createObjectURL(blob);
+        setPrescriptionPreviewUrl(url);
+        setPrescriptionPreviewName('Receta PDF');
+      })
+      .catch((error) => {
+        console.error('Error abriendo receta para impresi?n:', error);
+        setDailyNoteError('No se pudo abrir la receta para impresi?n.');
+      });
+  }, [buildPrescriptionPayload, prescriptionPreviewUrl]);
 
   const handleSelectPrescriptionWord = useCallback(async () => {
     setPrescriptionFormatOpen(false);
@@ -1812,6 +1923,7 @@ function PatientDailyNoteTab({
           recentMedicamentHistory={recentMedicamentHistory}
           onSearchMedicamentHistory={handleSearchMedicamentHistory}
           onOpenPrescription={handleOpenPrescription}
+          onPrintPrescription={handlePrintPrescription}
           previousConsultation={lastConsultation}
           visibility={dailyNoteVisibility}
         />
@@ -1821,6 +1933,7 @@ function PatientDailyNoteTab({
           onNotesChange={handleNotesChange}
           selectedLabels={selectedOfficeLabels}
           onLabelsChange={handleLabelsChange}
+          onCreateLabel={handleCreateOfficeLabel}
           officeLabels={officeLabels}
           patientTagControl={patientTagControl}
           previousConsultation={lastConsultation}
@@ -1841,6 +1954,24 @@ function PatientDailyNoteTab({
         <Alert onClose={() => setDailyNoteError(null)} severity="error" sx={{ width: '100%' }}>{dailyNoteError}</Alert>
       </Snackbar>
 
+      <Dialog open={Boolean(prescriptionPreviewUrl)} onClose={handleClosePrescriptionPreview} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
+          <Box component="span">{prescriptionPreviewName || 'Vista previa PDF'}</Box>
+          <IconButton onClick={handleClosePrescriptionPreview} size="small">
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0, height: '80vh' }}>
+          {prescriptionPreviewUrl && (
+            <Box
+              component="iframe"
+              src={prescriptionPreviewUrl}
+              title={prescriptionPreviewName || 'Vista previa PDF'}
+              sx={{ width: '100%', height: '100%', border: 0 }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={prescriptionFormatOpen}
         onClose={() => setPrescriptionFormatOpen(false)}
@@ -1850,7 +1981,7 @@ function PatientDailyNoteTab({
         <DialogTitle>Descargar receta</DialogTitle>
         <DialogContent dividers>
           <Typography>
-            ¿En qué formato deseas descargar la receta?
+            ?En qu? formato deseas descargar la receta?
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -1870,3 +2001,7 @@ function PatientDailyNoteTab({
 }
 
 export default memo(PatientDailyNoteTab);
+
+
+
+

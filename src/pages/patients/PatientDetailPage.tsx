@@ -27,7 +27,7 @@ import {
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
 import { useAuth } from '../../hooks/useAuth';
-import type { Patient, SOAPNote, PatientTagControlData, ActivityLogItem } from '../../types';
+import type { Patient, SOAPNote, PatientTagControlData } from '../../types';
 import ClinicalHistoryTab from './ClinicalHistoryTab';
 import PatientDailyNoteTab from './PatientDailyNoteTab';
 import PatientProfileTab from './PatientProfileTab';
@@ -66,10 +66,6 @@ export default function PatientDetailPage() {
   const [patient, setPatient] = useState<Patient | null>(null);
   const [soapNotes, setSoapNotes] = useState<SOAPNote[]>([]);
   const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
-  const [patientActivityLogs, setPatientActivityLogs] = useState<ActivityLogItem[]>([]);
-  const [patientActivityLogsHasMore, setPatientActivityLogsHasMore] = useState(false);
-  const [patientActivityLogsNextBefore, setPatientActivityLogsNextBefore] = useState<string | null>(null);
-  const [patientActivityLogsLoadingMore, setPatientActivityLogsLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -148,18 +144,14 @@ export default function PatientDetailPage() {
       if (!id) return;
       const patientId = parseInt(id, 10);
       try {
-        const [patientData, notesData, tagControlData, patientActivityLogsData] = await Promise.all([
+        const [patientData, notesData, tagControlData] = await Promise.all([
           patientService.getPatient(patientId),
           patientService.getSOAPNotes(patientId),
           patientService.getPatientTagControl(patientId),
-          patientService.getPatientActivityLogs(patientId, { days: 7 }),
         ]);
         setPatient(patientData);
         setSoapNotes(notesData);
         setPatientTagControl(tagControlData);
-        setPatientActivityLogs(patientActivityLogsData.logs);
-        setPatientActivityLogsHasMore(patientActivityLogsData.hasMore);
-        setPatientActivityLogsNextBefore(patientActivityLogsData.nextBefore);
       } catch (err) {
         console.error('Error cargando datos del paciente:', err);
       } finally {
@@ -168,29 +160,6 @@ export default function PatientDetailPage() {
     };
     loadData();
   }, [id]);
-
-  const handleLoadMorePatientActivityLogs = async () => {
-    if (!id || !patientActivityLogsNextBefore || patientActivityLogsLoadingMore) {
-      return;
-    }
-
-    setPatientActivityLogsLoadingMore(true);
-
-    try {
-      const patientId = parseInt(id, 10);
-      const data = await patientService.getPatientActivityLogs(patientId, {
-        days: 7,
-        before: patientActivityLogsNextBefore,
-      });
-      setPatientActivityLogs((current) => [...current, ...data.logs]);
-      setPatientActivityLogsHasMore(data.hasMore);
-      setPatientActivityLogsNextBefore(data.nextBefore);
-    } catch (err) {
-      console.error('Error cargando mas movimientos del paciente:', err);
-    } finally {
-      setPatientActivityLogsLoadingMore(false);
-    }
-  };
 
   useEffect(() => {
     if (!patient?.id || !patient.detail_menu?.camera_menu_enabled) {
@@ -497,10 +466,7 @@ export default function PatientDetailPage() {
       {/* Tab 6: Bit\u00e1cora */}
       <TabPanel value={tab} index={6}>
         <PatientActivityLogTab
-          patientActivityLogs={patientActivityLogs}
-          hasMore={patientActivityLogsHasMore}
-          loadingMore={patientActivityLogsLoadingMore}
-          onLoadMore={handleLoadMorePatientActivityLogs}
+          patientId={patient.id}
           onNavigateToHistorical={() => {
             setTab(7);
             setSearchParams({ tab: 'historical' }, { replace: true });
