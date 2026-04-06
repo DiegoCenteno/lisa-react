@@ -33,7 +33,7 @@ function isPatientPublicAppointmentAction(log: ActivityLogItem): boolean {
   const message = String(log.message ?? '').trim().toLowerCase();
   const source = String(log.meta?.source ?? '').trim().toLowerCase();
 
-  return source === 'public_wsapp' || message.includes('por paciente');
+  return source === 'public_wsapp' || source === 'patient_whatsapp' || message.includes('por paciente');
 }
 
 function getDisplayTitle(log: ActivityLogItem): string {
