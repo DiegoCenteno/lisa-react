@@ -110,6 +110,17 @@ interface ApiPatientTagControlResponse {
 interface ApiActivityLogListResponse {
   status: string;
   data: ActivityLogItem[];
+  meta?: {
+    window_start?: string;
+    window_end?: string;
+    has_more?: boolean;
+  };
+}
+
+export interface ActivityLogWindow {
+  logs: ActivityLogItem[];
+  hasMore: boolean;
+  nextBefore: string | null;
 }
 
 function splitFullName(fullName?: string): { name: string; lastName: string } {
@@ -351,8 +362,17 @@ export const patientService = {
     return response.data.data;
   },
 
-  async getMedicamentHistory(): Promise<MedicamentHistoryItem[]> {
-    const response = await apiClient.get<ApiMedicamentHistoryResponse>('/v2/consultations/medicament-history');
+  async getMedicamentHistory(query?: string): Promise<MedicamentHistoryItem[]> {
+    const response = await apiClient.get<ApiMedicamentHistoryResponse>('/v2/consultations/medicament-history', {
+      params: query ? { q: query } : undefined,
+    });
+    return response.data.data;
+  },
+
+  async searchMedicamentHistory(query: string): Promise<MedicamentHistoryItem[]> {
+    const response = await apiClient.get<ApiMedicamentHistoryResponse>('/v2/consultations/medicament-history', {
+      params: { q: query },
+    });
     return response.data.data;
   },
 
@@ -433,9 +453,21 @@ export const patientService = {
     return response.data.data;
   },
 
-  async getPatientActivityLogs(patientId: number): Promise<ActivityLogItem[]> {
-    const response = await apiClient.get<ApiActivityLogListResponse>(`/v2/patients/${patientId}/activity-logs`);
-    return response.data.data ?? [];
+  async getPatientActivityLogs(
+    patientId: number,
+    options?: { days?: number; before?: string | null }
+  ): Promise<ActivityLogWindow> {
+    const response = await apiClient.get<ApiActivityLogListResponse>(`/v2/patients/${patientId}/activity-logs`, {
+      params: {
+        days: options?.days ?? 7,
+        before: options?.before ?? undefined,
+      },
+    });
+    return {
+      logs: response.data.data ?? [],
+      hasMore: Boolean(response.data.meta?.has_more),
+      nextBefore: response.data.meta?.window_start ?? null,
+    };
   },
 
   async updatePatientTagStatuses(

@@ -273,8 +273,14 @@ export default function AgendaPage() {
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
   const [showAppointmentMore, setShowAppointmentMore] = useState(false);
   const [appointmentActivityLogs, setAppointmentActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [appointmentActivityLogsHasMore, setAppointmentActivityLogsHasMore] = useState(false);
+  const [appointmentActivityLogsNextBefore, setAppointmentActivityLogsNextBefore] = useState<string | null>(null);
+  const [appointmentActivityLogsLoadingMore, setAppointmentActivityLogsLoadingMore] = useState(false);
   const [activityLogsLoading, setActivityLogsLoading] = useState(false);
   const [officeActivityLogs, setOfficeActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [officeActivityLogsHasMore, setOfficeActivityLogsHasMore] = useState(false);
+  const [officeActivityLogsNextBefore, setOfficeActivityLogsNextBefore] = useState<string | null>(null);
+  const [officeActivityLogsLoadingMore, setOfficeActivityLogsLoadingMore] = useState(false);
   const [officeActivityLogsLoading, setOfficeActivityLogsLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -368,8 +374,14 @@ export default function AgendaPage() {
     setShowAppointmentDetails(false);
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
+    setAppointmentActivityLogsHasMore(false);
+    setAppointmentActivityLogsNextBefore(null);
+    setAppointmentActivityLogsLoadingMore(false);
     setActivityLogsLoading(false);
     setOfficeActivityLogs([]);
+    setOfficeActivityLogsHasMore(false);
+    setOfficeActivityLogsNextBefore(null);
+    setOfficeActivityLogsLoadingMore(false);
     setOfficeActivityLogsLoading(false);
     setSummaryOpen(false);
     setSummaryLoading(false);
@@ -457,14 +469,18 @@ export default function AgendaPage() {
     const loadOfficeActivityLogs = async () => {
       setOfficeActivityLogsLoading(true);
       try {
-        const data = await appointmentService.getGlobalActivityLogs(10, officeId);
+        const data = await appointmentService.getGlobalActivityLogs({ officeId, days: 7 });
         if (!cancelled) {
-          setOfficeActivityLogs(data);
+          setOfficeActivityLogs(data.logs);
+          setOfficeActivityLogsHasMore(data.hasMore);
+          setOfficeActivityLogsNextBefore(data.nextBefore);
         }
       } catch (err) {
         console.error('Error cargando bitacora del consultorio:', err);
         if (!cancelled) {
           setOfficeActivityLogs([]);
+          setOfficeActivityLogsHasMore(false);
+          setOfficeActivityLogsNextBefore(null);
         }
       } finally {
         if (!cancelled) {
@@ -498,6 +514,9 @@ export default function AgendaPage() {
     setShowAppointmentDetails(false);
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
+    setAppointmentActivityLogsHasMore(false);
+    setAppointmentActivityLogsNextBefore(null);
+    setAppointmentActivityLogsLoadingMore(false);
   };
 
   const isSelectedEventToday = selectedEvent
@@ -690,15 +709,64 @@ export default function AgendaPage() {
     setActivityLogsLoading(true);
 
     try {
-      const logs = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id));
-      setAppointmentActivityLogs(logs);
+      const logs = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id), { days: 7 });
+      setAppointmentActivityLogs(logs.logs);
+      setAppointmentActivityLogsHasMore(logs.hasMore);
+      setAppointmentActivityLogsNextBefore(logs.nextBefore);
     } catch (error) {
       console.error('Error cargando historial de movimientos de la cita:', error);
       setAppointmentActivityLogs([]);
+      setAppointmentActivityLogsHasMore(false);
+      setAppointmentActivityLogsNextBefore(null);
     } finally {
       setActivityLogsLoading(false);
     }
   }, [selectedEvent]);
+
+  const handleLoadMoreOfficeActivityLogs = useCallback(async () => {
+    if (!officeId || !officeActivityLogsNextBefore || officeActivityLogsLoadingMore) {
+      return;
+    }
+
+    setOfficeActivityLogsLoadingMore(true);
+
+    try {
+      const data = await appointmentService.getGlobalActivityLogs({
+        officeId,
+        days: 7,
+        before: officeActivityLogsNextBefore,
+      });
+      setOfficeActivityLogs((current) => [...current, ...data.logs]);
+      setOfficeActivityLogsHasMore(data.hasMore);
+      setOfficeActivityLogsNextBefore(data.nextBefore);
+    } catch (error) {
+      console.error('Error cargando mas movimientos del consultorio:', error);
+    } finally {
+      setOfficeActivityLogsLoadingMore(false);
+    }
+  }, [officeActivityLogsLoadingMore, officeActivityLogsNextBefore, officeId]);
+
+  const handleLoadMoreAppointmentActivityLogs = useCallback(async () => {
+    if (!selectedEvent || !appointmentActivityLogsNextBefore || appointmentActivityLogsLoadingMore) {
+      return;
+    }
+
+    setAppointmentActivityLogsLoadingMore(true);
+
+    try {
+      const data = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id), {
+        days: 7,
+        before: appointmentActivityLogsNextBefore,
+      });
+      setAppointmentActivityLogs((current) => [...current, ...data.logs]);
+      setAppointmentActivityLogsHasMore(data.hasMore);
+      setAppointmentActivityLogsNextBefore(data.nextBefore);
+    } catch (error) {
+      console.error('Error cargando mas movimientos de la cita:', error);
+    } finally {
+      setAppointmentActivityLogsLoadingMore(false);
+    }
+  }, [appointmentActivityLogsLoadingMore, appointmentActivityLogsNextBefore, selectedEvent]);
 
   const handleOpenPatientLogbook = useCallback(() => {
     const patientId = selectedEvent?.event.extendedProps.patientId;
@@ -852,23 +920,43 @@ export default function AgendaPage() {
                   emptyText="Aún no hay movimientos recientes en este consultorio."
                   showPatient
                 />
-                {officeActivityLogs.length > 2 && !showAllOfficeActivityLogs ? (
-                  <Button
-                    variant="text"
-                    onClick={() => setShowAllOfficeActivityLogs(true)}
-                    sx={{
-                      alignSelf: 'flex-start',
-                      minWidth: 'auto',
-                      p: 0,
-                      color: '#2d64c8',
-                      textDecoration: 'underline',
-                      textTransform: 'none',
-                      fontWeight: 400,
-                    }}
-                  >
-                    Mostrar más
-                  </Button>
-                ) : null}
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                  {officeActivityLogs.length > 2 && !showAllOfficeActivityLogs ? (
+                    <Button
+                      variant="text"
+                      onClick={() => setShowAllOfficeActivityLogs(true)}
+                      sx={{
+                        alignSelf: 'flex-start',
+                        minWidth: 'auto',
+                        p: 0,
+                        color: '#2d64c8',
+                        textDecoration: 'underline',
+                        textTransform: 'none',
+                        fontWeight: 400,
+                      }}
+                    >
+                      Mostrar más
+                    </Button>
+                  ) : null}
+                  {officeActivityLogsHasMore ? (
+                    <Button
+                      variant="text"
+                      onClick={handleLoadMoreOfficeActivityLogs}
+                      disabled={officeActivityLogsLoadingMore}
+                      sx={{
+                        alignSelf: 'flex-start',
+                        minWidth: 'auto',
+                        p: 0,
+                        color: '#2d64c8',
+                        textDecoration: 'underline',
+                        textTransform: 'none',
+                        fontWeight: 400,
+                      }}
+                    >
+                      {officeActivityLogsLoadingMore ? 'Cargando...' : 'Cargar 7 días más'}
+                    </Button>
+                  ) : null}
+                </Box>
               </Box>
             )}
           </Box>
@@ -1135,6 +1223,23 @@ export default function AgendaPage() {
                           }}
                         >
                           Ver bitácora completa del paciente
+                        </Button>
+                      ) : null}
+                      {appointmentActivityLogsHasMore ? (
+                        <Button
+                          variant="text"
+                          onClick={handleLoadMoreAppointmentActivityLogs}
+                          disabled={appointmentActivityLogsLoadingMore}
+                          sx={{
+                            alignSelf: 'flex-start',
+                            minWidth: 'auto',
+                            p: 0,
+                            color: '#2d64c8',
+                            textDecoration: 'underline',
+                            textTransform: 'none',
+                          }}
+                        >
+                          {appointmentActivityLogsLoadingMore ? 'Cargando...' : 'Cargar 7 días más'}
                         </Button>
                       ) : null}
                     </Box>

@@ -14,10 +14,19 @@ import ActivityLogFeed from '../../components/activity/ActivityLogFeed';
 
 interface Props {
   patientActivityLogs: ActivityLogItem[];
+  hasMore?: boolean;
+  loadingMore?: boolean;
+  onLoadMore?: () => void;
   onNavigateToHistorical: () => void;
 }
 
-function PatientActivityLogTabInner({ patientActivityLogs, onNavigateToHistorical }: Props) {
+function PatientActivityLogTabInner({
+  patientActivityLogs,
+  hasMore = false,
+  loadingMore = false,
+  onLoadMore,
+  onNavigateToHistorical,
+}: Props) {
   return (
     <Card>
       <CardContent>
@@ -39,6 +48,14 @@ function PatientActivityLogTabInner({ patientActivityLogs, onNavigateToHistorica
           logs={patientActivityLogs}
           emptyText="No hay movimientos registrados para este paciente."
         />
+
+        {hasMore ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+            <Button variant="outlined" onClick={onLoadMore} disabled={loadingMore}>
+              {loadingMore ? 'Cargando...' : 'Cargar 7 días más'}
+            </Button>
+          </Box>
+        ) : null}
       </CardContent>
     </Card>
   );

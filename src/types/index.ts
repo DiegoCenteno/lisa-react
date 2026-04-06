@@ -28,6 +28,7 @@ export interface AuthResponse {
 
 export interface Patient {
   id: number;
+  office_id?: number | null;
   name: string;
   last_name: string;
   full_name?: string;

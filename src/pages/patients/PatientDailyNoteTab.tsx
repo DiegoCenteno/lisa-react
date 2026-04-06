@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  Autocomplete,
   Box,
   Button,
   Card,
@@ -36,6 +37,7 @@ import {
   Save as SaveIcon,
 } from '@mui/icons-material';
 import { consultationService } from '../../api/consultationService';
+import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
 import settingsService from '../../api/settingsService';
 import type { ClinicalHistory, MedicamentHistoryItem, OfficeLabelItem, Patient, PatientSoapContext, PatientTagControlData, SOAPNote } from '../../types';
@@ -49,12 +51,12 @@ type RefreshPayload = {
 
 type Props = {
   patient: Patient;
+  patientTagControl: PatientTagControlData | null;
   canCreateDailyNote: boolean;
   canEditConsultationHistory: boolean;
   editRequestNote: SOAPNote | null;
   onEditRequestHandled: () => void;
   onRefreshAfterSave: (payload: RefreshPayload) => void;
-  onOpenColposcopy: () => void;
 };
 
 type SubjectiveFormData = { illnessStartDate: string; currentCondition: string };
@@ -62,6 +64,19 @@ type ObjectiveFormData = { height: string; weight: string; ta: string; temp: str
 type AnalysisFormData = { examination: string; diagnostics: string[] };
 type PlanFormData = { medications: Array<{ medicament: string; prescription: string }>; additionalInstructions: string };
 type ClinicalHistoryVisibleItem = { label: string; value: string };
+type DailyNoteVisibilityMap = Record<string, boolean>;
+
+type DailyNoteBootstrapData = {
+  historyData: ClinicalHistory;
+  officeLabelsData: OfficeLabelItem[];
+  formSettingsData: Awaited<ReturnType<typeof settingsService.getFormSettings>> | null;
+};
+
+const dailyNoteBootstrapRequests = new Map<string, Promise<DailyNoteBootstrapData>>();
+
+function isDailyNoteFieldVisible(visibility: DailyNoteVisibilityMap, key: string): boolean {
+  return visibility[key] !== false;
+}
 
 const DAILY_NOTE_CLINICAL_HISTORY_GROUPS = [
   {
@@ -229,7 +244,12 @@ function buildPregnancySummary(lastMenstruationDate?: string | null): { fur: str
   };
 }
 
-function resolveCurrentOfficeId(): number | null {
+function resolveCurrentOfficeId(patientOfficeId?: number | null): number | null {
+  if (patientOfficeId && patientOfficeId > 0) {
+    localStorage.setItem('cached_office_id', String(patientOfficeId));
+    return patientOfficeId;
+  }
+
   const cachedOfficeId = localStorage.getItem('cached_office_id');
   if (cachedOfficeId) {
     const parsed = Number(cachedOfficeId);
@@ -244,11 +264,51 @@ function resolveCurrentOfficeId(): number | null {
   }
 
   try {
-    const user = JSON.parse(userRaw) as { consultorio_id?: number };
-    return user.consultorio_id && user.consultorio_id > 0 ? user.consultorio_id : null;
+    const user = JSON.parse(userRaw) as { consultorio_id?: number; office_id?: number };
+    if (user.consultorio_id && user.consultorio_id > 0) {
+      localStorage.setItem('cached_office_id', String(user.consultorio_id));
+      return user.consultorio_id;
+    }
+    if (user.office_id && user.office_id > 0) {
+      localStorage.setItem('cached_office_id', String(user.office_id));
+      return user.office_id;
+    }
+    return null;
   } catch {
     return null;
   }
+}
+
+async function loadDailyNoteBootstrap(patientId: number, patientOfficeId?: number | null): Promise<DailyNoteBootstrapData> {
+  let officeId = resolveCurrentOfficeId(patientOfficeId);
+  if (!officeId) {
+    const availableOffices = await appointmentService.getOffices();
+    officeId = availableOffices[0]?.id ?? null;
+    if (officeId) {
+      localStorage.setItem('cached_office_id', String(officeId));
+    }
+  }
+
+  const cacheKey = `${patientId}:${officeId ?? 0}`;
+  const existing = dailyNoteBootstrapRequests.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+
+  const request = Promise.all([
+    patientService.getClinicalHistory(patientId),
+    patientService.getOfficeLabels(),
+    officeId ? settingsService.getFormSettings(officeId) : Promise.resolve(null),
+  ]).then(([historyData, officeLabelsData, formSettingsData]) => ({
+    historyData,
+    officeLabelsData,
+    formSettingsData,
+  })).finally(() => {
+    dailyNoteBootstrapRequests.delete(cacheKey);
+  });
+
+  dailyNoteBootstrapRequests.set(cacheKey, request);
+  return request;
 }
 
 function buildClinicalHistoryVisibleGroups(
@@ -476,19 +536,20 @@ function PreviousFieldHint({
 // --- Memoized sub-components ---
 
 const SubjectiveSection = memo(function SubjectiveSection({
-  form, formInstanceKey, onIllnessStartDateChange, onCurrentConditionChange, previousConsultation,
+  form, formInstanceKey, onIllnessStartDateChange, onCurrentConditionChange, previousConsultation, visibility,
 }: {
   form: SubjectiveFormData;
   formInstanceKey: number;
   onIllnessStartDateChange: (value: string) => void;
   onCurrentConditionChange: (value: string) => void;
   previousConsultation: PatientSoapContext['last_consultation'];
+  visibility: DailyNoteVisibilityMap;
 }) {
   return (
     <Card><CardContent>
       <SoapSectionTitle initial="S" title="Subjetivo" />
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 6 }}>
+        <Grid size={{ xs: 12, md: 6 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulfechaip') ? undefined : 'none' }}>
           <ClickableDateField
             label="Fecha de inicio del padecimiento"
             value={form.illnessStartDate}
@@ -502,7 +563,7 @@ const SubjectiveSection = memo(function SubjectiveSection({
             />
           ) : null}
         </Grid>
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulmotivoconsulta') ? undefined : 'none' }}>
           <TextField
             key={`${formInstanceKey}-currentCondition`}
             label="Motivo de consulta"
@@ -522,7 +583,7 @@ const SubjectiveSection = memo(function SubjectiveSection({
 });
 
 const ObjectiveSection = memo(function ObjectiveSection({
-  form, formInstanceKey, onPassiveFieldChange, onLastMenstruationDateChange, onPregnantChange, previousConsultation,
+  form, formInstanceKey, onPassiveFieldChange, onLastMenstruationDateChange, onPregnantChange, previousConsultation, visibility, showClinicalHistoryPanel: _showClinicalHistoryPanel,
 }: {
   form: ObjectiveFormData;
   formInstanceKey: number;
@@ -530,6 +591,8 @@ const ObjectiveSection = memo(function ObjectiveSection({
   onLastMenstruationDateChange: (value: string) => void;
   onPregnantChange: (value: boolean) => void;
   previousConsultation: PatientSoapContext['last_consultation'];
+  visibility: DailyNoteVisibilityMap;
+  showClinicalHistoryPanel: boolean;
 }) {
   const previousDate = previousConsultation?.created_at;
   const pregnancySummary = form.pregnant ? buildPregnancySummary(form.lastMenstruationDate) : null;
@@ -537,31 +600,31 @@ const ObjectiveSection = memo(function ObjectiveSection({
     <Card><CardContent>
       <SoapSectionTitle initial="O" title="Objetivo" />
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 4 }}>
-          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} />
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulestatura') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} slotProps={{ inputLabel: { shrink: Boolean(form.height) } }} />
           <PreviousFieldHint text={previousConsultation?.height} showDate={false} />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulpeso') ? undefined : 'none' }}>
           <TextField key={`${formInstanceKey}-weight`} fullWidth size="small" label="Peso" defaultValue={form.weight} onChange={(e) => onPassiveFieldChange('weight', e.target.value)} />
           <PreviousFieldHint text={previousConsultation?.weight} showDate={false} />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulhta') ? undefined : 'none' }}>
           <TextField key={`${formInstanceKey}-ta`} fullWidth size="small" label="T. A." defaultValue={form.ta} onChange={(e) => onPassiveFieldChange('ta', e.target.value)} />
           <PreviousFieldHint text={previousConsultation?.ta} showDate={false} />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consultemp') ? undefined : 'none' }}>
           <TextField key={`${formInstanceKey}-temp`} fullWidth size="small" label={`Temp (\u00b0C)`} defaultValue={form.temp} onChange={(e) => onPassiveFieldChange('temp', e.target.value)} />
           <PreviousFieldHint text={previousConsultation?.temp} showDate={false} />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulfc') ? undefined : 'none' }}>
           <TextField key={`${formInstanceKey}-fc`} fullWidth size="small" label="F.C." defaultValue={form.fc} onChange={(e) => onPassiveFieldChange('fc', e.target.value)} />
           <PreviousFieldHint text={previousConsultation?.fc} showDate={false} />
         </Grid>
-        <Grid size={{ xs: 12, md: 4 }}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consuloxigeno') ? undefined : 'none' }}>
           <TextField key={`${formInstanceKey}-os`} fullWidth size="small" label="O2 (%)" defaultValue={form.os} onChange={(e) => onPassiveFieldChange('os', e.target.value)} />
           <PreviousFieldHint text={previousConsultation?.os} showDate={false} />
         </Grid>
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulresultadosestudio') ? undefined : 'none' }}>
           <TextField key={`${formInstanceKey}-studies`} multiline minRows={3} fullWidth label={`Exploraci\u00f3n f\u00edsica`} defaultValue={form.studies} onChange={(e) => onPassiveFieldChange('studies', e.target.value)} />
           <PreviousFieldHint date={previousDate} text={previousConsultation?.studies} />
         </Grid>
@@ -572,7 +635,7 @@ const ObjectiveSection = memo(function ObjectiveSection({
             onChange={onLastMenstruationDateChange}
           />
         </Grid>
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulupdatefur') ? undefined : 'none' }}>
           <Paper variant="outlined" sx={{ p: 1.5, borderColor: '#cfe0f5', backgroundColor: '#f4f9ff' }}>
             <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
               Historia clínica
@@ -606,7 +669,7 @@ const ObjectiveSection = memo(function ObjectiveSection({
 });
 
 const AnalysisSection = memo(function AnalysisSection({
-  form, formInstanceKey, onExaminationChange, onDiagnosticChange, onAddDiagnostic, onRemoveDiagnostic, previousConsultation,
+  form, formInstanceKey, onExaminationChange, onDiagnosticChange, onAddDiagnostic, onRemoveDiagnostic, previousConsultation, visibility,
 }: {
   form: AnalysisFormData;
   formInstanceKey: number;
@@ -615,6 +678,7 @@ const AnalysisSection = memo(function AnalysisSection({
   onAddDiagnostic: () => void;
   onRemoveDiagnostic: (index: number) => void;
   previousConsultation: PatientSoapContext['last_consultation'];
+  visibility: DailyNoteVisibilityMap;
 }) {
   const previousDiagnosticsText = (previousConsultation?.diagnostic_items ?? [])
     .map((diagnostic) => String(diagnostic ?? '').trim())
@@ -634,9 +698,22 @@ const AnalysisSection = memo(function AnalysisSection({
           <PreviousFieldHint date={previousConsultation?.created_at} text={previousConsultation?.examination} />
         </Grid>
         {form.diagnostics.map((diagnostic, index) => (
-          <Grid key={`diagnostic-${index}`} size={{ xs: 12 }}>
+          <Grid key={`diagnostic-${index}`} size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consuldiagnostico') ? undefined : 'none' }}>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <TextField key={`${formInstanceKey}-diagnostic-${index}`} fullWidth size="small" label={`Diagn\u00f3stico ${index + 1}`} defaultValue={diagnostic} onChange={(e) => onDiagnosticChange(index, e.target.value)} />
+              <TextField
+                key={`${formInstanceKey}-diagnostic-${index}`}
+                fullWidth
+                size="small"
+                label={`Diagn\u00f3stico ${index + 1}`}
+                defaultValue={diagnostic}
+                onChange={(e) => onDiagnosticChange(index, e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    onAddDiagnostic();
+                  }
+                }}
+              />
               {index === 0 ? (
                 <IconButton color="primary" onClick={onAddDiagnostic}><AddIcon /></IconButton>
               ) : (
@@ -654,7 +731,7 @@ const AnalysisSection = memo(function AnalysisSection({
 });
 
 const PlanSection = memo(function PlanSection({
-  form, formInstanceKey, onMedicationChange, onAddMedication, onRemoveMedication, onAdditionalInstructionsChange, medicamentHistory, onOpenColposcopy, onOpenPrescription, previousConsultation,
+  form, formInstanceKey, onMedicationChange, onAddMedication, onRemoveMedication, onAdditionalInstructionsChange, recentMedicamentHistory, onSearchMedicamentHistory, onOpenPrescription, previousConsultation, visibility,
 }: {
   form: PlanFormData;
   formInstanceKey: number;
@@ -662,13 +739,20 @@ const PlanSection = memo(function PlanSection({
   onAddMedication: () => void;
   onRemoveMedication: (index: number) => void;
   onAdditionalInstructionsChange: (value: string) => void;
-  medicamentHistory: MedicamentHistoryItem[];
-  onOpenColposcopy: () => void;
+  recentMedicamentHistory: MedicamentHistoryItem[];
+  onSearchMedicamentHistory: (query: string) => Promise<MedicamentHistoryItem[]>;
   onOpenPrescription: () => void;
   previousConsultation: PatientSoapContext['last_consultation'];
+  visibility: DailyNoteVisibilityMap;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<MedicamentHistoryItem[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [medicamentLookupQuery, setMedicamentLookupQuery] = useState('');
+  const [medicamentLookupResults, setMedicamentLookupResults] = useState<MedicamentHistoryItem[]>([]);
+  const [medicamentLookupLoading, setMedicamentLookupLoading] = useState(false);
+  const [activeMedicationIndex, setActiveMedicationIndex] = useState<number | null>(null);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const previousMedicationRows = (previousConsultation?.medications ?? [])
@@ -679,16 +763,110 @@ const PlanSection = memo(function PlanSection({
       return { medicament, prescription };
     })
     .filter((row): row is { medicament: string; prescription: string } => Boolean(row));
+  const localMedicamentMatches = useMemo(() => {
+    const q = medicamentLookupQuery.trim().toLowerCase();
+    if (!q) {
+      return recentMedicamentHistory;
+    }
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
-    if (!q) return medicamentHistory;
-    return medicamentHistory.filter((item) => item.title.toLowerCase().includes(q));
-  }, [medicamentHistory, search]);
+    const terms = q.split(/\s+/).map((term) => term.trim()).filter(Boolean);
+    if (terms.length === 0) {
+      return recentMedicamentHistory;
+    }
+
+    return recentMedicamentHistory.filter((item) => {
+      const normalizedTitle = item.title.toLowerCase();
+      return terms.every((term) => normalizedTitle.includes(term));
+    });
+  }, [medicamentLookupQuery, recentMedicamentHistory]);
+
+  useEffect(() => {
+    if (!showHistory) {
+      return;
+    }
+
+    const q = search.trim();
+    if (q.length < 1) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchLoading(true);
+
+    const timeoutId = window.setTimeout(() => {
+      void onSearchMedicamentHistory(q)
+        .then((results) => {
+          if (!cancelled) {
+            setSearchResults(results);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSearchResults([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setSearchLoading(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [onSearchMedicamentHistory, search, showHistory]);
+
+  useEffect(() => {
+    const q = medicamentLookupQuery.trim();
+    if (q.length < 3 || localMedicamentMatches.length > 0) {
+      setMedicamentLookupResults([]);
+      setMedicamentLookupLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMedicamentLookupLoading(true);
+
+    const timeoutId = window.setTimeout(() => {
+      void onSearchMedicamentHistory(q)
+        .then((results) => {
+          if (!cancelled) {
+            setMedicamentLookupResults(results);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setMedicamentLookupResults([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setMedicamentLookupLoading(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [localMedicamentMatches.length, medicamentLookupQuery, onSearchMedicamentHistory]);
+
+  const medicamentOptions = useMemo(() => {
+    const localTitles = localMedicamentMatches.map((item) => item.title);
+    if (localTitles.length > 0) {
+      return localTitles;
+    }
+    return medicamentLookupResults.map((item) => item.title);
+  }, [localMedicamentMatches, medicamentLookupResults]);
 
   const paginated = useMemo(
-    () => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
-    [filtered, page, rowsPerPage]
+    () => searchResults.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
+    [searchResults, page, rowsPerPage]
   );
 
   return (
@@ -700,13 +878,19 @@ const PlanSection = memo(function PlanSection({
       <Collapse in={showHistory}>
         <Box sx={{ mb: 3 }}>
           <TextField fullWidth size="small" label="Buscar medicamentos" value={search} onChange={(e) => { setSearch(e.target.value); setPage(0); }} sx={{ mb: 2 }} />
+          {search.trim().length > 0 && search.trim().length < 1 ? (
+            <Typography sx={{ fontSize: '0.8rem', color: '#5f6b76', mb: 1 }}>
+              Escribe al menos 1 caracter para buscar.
+            </Typography>
+          ) : null}
           <TableContainer component={Paper} variant="outlined">
             <Table size="small"><TableBody>
-              {paginated.map((item) => <TableRow key={item.title}><TableCell>{item.title}</TableCell></TableRow>)}
-              {paginated.length === 0 && <TableRow><TableCell>No se encontraron medicamentos</TableCell></TableRow>}
+              {searchLoading ? <TableRow><TableCell>Buscando medicamentos...</TableCell></TableRow> : null}
+              {!searchLoading && paginated.map((item) => <TableRow key={item.title}><TableCell>{item.title}</TableCell></TableRow>)}
+              {!searchLoading && search.trim().length >= 1 && paginated.length === 0 && <TableRow><TableCell>No se encontraron medicamentos</TableCell></TableRow>}
             </TableBody></Table>
           </TableContainer>
-          <TablePagination component="div" count={filtered.length} page={page} onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[5, 10, 20]} labelRowsPerPage="Filas" />
+          <TablePagination component="div" count={searchResults.length} page={page} onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }} rowsPerPageOptions={[5, 10, 20]} labelRowsPerPage="Filas" />
         </Box>
       </Collapse>
 
@@ -714,14 +898,85 @@ const PlanSection = memo(function PlanSection({
         {form.medications.map((row, index) => (
           <Grid key={`medication-${index}`} size={{ xs: 12 }}>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <TextField key={`${formInstanceKey}-medicament-${index}`} fullWidth size="small" label={`Medicamento ${index + 1}`} defaultValue={row.medicament} onChange={(e) => onMedicationChange(index, 'medicament', e.target.value)} />
+              <Autocomplete
+                freeSolo
+                fullWidth
+                open={activeMedicationIndex === index && row.medicament.trim().length > 0 && medicamentOptions.length > 0}
+                options={medicamentOptions}
+                filterOptions={(options) => options}
+                inputValue={row.medicament}
+                onInputChange={(_event, value, reason) => {
+                  onMedicationChange(index, 'medicament', value);
+                  if (reason === 'input') {
+                    setActiveMedicationIndex(index);
+                    setMedicamentLookupQuery(value);
+                  } else if (reason === 'clear') {
+                    setMedicamentLookupQuery('');
+                    setMedicamentLookupResults([]);
+                    setActiveMedicationIndex(index);
+                  }
+                }}
+                onChange={(_event, value) => {
+                  const nextValue = typeof value === 'string' ? value : '';
+                  onMedicationChange(index, 'medicament', nextValue);
+                  setMedicamentLookupQuery(nextValue);
+                  setActiveMedicationIndex(null);
+                }}
+                onClose={() => {
+                  setActiveMedicationIndex(null);
+                }}
+                loading={medicamentLookupLoading && activeMedicationIndex === index && localMedicamentMatches.length === 0}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    key={`${formInstanceKey}-medicament-${index}`}
+                    fullWidth
+                    size="small"
+                    label={`Medicamento ${index + 1}`}
+                    onBlur={() => {
+                      setActiveMedicationIndex(null);
+                    }}
+                    slotProps={{
+                      input: {
+                        ...params.InputProps,
+                        endAdornment: (
+                          <>
+                            {medicamentLookupLoading && activeMedicationIndex === index && localMedicamentMatches.length === 0 ? (
+                              <CircularProgress color="inherit" size={16} />
+                            ) : null}
+                            {params.InputProps.endAdornment}
+                          </>
+                        ),
+                      },
+                      htmlInput: {
+                        ...params.inputProps,
+                        autoComplete: 'off',
+                      },
+                    }}
+                  />
+                )}
+              />
               {index === 0 ? (
                 <IconButton color="primary" onClick={onAddMedication}><AddIcon /></IconButton>
               ) : (
                 <IconButton color="error" onClick={() => onRemoveMedication(index)}><CancelIcon /></IconButton>
               )}
             </Box>
-            <TextField key={`${formInstanceKey}-prescription-${index}`} fullWidth size="small" label={`Prescripci\u00f3n`} defaultValue={row.prescription} onChange={(e) => onMedicationChange(index, 'prescription', e.target.value)} sx={{ mt: 1 }} />
+            <TextField
+              key={`${formInstanceKey}-prescription-${index}`}
+              fullWidth
+              size="small"
+              label={`Prescripci\u00f3n`}
+              defaultValue={row.prescription}
+              onChange={(e) => onMedicationChange(index, 'prescription', e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  onAddMedication();
+                }
+              }}
+              sx={{ mt: 1 }}
+            />
             {index === 0 && previousMedicationRows.length > 0 ? (
               <Box sx={{ mt: 0.75 }}>
                 <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
@@ -743,19 +998,9 @@ const PlanSection = memo(function PlanSection({
             ) : null}
           </Grid>
         ))}
-        <Grid size={{ xs: 12 }}><TextField key={`${formInstanceKey}-additionalInstructions`} multiline minRows={2} fullWidth label="Indicaciones adicionales" defaultValue={form.additionalInstructions} onChange={(e) => onAdditionalInstructionsChange(e.target.value)} /></Grid>
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulindicaciones') ? undefined : 'none' }}><TextField key={`${formInstanceKey}-additionalInstructions`} multiline minRows={2} fullWidth label="Indicaciones adicionales" defaultValue={form.additionalInstructions} onChange={(e) => onAdditionalInstructionsChange(e.target.value)} /></Grid>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulanalisis') ? undefined : 'none' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mt: 0.5 }}>
-            <Button
-              variant="contained"
-              onClick={onOpenColposcopy}
-              sx={{
-                backgroundColor: '#16b8d4',
-                '&:hover': { backgroundColor: '#1099b1' },
-              }}
-            >
-              Colposcopia
-            </Button>
             <Button
               variant="contained"
               onClick={onOpenPrescription}
@@ -773,8 +1018,97 @@ const PlanSection = memo(function PlanSection({
   );
 });
 
+const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
+  form, formInstanceKey, onPassiveFieldChange, onLastMenstruationDateChange, onPregnantChange, previousConsultation, visibility, showClinicalHistoryPanel,
+}: {
+  form: ObjectiveFormData;
+  formInstanceKey: number;
+  onPassiveFieldChange: (field: 'height' | 'weight' | 'ta' | 'temp' | 'fc' | 'os' | 'studies', value: string) => void;
+  onLastMenstruationDateChange: (value: string) => void;
+  onPregnantChange: (value: boolean) => void;
+  previousConsultation: PatientSoapContext['last_consultation'];
+  visibility: DailyNoteVisibilityMap;
+  showClinicalHistoryPanel: boolean;
+}) {
+  const previousDate = previousConsultation?.created_at;
+  const pregnancySummary = form.pregnant ? buildPregnancySummary(form.lastMenstruationDate) : null;
+
+  return (
+    <Card><CardContent>
+      <SoapSectionTitle initial="O" title="Objetivo" />
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulestatura') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} slotProps={{ inputLabel: { shrink: Boolean(form.height) } }} />
+          <PreviousFieldHint text={previousConsultation?.height} showDate={false} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulpeso') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-weight`} fullWidth size="small" label="Peso" defaultValue={form.weight} onChange={(e) => onPassiveFieldChange('weight', e.target.value)} />
+          <PreviousFieldHint text={previousConsultation?.weight} showDate={false} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulhta') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-ta`} fullWidth size="small" label="T. A." defaultValue={form.ta} onChange={(e) => onPassiveFieldChange('ta', e.target.value)} />
+          <PreviousFieldHint text={previousConsultation?.ta} showDate={false} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consultemp') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-temp`} fullWidth size="small" label={`Temp (\u00b0C)`} defaultValue={form.temp} onChange={(e) => onPassiveFieldChange('temp', e.target.value)} />
+          <PreviousFieldHint text={previousConsultation?.temp} showDate={false} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulfc') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-fc`} fullWidth size="small" label="F.C." defaultValue={form.fc} onChange={(e) => onPassiveFieldChange('fc', e.target.value)} />
+          <PreviousFieldHint text={previousConsultation?.fc} showDate={false} />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consuloxigeno') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-os`} fullWidth size="small" label="O2 (%)" defaultValue={form.os} onChange={(e) => onPassiveFieldChange('os', e.target.value)} />
+          <PreviousFieldHint text={previousConsultation?.os} showDate={false} />
+        </Grid>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulresultadosestudio') ? undefined : 'none' }}>
+          <TextField key={`${formInstanceKey}-studies`} multiline minRows={3} fullWidth label={`Exploraci\u00f3n f\u00edsica`} defaultValue={form.studies} onChange={(e) => onPassiveFieldChange('studies', e.target.value)} />
+          <PreviousFieldHint date={previousDate} text={previousConsultation?.studies} />
+        </Grid>
+        <Grid size={{ xs: 12 }} sx={{ display: showClinicalHistoryPanel ? undefined : 'none' }}>
+          <Paper variant="outlined" sx={{ p: 1.5, borderColor: '#cfe0f5', backgroundColor: '#f4f9ff' }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+              Historia clínica
+            </Typography>
+            {isDailyNoteFieldVisible(visibility, 'consulupdatefur') ? (
+              <Box sx={{ mt: 1.25, mb: 1.5 }}>
+                <ClickableDateField
+                  label="Fecha de última menstruación"
+                  value={form.lastMenstruationDate}
+                  onChange={onLastMenstruationDateChange}
+                />
+              </Box>
+            ) : null}
+            {isDailyNoteFieldVisible(visibility, 'consulembarazada') ? (
+              <FormControlLabel
+                control={<Checkbox checked={form.pregnant} onChange={(e) => onPregnantChange(e.target.checked)} />}
+                label="Embarazada"
+              />
+            ) : null}
+            {form.pregnant && pregnancySummary ? (
+              <Box sx={{ mt: 0.5 }}>
+                <Typography sx={{ fontSize: '0.8rem', color: '#5f6b76', lineHeight: 1.35 }}>
+                  Fecha de última menstruación: {pregnancySummary.fur}
+                </Typography>
+                <Typography sx={{ fontSize: '0.8rem', color: '#5f6b76', lineHeight: 1.35 }}>
+                  Fecha probable de parto: {pregnancySummary.fpp}
+                </Typography>
+                <Typography sx={{ fontSize: '0.8rem', color: '#5f6b76', lineHeight: 1.35 }}>
+                  Semanas de gestación: {pregnancySummary.gestation}
+                </Typography>
+              </Box>
+            ) : null}
+          </Paper>
+        </Grid>
+      </Grid>
+    </CardContent></Card>
+  );
+});
+
+void ObjectiveSection;
+
 const PersonalNotesSection = memo(function PersonalNotesSection({
-  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, officeLabels, patientTagControl, previousConsultation,
+  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, officeLabels, patientTagControl, previousConsultation, visibility,
 }: {
   notes: string;
   formInstanceKey: number;
@@ -784,11 +1118,12 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
   officeLabels: OfficeLabelItem[];
   patientTagControl: PatientTagControlData | null;
   previousConsultation: PatientSoapContext['last_consultation'];
+  visibility: DailyNoteVisibilityMap;
 }) {
   return (
     <Card><CardContent>
       <Grid container spacing={2}>
-        <Grid size={{ xs: 12 }}>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulanotaciones') ? undefined : 'none' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
             <Typography variant="body2" sx={{ fontWeight: 600 }}>Anotaciones personales</Typography>
@@ -823,20 +1158,20 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
 
 function PatientDailyNoteTab({
   patient,
+  patientTagControl: initialPatientTagControl,
   canCreateDailyNote,
   canEditConsultationHistory,
   editRequestNote,
   onEditRequestHandled,
   onRefreshAfterSave,
-  onOpenColposcopy,
 }: Props) {
   const [clinicalHistory, setClinicalHistory] = useState<ClinicalHistory | null>(null);
   const [soapContext, setSoapContext] = useState<PatientSoapContext | null>(null);
-  const [medicamentHistory, setMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
   const [officeLabels, setOfficeLabels] = useState<OfficeLabelItem[]>([]);
-  const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
+  const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(initialPatientTagControl);
+  const [dailyNoteVisibility, setDailyNoteVisibility] = useState<DailyNoteVisibilityMap>({});
   const [dailyNoteClinicalHistoryVisibility, setDailyNoteClinicalHistoryVisibility] = useState<Record<string, boolean>>({});
-  const [clinicalHistoryPanelOpen, setClinicalHistoryPanelOpen] = useState(false);
+  const [clinicalHistoryPanelOpen, setClinicalHistoryPanelOpen] = useState(true);
   const [tabLoading, setTabLoading] = useState(true);
   const [subjectiveForm, setSubjectiveForm] = useState<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
   const [objectiveForm, setObjectiveForm] = useState<ObjectiveFormData>({ height: '', weight: '', ta: '', temp: '', fc: '', os: '', studies: '', lastMenstruationDate: '', pregnant: false });
@@ -849,6 +1184,7 @@ function PatientDailyNoteTab({
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [prescriptionFormatOpen, setPrescriptionFormatOpen] = useState(false);
   const [editingConsultation, setEditingConsultation] = useState<SOAPNote | null>(null);
+  const [recentMedicamentHistory, setRecentMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
   const draftRestoredRef = useRef(false);
   const [formInstanceKey, setFormInstanceKey] = useState(0);
   const subjectiveFormRef = useRef<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
@@ -863,6 +1199,10 @@ function PatientDailyNoteTab({
     () => buildClinicalHistoryVisibleGroups(clinicalHistory, dailyNoteClinicalHistoryVisibility),
     [clinicalHistory, dailyNoteClinicalHistoryVisibility]
   );
+  const hasObjectiveClinicalHistoryFieldsEnabled = (
+    isDailyNoteFieldVisible(dailyNoteVisibility, 'consulupdatefur') ||
+    isDailyNoteFieldVisible(dailyNoteVisibility, 'consulembarazada')
+  );
 
   const refreshFormInstance = useCallback(() => setFormInstanceKey((current) => current + 1), []);
 
@@ -872,23 +1212,17 @@ function PatientDailyNoteTab({
     const loadTabData = async () => {
       setTabLoading(true);
       try {
-        const officeId = resolveCurrentOfficeId();
-        const [historyData, soapContextData, medicamentHistoryData, officeLabelsData, tagControlData, formSettingsData] = await Promise.all([
-          patientService.getClinicalHistory(patient.id),
-          patientService.getPatientSoapContext(patient.id),
-          patientService.getMedicamentHistory(),
-          patientService.getOfficeLabels(),
-          patientService.getPatientTagControl(patient.id),
-          officeId ? settingsService.getFormSettings(officeId) : Promise.resolve(null),
-        ]);
+        const {
+          historyData,
+          officeLabelsData,
+          formSettingsData,
+        } = await loadDailyNoteBootstrap(patient.id, patient.office_id);
 
         if (cancelled) return;
 
         setClinicalHistory(historyData);
-        setSoapContext(soapContextData);
-        setMedicamentHistory(medicamentHistoryData);
-        setOfficeLabels(officeLabelsData);
-        setPatientTagControl(tagControlData);
+        setOfficeLabels(officeLabelsData.filter((label) => Number(label.status ?? 1) === 1));
+        setDailyNoteVisibility(formSettingsData?.daily_note ?? {});
         setDailyNoteClinicalHistoryVisibility(formSettingsData?.daily_note_clinical_history_visibility ?? {});
       } catch (error) {
         if (cancelled) return;
@@ -906,7 +1240,54 @@ function PatientDailyNoteTab({
     return () => {
       cancelled = true;
     };
-  }, [patient.id]);
+  }, [patient.id, patient.office_id]);
+
+  useEffect(() => {
+    setPatientTagControl(initialPatientTagControl);
+  }, [initialPatientTagControl]);
+
+  useEffect(() => {
+    if (tabLoading) {
+      return;
+    }
+
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      void patientService.getPatientSoapContext(patient.id)
+        .then((data) => {
+          if (!cancelled) {
+            setSoapContext(data);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSoapContext(null);
+          }
+        })
+        .finally(() => {
+          if (cancelled) {
+            return;
+          }
+
+          void patientService.getMedicamentHistory()
+            .then((results) => {
+              if (!cancelled) {
+                setRecentMedicamentHistory(results);
+              }
+            })
+            .catch(() => {
+              if (!cancelled) {
+                setRecentMedicamentHistory([]);
+              }
+            });
+        });
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [patient.id, tabLoading]);
 
   // Restore draft from localStorage on mount
   useEffect(() => {
@@ -962,11 +1343,6 @@ function PatientDailyNoteTab({
   useEffect(() => {
     personalNotesRef.current = personalNotes;
   }, [personalNotes]);
-
-  useEffect(() => {
-    if (tabLoading) return;
-    setSelectedOfficeLabels((current) => (current.length > 0 ? current : officeLabels.slice(0, 1).map((label) => label.id)));
-  }, [officeLabels, tabLoading]);
 
   useEffect(() => {
     const suggestedHeight = getSuggestedHeight(patient.age, soapContext?.last_consultation?.height);
@@ -1093,7 +1469,7 @@ function PatientDailyNoteTab({
       setAnalysisForm({ examination: '', diagnostics: [''] });
       setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
       setPersonalNotes('');
-      setSelectedOfficeLabels(officeLabels.slice(0, 1).map((label) => label.id));
+      setSelectedOfficeLabels([]);
       subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
       objectiveFormRef.current = {
         height: getSuggestedHeight(nextPatient.age, nextSoapContext.last_consultation?.height),
@@ -1139,7 +1515,7 @@ function PatientDailyNoteTab({
     setAnalysisForm({ examination: '', diagnostics: [''] });
     setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
     setPersonalNotes('');
-    setSelectedOfficeLabels(officeLabels.slice(0, 1).map((label) => label.id));
+    setSelectedOfficeLabels([]);
     subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
     objectiveFormRef.current = {
       height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
@@ -1211,10 +1587,14 @@ function PatientDailyNoteTab({
     });
   }, []);
   const handleMedicationChange = useCallback((index: number, field: 'medicament' | 'prescription', value: string) => {
-    const medications = [...planFormRef.current.medications];
-    const currentRow = medications[index] ?? { medicament: '', prescription: '' };
-    medications[index] = { ...currentRow, [field]: value };
-    planFormRef.current = { ...planFormRef.current, medications };
+    setPlanForm((current) => {
+      const medications = [...current.medications];
+      const currentRow = medications[index] ?? { medicament: '', prescription: '' };
+      medications[index] = { ...currentRow, [field]: value };
+      const next = { ...current, medications };
+      planFormRef.current = next;
+      return next;
+    });
   }, []);
   const handleAddMedication = useCallback(() => {
     setPlanForm((current) => {
@@ -1239,6 +1619,7 @@ function PatientDailyNoteTab({
     personalNotesRef.current = next;
   }, []);
   const handleLabelsChange = useCallback((next: number[]) => setSelectedOfficeLabels(next), []);
+  const handleSearchMedicamentHistory = useCallback((query: string) => patientService.searchMedicamentHistory(query), []);
   const buildPrescriptionPayload = useCallback(() => ({
     patient_id: patient.id,
     height: objectiveForm.height.trim() || undefined,
@@ -1333,8 +1714,7 @@ function PatientDailyNoteTab({
           </Alert>
         )}
 
-        {visibleClinicalHistoryGroups.length > 0 && (
-          <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid #cfe0e8', backgroundColor: '#f9fdff' }}>
+        <Card elevation={0} sx={{ borderRadius: 2, border: '1px solid #cfe0e8', backgroundColor: '#f9fdff' }}>
             <CardContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               <Box
                 sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, cursor: 'pointer' }}
@@ -1348,33 +1728,47 @@ function PatientDailyNoteTab({
                 </IconButton>
               </Box>
               <Collapse in={clinicalHistoryPanelOpen}>
-                <Grid container spacing={1.25}>
-                  {visibleClinicalHistoryGroups.map((item) => (
-                    <Grid key={item.label} size={{ xs: 12, md: 6 }}>
-                      <Box
-                        sx={{
-                          px: 0.25,
-                          py: 0.35,
-                          display: 'grid',
-                          gridTemplateColumns: { xs: '1fr', sm: '160px minmax(0, 1fr)' },
-                          gap: { xs: 0.35, sm: 1 },
-                          alignItems: 'start',
-                        }}
-                      >
-                        <Typography variant="body2" sx={{ color: '#7a9098' }}>
-                          {item.label}:
-                        </Typography>
-                        <Typography variant="body2" sx={{ color: '#183844', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                          {item.value}
-                        </Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
+                {visibleClinicalHistoryGroups.length > 0 ? (
+                  <Grid container spacing={1.25}>
+                    {visibleClinicalHistoryGroups.map((item) => (
+                      <Grid key={item.label} size={{ xs: 12, md: 6 }}>
+                        <Box
+                          sx={{
+                            px: 0.25,
+                            py: 0.35,
+                            display: 'grid',
+                            gridTemplateColumns: { xs: '1fr', sm: '160px minmax(0, 1fr)' },
+                            gap: { xs: 0.35, sm: 1 },
+                            alignItems: 'start',
+                          }}
+                        >
+                          <Typography variant="body2" sx={{ color: '#7a9098' }}>
+                            {item.label}:
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: '#183844', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {item.value}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                ) : (
+                  <Typography variant="body2" sx={{ color: '#5f6b76', lineHeight: 1.6 }}>
+                    Aquí puedes consultar información de referencia de la historia clínica del paciente. Si aún no se
+                    muestra nada, habilita los campos que quieras ver desde{' '}
+                    <Box
+                      component="a"
+                      href="/configuracion?tab=herramientas"
+                      sx={{ color: '#2d64c8', textDecoration: 'underline', fontWeight: 500 }}
+                    >
+                      Configuración &gt; Formularios
+                    </Box>
+                    .
+                  </Typography>
+                )}
               </Collapse>
             </CardContent>
           </Card>
-        )}
 
         <Typography variant="body2" sx={{ color: '#2f2f2f' }}>
           {lastConsultationDateLabel ? `\u00daltima consulta: ${lastConsultationDateLabel}` : '\u00daltima consulta: Sin consultas previas'}
@@ -1386,14 +1780,17 @@ function PatientDailyNoteTab({
           onIllnessStartDateChange={handleIllnessStartDateChange}
           onCurrentConditionChange={handleCurrentConditionChange}
           previousConsultation={lastConsultation}
+          visibility={dailyNoteVisibility}
         />
-        <ObjectiveSection
+        <ObjectiveSectionConfigured
           form={objectiveForm}
           formInstanceKey={formInstanceKey}
           onPassiveFieldChange={handleObjectivePassiveFieldChange}
           onLastMenstruationDateChange={handleLastMenstruationDateChange}
           onPregnantChange={handlePregnantChange}
           previousConsultation={lastConsultation}
+          visibility={dailyNoteVisibility}
+          showClinicalHistoryPanel={hasObjectiveClinicalHistoryFieldsEnabled}
         />
         <AnalysisSection
           form={analysisForm}
@@ -1403,6 +1800,7 @@ function PatientDailyNoteTab({
           onAddDiagnostic={handleAddDiagnostic}
           onRemoveDiagnostic={handleRemoveDiagnostic}
           previousConsultation={lastConsultation}
+          visibility={dailyNoteVisibility}
         />
         <PlanSection
           form={planForm}
@@ -1411,10 +1809,11 @@ function PatientDailyNoteTab({
           onAddMedication={handleAddMedication}
           onRemoveMedication={handleRemoveMedication}
           onAdditionalInstructionsChange={handleAdditionalInstructionsChange}
-          medicamentHistory={medicamentHistory}
-          onOpenColposcopy={onOpenColposcopy}
+          recentMedicamentHistory={recentMedicamentHistory}
+          onSearchMedicamentHistory={handleSearchMedicamentHistory}
           onOpenPrescription={handleOpenPrescription}
           previousConsultation={lastConsultation}
+          visibility={dailyNoteVisibility}
         />
         <PersonalNotesSection
           notes={personalNotes}
@@ -1425,6 +1824,7 @@ function PatientDailyNoteTab({
           officeLabels={officeLabels}
           patientTagControl={patientTagControl}
           previousConsultation={lastConsultation}
+          visibility={dailyNoteVisibility}
         />
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>

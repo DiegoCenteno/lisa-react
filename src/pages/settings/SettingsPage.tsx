@@ -67,6 +67,7 @@ const TAG_STATUS_VISIBLE_DAYS_OPTIONS: Array<{ value: number | 'always'; label: 
 type FormFieldDefinition = {
   key: string;
   label: string;
+  helperText?: string;
 };
 
 type FormFieldGroup = {
@@ -157,8 +158,6 @@ const DAILY_NOTE_GROUPS: FormFieldGroup[] = [
   {
     title: 'Subjetivo',
     fields: [
-      { key: 'consulhiscli', label: 'Resumen de historia clínica' },
-      { key: 'consulupdatefur', label: 'Fecha de última menstruación' },
       { key: 'consulfechaip', label: 'Fecha de inicio del padecimiento' },
       { key: 'consulmotivoconsulta', label: 'Motivo de consulta' },
     ],
@@ -166,6 +165,16 @@ const DAILY_NOTE_GROUPS: FormFieldGroup[] = [
   {
     title: 'Objetivo',
     fields: [
+      {
+        key: 'consulupdatefur',
+        label: 'Fecha de última menstruación',
+        helperText: 'Campo compartido en conjunto con historia clínica',
+      },
+      {
+        key: 'consulembarazada',
+        label: 'Embarazada',
+        helperText: 'Campo compartido en conjunto con historia clínica',
+      },
       { key: 'consulestatura', label: 'Estatura' },
       { key: 'consulpeso', label: 'Peso' },
       { key: 'consulhta', label: 'T. A.' },
@@ -3352,7 +3361,14 @@ function FormFieldGroupCard({
                   onClick={(event) => event.stopPropagation()}
                   sx={{ p: 0.5 }}
                 />
-                <Typography sx={{ color: '#183844' }}>{field.label}</Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                  <Typography sx={{ color: '#183844' }}>{field.label}</Typography>
+                  {field.helperText ? (
+                    <Typography sx={{ color: '#7b8794', fontSize: '0.8rem', lineHeight: 1.35 }}>
+                      {field.helperText}
+                    </Typography>
+                  ) : null}
+                </Box>
               </Box>
             ))}
           </Box>

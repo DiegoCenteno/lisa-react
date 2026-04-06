@@ -67,6 +67,9 @@ export default function PatientDetailPage() {
   const [soapNotes, setSoapNotes] = useState<SOAPNote[]>([]);
   const [patientTagControl, setPatientTagControl] = useState<PatientTagControlData | null>(null);
   const [patientActivityLogs, setPatientActivityLogs] = useState<ActivityLogItem[]>([]);
+  const [patientActivityLogsHasMore, setPatientActivityLogsHasMore] = useState(false);
+  const [patientActivityLogsNextBefore, setPatientActivityLogsNextBefore] = useState<string | null>(null);
+  const [patientActivityLogsLoadingMore, setPatientActivityLogsLoadingMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
@@ -149,12 +152,14 @@ export default function PatientDetailPage() {
           patientService.getPatient(patientId),
           patientService.getSOAPNotes(patientId),
           patientService.getPatientTagControl(patientId),
-          patientService.getPatientActivityLogs(patientId),
+          patientService.getPatientActivityLogs(patientId, { days: 7 }),
         ]);
         setPatient(patientData);
         setSoapNotes(notesData);
         setPatientTagControl(tagControlData);
-        setPatientActivityLogs(patientActivityLogsData);
+        setPatientActivityLogs(patientActivityLogsData.logs);
+        setPatientActivityLogsHasMore(patientActivityLogsData.hasMore);
+        setPatientActivityLogsNextBefore(patientActivityLogsData.nextBefore);
       } catch (err) {
         console.error('Error cargando datos del paciente:', err);
       } finally {
@@ -163,6 +168,29 @@ export default function PatientDetailPage() {
     };
     loadData();
   }, [id]);
+
+  const handleLoadMorePatientActivityLogs = async () => {
+    if (!id || !patientActivityLogsNextBefore || patientActivityLogsLoadingMore) {
+      return;
+    }
+
+    setPatientActivityLogsLoadingMore(true);
+
+    try {
+      const patientId = parseInt(id, 10);
+      const data = await patientService.getPatientActivityLogs(patientId, {
+        days: 7,
+        before: patientActivityLogsNextBefore,
+      });
+      setPatientActivityLogs((current) => [...current, ...data.logs]);
+      setPatientActivityLogsHasMore(data.hasMore);
+      setPatientActivityLogsNextBefore(data.nextBefore);
+    } catch (err) {
+      console.error('Error cargando mas movimientos del paciente:', err);
+    } finally {
+      setPatientActivityLogsLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (!patient?.id || !patient.detail_menu?.camera_menu_enabled) {
@@ -422,15 +450,11 @@ export default function PatientDetailPage() {
       <TabPanel value={tab} index={2}>
         <PatientDailyNoteTab
           patient={patient}
+          patientTagControl={patientTagControl}
           canCreateDailyNote={canCreateDailyNote}
           canEditConsultationHistory={canEditConsultationHistory}
           editRequestNote={dailyNoteEditRequest}
           onEditRequestHandled={() => setDailyNoteEditRequest(null)}
-          onOpenColposcopy={() => {
-            if (!patient?.detail_menu?.camera_menu_enabled) return;
-            setTab(4);
-            setSearchParams({ tab: 'colposcopy' }, { replace: true });
-          }}
           onRefreshAfterSave={({ patient: nextPatient, soapNotes: nextSoapNotes }) => {
             setPatient(nextPatient);
             setSoapNotes(nextSoapNotes);
@@ -474,6 +498,9 @@ export default function PatientDetailPage() {
       <TabPanel value={tab} index={6}>
         <PatientActivityLogTab
           patientActivityLogs={patientActivityLogs}
+          hasMore={patientActivityLogsHasMore}
+          loadingMore={patientActivityLogsLoadingMore}
+          onLoadMore={handleLoadMorePatientActivityLogs}
           onNavigateToHistorical={() => {
             setTab(7);
             setSearchParams({ tab: 'historical' }, { replace: true });

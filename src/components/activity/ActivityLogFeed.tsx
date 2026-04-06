@@ -140,6 +140,33 @@ function getActorDisplayName(log: ActivityLogItem): string {
   return 'Sistema';
 }
 
+function getLogDayKey(value?: string | null): string {
+  if (!value) return '';
+
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+}
+
+function formatTimelineDayLabel(dayKey: string): string {
+  if (!dayKey) return '';
+
+  const date = new Date(`${dayKey}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return dayKey;
+
+  const day = date.getDate();
+  const month = date.toLocaleString('es-MX', { month: 'long' }).toLowerCase();
+  const year = date.getFullYear();
+
+  return `${day} ${month} ${year}`;
+}
+
 interface Props {
   logs: ActivityLogItem[];
   emptyText: string;
@@ -160,94 +187,158 @@ export default function ActivityLogFeed({
     );
   }
 
+  const groupedLogs = logs.reduce<Array<{ dayKey: string; items: ActivityLogItem[] }>>((acc, log) => {
+    const dayKey = getLogDayKey(log.created_at);
+    const lastGroup = acc[acc.length - 1];
+
+    if (lastGroup && lastGroup.dayKey === dayKey) {
+      lastGroup.items.push(log);
+      return acc;
+    }
+
+    acc.push({ dayKey, items: [log] });
+    return acc;
+  }, []);
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-      {logs.map((log) => {
-        const metaLines = getActivityMetaLines(log);
-        const title = getDisplayTitle(log);
-
-        return (
+      {groupedLogs.map((group) => (
+        <Box
+          key={group.dayKey}
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '132px 1fr' },
+            gap: { xs: 1.25, md: 2.25 },
+            alignItems: 'stretch',
+          }}
+        >
           <Box
-            key={log.id}
             sx={{
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 2,
-              px: 2,
-              py: 1.5,
-              backgroundColor: '#ffffff',
+              position: 'relative',
+              display: 'flex',
+              justifyContent: { xs: 'flex-start', md: 'center' },
+              pb: { xs: 0.5, md: 0 },
             }}
           >
             <Box
               sx={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'flex-start',
-                gap: 1.5,
-                flexWrap: 'wrap',
+                position: 'absolute',
+                top: { xs: 18, md: 38 },
+                bottom: 0,
+                left: { xs: 18, md: '50%' },
+                transform: { xs: 'none', md: 'translateX(-50%)' },
+                width: 2,
+                backgroundColor: 'rgba(25, 118, 210, 0.26)',
+                borderRadius: 999,
               }}
-            >
-              <Box sx={{ minWidth: 0 }}>
-                <Chip
-                  size="medium"
-                  label={title}
-                  variant="outlined"
-                  sx={{
-                    mb: 0.5,
-                    fontSize: '0.98rem',
-                    fontWeight: 600,
-                    borderRadius: 999,
-                    ...getActionTitleChipSx(title),
-                  }}
-                />
-                <Typography sx={{ fontSize: '0.9rem', color: '#6b7785', mt: 0.25 }}>
-                  {log.created_at ? formatDisplayDateTimeLongEs(log.created_at) : ''}
-                </Typography>
-              </Box>
-
-              <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-                {log.entity_type ? (
-                  <Chip
-                    size="small"
-                    label={toCamelCaseWords(log.entity_type)}
-                    variant="outlined"
-                    sx={{ color: '#6b7785' }}
-                  />
-                ) : null}
-              </Box>
-            </Box>
-
-            {metaLines.length > 0 ? (
-              <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
-                <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
-                  {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
-                </Typography>
-                {(showPatient || log.patient_id) && log.patient_name ? (
-                  <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
-                    Paciente: {toCamelCaseWords(log.patient_name)}
-                  </Typography>
-                ) : null}
-                {metaLines.map((line, index) => (
-                  <Typography key={`${log.id}-${index}`} sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
-                    {line}
-                  </Typography>
-                ))}
-              </Box>
-            ) : (
-              <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
-                <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
-                  {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
-                </Typography>
-                {(showPatient || log.patient_id) && log.patient_name ? (
-                  <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
-                    Paciente: {toCamelCaseWords(log.patient_name)}
-                  </Typography>
-                ) : null}
-              </Box>
-            )}
+            />
+            <Chip
+              label={formatTimelineDayLabel(group.dayKey)}
+              variant="outlined"
+              sx={{
+                position: 'relative',
+                zIndex: 1,
+                px: 0.5,
+                fontSize: { xs: '0.95rem', md: '1rem' },
+                fontWeight: 500,
+                borderRadius: 999,
+                backgroundColor: '#ffffff',
+                borderColor: 'rgba(25, 118, 210, 0.32)',
+                color: '#2a4158',
+              }}
+            />
           </Box>
-        );
-      })}
+
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {group.items.map((log) => {
+              const metaLines = getActivityMetaLines(log);
+              const title = getDisplayTitle(log);
+
+              return (
+                <Box
+                  key={log.id}
+                  sx={{
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 2,
+                    px: 2,
+                    py: 1.5,
+                    backgroundColor: '#ffffff',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'flex-start',
+                      gap: 1.5,
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Chip
+                        size="medium"
+                        label={title}
+                        variant="outlined"
+                        sx={{
+                          mb: 0.5,
+                          fontSize: '0.98rem',
+                          fontWeight: 600,
+                          borderRadius: 999,
+                          ...getActionTitleChipSx(title),
+                        }}
+                      />
+                      <Typography sx={{ fontSize: '0.9rem', color: '#6b7785', mt: 0.25 }}>
+                        {log.created_at ? formatDisplayDateTimeLongEs(log.created_at) : ''}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
+                      {log.entity_type ? (
+                        <Chip
+                          size="small"
+                          label={toCamelCaseWords(log.entity_type)}
+                          variant="outlined"
+                          sx={{ color: '#6b7785' }}
+                        />
+                      ) : null}
+                    </Box>
+                  </Box>
+
+                  {metaLines.length > 0 ? (
+                    <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
+                      <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                        {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
+                      </Typography>
+                      {(showPatient || log.patient_id) && log.patient_name ? (
+                        <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                          Paciente: {toCamelCaseWords(log.patient_name)}
+                        </Typography>
+                      ) : null}
+                      {metaLines.map((line, index) => (
+                        <Typography key={`${log.id}-${index}`} sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                          {line}
+                        </Typography>
+                      ))}
+                    </Box>
+                  ) : (
+                    <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 0.45 }}>
+                      <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                        {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
+                      </Typography>
+                      {(showPatient || log.patient_id) && log.patient_name ? (
+                        <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                          Paciente: {toCamelCaseWords(log.patient_name)}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+      ))}
     </Box>
   );
 }

@@ -37,6 +37,17 @@ interface ApiLastConsultationSummaryResponse {
 interface ApiActivityLogListResponse {
   status: string;
   data: ActivityLogItem[];
+  meta?: {
+    window_start?: string;
+    window_end?: string;
+    has_more?: boolean;
+  };
+}
+
+export interface ActivityLogWindow {
+  logs: ActivityLogItem[];
+  hasMore: boolean;
+  nextBefore: string | null;
 }
 
 interface FutureActiveAppointmentWarning {
@@ -177,21 +188,44 @@ export const appointmentService = {
     return response.data.data;
   },
 
-  async getAppointmentActivityLogs(appointmentId: number): Promise<ActivityLogItem[]> {
+  async getAppointmentActivityLogs(
+    appointmentId: number,
+    options?: { days?: number; before?: string | null }
+  ): Promise<ActivityLogWindow> {
     const response = await apiClient.get<ApiActivityLogListResponse>(
-      `/v2/appointments/${appointmentId}/activity-logs`
+      `/v2/appointments/${appointmentId}/activity-logs`,
+      {
+        params: {
+          days: options?.days ?? 7,
+          before: options?.before ?? undefined,
+        },
+      }
     );
-    return response.data.data ?? [];
+
+    return {
+      logs: response.data.data ?? [],
+      hasMore: Boolean(response.data.meta?.has_more),
+      nextBefore: response.data.meta?.window_start ?? null,
+    };
   },
 
-  async getGlobalActivityLogs(limit: number = 500, officeId?: number): Promise<ActivityLogItem[]> {
+  async getGlobalActivityLogs(options?: {
+    officeId?: number;
+    days?: number;
+    before?: string | null;
+  }): Promise<ActivityLogWindow> {
     const response = await apiClient.get<ApiActivityLogListResponse>('/v2/activity-logs', {
       params: {
-        limit,
-        office_id: officeId,
+        office_id: options?.officeId,
+        days: options?.days ?? 7,
+        before: options?.before ?? undefined,
       },
     });
-    return response.data.data ?? [];
+    return {
+      logs: response.data.data ?? [],
+      hasMore: Boolean(response.data.meta?.has_more),
+      nextBefore: response.data.meta?.window_start ?? null,
+    };
   },
 
   async getFutureActiveAppointmentWarning(
