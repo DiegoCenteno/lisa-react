@@ -282,6 +282,21 @@ export default function AgendaPage() {
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
+
+  useEffect(() => {
+    if (!actionToast) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setActionToast(null);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [actionToast]);
+
   const canViewPatientSummary = can('agenda.patient_summary');
   const doctorName = useMemo(() => {
     try {
@@ -1799,7 +1814,7 @@ export default function AgendaPage() {
 
       <Snackbar
         open={!!actionToast}
-        autoHideDuration={3000}
+        autoHideDuration={2000}
         onClose={() => setActionToast(null)}
         anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
         sx={{ mt: 2 }}

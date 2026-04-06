@@ -29,6 +29,31 @@ function toCamelCaseWords(value: string): string {
     .join(' ');
 }
 
+function isPatientPublicAppointmentAction(log: ActivityLogItem): boolean {
+  const message = String(log.message ?? '').trim().toLowerCase();
+  const source = String(log.meta?.source ?? '').trim().toLowerCase();
+
+  return source === 'public_wsapp' || message.includes('por paciente');
+}
+
+function getDisplayTitle(log: ActivityLogItem): string {
+  const normalizedAction = log.action.trim().toLowerCase();
+
+  if (normalizedAction === 'cancelled') {
+    return 'Cita Cancelada';
+  }
+
+  if (normalizedAction === 'confirmed') {
+    return 'Cita Confirmada';
+  }
+
+  if (normalizedAction === 'created') {
+    return 'Cita Creada';
+  }
+
+  return toCamelCaseWords(log.message || log.action);
+}
+
 function getActionTitleChipSx(title: string) {
   const normalized = title.trim().toLowerCase();
 
@@ -96,6 +121,10 @@ function getActorLineLabel(action: string): string {
 }
 
 function getActorDisplayName(log: ActivityLogItem): string {
+  if (isPatientPublicAppointmentAction(log)) {
+    return 'Paciente';
+  }
+
   if (log.user_role_id === 1 || log.user_role_id === 2) {
     return toCamelCaseWords(log.user_name?.trim() || 'Sistema');
   }
@@ -135,7 +164,7 @@ export default function ActivityLogFeed({
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
       {logs.map((log) => {
         const metaLines = getActivityMetaLines(log);
-        const title = toCamelCaseWords(log.message || log.action);
+        const title = getDisplayTitle(log);
 
         return (
           <Box
