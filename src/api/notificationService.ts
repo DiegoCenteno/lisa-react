@@ -1,5 +1,9 @@
 import apiClient from './client';
-import type { NotificationAssistantRecipientsData, NotificationSettingsData } from '../types';
+import type {
+  NotificationAssistantRecipientsData,
+  NotificationSettingsData,
+  PatientResultTemplate,
+} from '../types';
 
 const notificationService = {
   async getSettings(): Promise<NotificationSettingsData> {
@@ -83,6 +87,37 @@ const notificationService = {
   async removePreassistant(id: number): Promise<NotificationAssistantRecipientsData> {
     const response = await apiClient.delete<{ status: string; data: NotificationAssistantRecipientsData }>(
       `/v2/notifications/preassistants/${id}`
+    );
+
+    return response.data.data;
+  },
+
+  async getResultTemplates(officeId: number): Promise<PatientResultTemplate[]> {
+    const response = await apiClient.get<{ status: string; data: PatientResultTemplate[] }>(
+      '/v2/datahelp/office-result-templates',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data ?? [];
+  },
+
+  async createResultTemplate(officeId: number, code: string, data: string): Promise<PatientResultTemplate> {
+    const response = await apiClient.post<{ status: string; data: PatientResultTemplate }>(
+      '/v2/datahelp/office-result-templates',
+      { office_id: officeId, code, data, status: 1 }
+    );
+
+    return response.data.data;
+  },
+
+  async updateResultTemplate(
+    id: number,
+    officeId: number,
+    payload: Partial<Pick<PatientResultTemplate, 'code' | 'data'>> & { status?: number }
+  ): Promise<PatientResultTemplate> {
+    const response = await apiClient.put<{ status: string; data: PatientResultTemplate }>(
+      `/v2/datahelp/office-result-templates/${id}`,
+      { office_id: officeId, ...payload }
     );
 
     return response.data.data;

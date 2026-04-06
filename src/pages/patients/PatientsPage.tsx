@@ -912,7 +912,7 @@ export default function PatientsPage() {
                               variant="caption"
                               sx={{ display: 'block', color: 'error.main', mb: 1.5, fontSize: '0.8rem' }}
                             >
-                              Al seleccionar esta casilla se enviarÃ¡ una notificaciÃ³n al paciente
+                              Al seleccionar esta casilla se enviará una notificación al paciente
                               sobre el resultado de su estudio. Es necesario seleccionar un template
                               previamente configurado.
                             </Typography>

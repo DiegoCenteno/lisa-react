@@ -7,6 +7,7 @@ import {
   Card,
   CardContent,
   Checkbox,
+  Collapse,
   CircularProgress,
   Dialog,
   DialogActions,
@@ -30,8 +31,12 @@ import {
 } from '@mui/material';
 import {
   DeleteOutline as DeleteOutlineIcon,
+  EditOutlined as EditOutlinedIcon,
+  ExpandLess as ExpandLessIcon,
+  ExpandMore as ExpandMoreIcon,
   Sms as WhatsAppPageIcon,
   Savings as SavingsIcon,
+  AddCircleOutline as AddCircleOutlineIcon,
 } from '@mui/icons-material';
 import { appointmentService } from '../../api/appointmentService';
 import notificationService from '../../api/notificationService';
@@ -41,6 +46,7 @@ import type {
   NotificationAssistantRecipientsData,
   NotificationSettingsData,
   Office,
+  PatientResultTemplate,
 } from '../../types';
 
 const notificationOptions = [
@@ -121,6 +127,16 @@ export default function NotificationsPage() {
   const [newLegacyPhone, setNewLegacyPhone] = useState('');
   const [addingLegacyPhone, setAddingLegacyPhone] = useState(false);
   const [assistantToDelete, setAssistantToDelete] = useState<NotificationAssistantItem | null>(null);
+  const [resultTemplates, setResultTemplates] = useState<PatientResultTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<PatientResultTemplate | null>(null);
+  const [templateCode, setTemplateCode] = useState('');
+  const [templateData, setTemplateData] = useState('');
+  const [templateSaving, setTemplateSaving] = useState(false);
+  const [messagesExpanded, setMessagesExpanded] = useState(false);
+  const [templatesExpanded, setTemplatesExpanded] = useState(false);
+  const [creditsExpanded, setCreditsExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -192,6 +208,38 @@ export default function NotificationsPage() {
       active = false;
     };
   }, [preferences.alertas_citas_proximas, selectedOfficeId]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadTemplates = async () => {
+      if (!selectedOfficeId) {
+        setResultTemplates([]);
+        return;
+      }
+
+      try {
+        setTemplatesLoading(true);
+        const data = await notificationService.getResultTemplates(selectedOfficeId);
+        if (!active) return;
+        setResultTemplates(data);
+      } catch (requestError) {
+        console.error('Error cargando plantillas de resultados:', requestError);
+        if (!active) return;
+        setResultTemplates([]);
+      } finally {
+        if (active) {
+          setTemplatesLoading(false);
+        }
+      }
+    };
+
+    void loadTemplates();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedOfficeId]);
 
   const savePreferences = async (nextPreferences: Record<string, boolean>, successMessage?: string) => {
     const data = await notificationService.updateSettings(nextPreferences);
@@ -408,6 +456,64 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleOpenCreateTemplate = () => {
+    setEditingTemplate(null);
+    setTemplateCode('');
+    setTemplateData('');
+    setTemplateDialogOpen(true);
+  };
+
+  const handleOpenEditTemplate = (template: PatientResultTemplate) => {
+    setEditingTemplate(template);
+    setTemplateCode(template.code ?? '');
+    setTemplateData(template.data ?? '');
+    setTemplateDialogOpen(true);
+  };
+
+  const handleCloseTemplateDialog = () => {
+    if (templateSaving) return;
+    setTemplateDialogOpen(false);
+    setEditingTemplate(null);
+    setTemplateCode('');
+    setTemplateData('');
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!selectedOfficeId) return;
+
+    try {
+      setTemplateSaving(true);
+      setError(null);
+      const trimmedCode = templateCode.trim();
+      const trimmedData = templateData.trim();
+
+      if (editingTemplate) {
+        const updated = await notificationService.updateResultTemplate(editingTemplate.id, selectedOfficeId, {
+          code: trimmedCode,
+          data: trimmedData,
+        });
+        setResultTemplates((current) =>
+          current.map((item) => (item.id === updated.id ? updated : item))
+        );
+        setMessage('Plantilla actualizada correctamente.');
+      } else {
+        const created = await notificationService.createResultTemplate(selectedOfficeId, trimmedCode, trimmedData);
+        setResultTemplates((current) => [created, ...current]);
+        setMessage('Plantilla creada correctamente.');
+      }
+
+      handleCloseTemplateDialog();
+    } catch (requestError) {
+      console.error('Error guardando plantilla de resultados:', requestError);
+      const backendMessage = axios.isAxiosError(requestError)
+        ? (requestError.response?.data as { message?: string } | undefined)?.message
+        : undefined;
+      setError(backendMessage || 'No se pudo guardar la plantilla.');
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box>
@@ -436,12 +542,6 @@ export default function NotificationsPage() {
             <Typography variant="body2" color="text.secondary">
               Aqui decides que tipos de avisos puede enviar LISA por WhatsApp para tu operacion diaria.
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Las preferencias se guardan por medico en <strong>`datahelp tipo = 26`</strong> y el consumo mensual se lee desde <strong>`datahelp tipo = 25`</strong>.
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Los templates configurados en el sistema nuevo ya respetan estas banderas antes de registrar el mock o intentar un envio real.
-            </Typography>
           </Stack>
         </CardContent>
       </Card>
@@ -449,36 +549,39 @@ export default function NotificationsPage() {
       <Card sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
           <Stack
-            direction={{ xs: 'column', md: 'row' }}
+            direction="row"
             spacing={1.5}
-            alignItems={{ xs: 'flex-start', md: 'center' }}
+            alignItems="center"
             justifyContent="space-between"
-            sx={{ mb: 2 }}
+            sx={{ cursor: 'pointer' }}
+            onClick={() => setMessagesExpanded((current) => !current)}
           >
             <Stack direction="row" spacing={1.5} alignItems="center">
               <WhatsAppPageIcon color="primary" />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
                 Mensajes habilitables
               </Typography>
+              <Box
+                sx={{
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 999,
+                  backgroundColor: 'rgba(30, 136, 229, 0.12)',
+                  color: 'info.main',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                {enabledCount} activas
+              </Box>
             </Stack>
-            <Box
-              sx={{
-                px: 1.5,
-                py: 0.75,
-                borderRadius: 999,
-                backgroundColor: 'rgba(30, 136, 229, 0.12)',
-                color: 'info.main',
-                fontWeight: 700,
-                fontSize: 13,
-              }}
-            >
-              {enabledCount} activas
-            </Box>
+            {messagesExpanded ? <ExpandLessIcon color="action" /> : <ExpandMoreIcon color="action" />}
           </Stack>
 
-          <Divider sx={{ mb: 2 }} />
+          <Collapse in={messagesExpanded}>
+            <Divider sx={{ my: 2 }} />
 
-          <Stack spacing={2.5}>
+            <Stack spacing={2.5}>
             <Box>
               <Typography sx={{ mb: 1.1, fontWeight: 700, color: 'success.dark' }}>
                 Mensajes para paciente
@@ -496,18 +599,18 @@ export default function NotificationsPage() {
                 {doctorOptions.map(renderOption)}
               </Stack>
             </Box>
-          </Stack>
+            </Stack>
 
-          {preferences.alertas_citas_proximas ? (
-            <Box
-              sx={{
-                mt: 2.5,
-                p: 2,
-                borderRadius: 2.5,
-                backgroundColor: 'rgba(30, 136, 229, 0.04)',
-                border: '1px solid rgba(30, 136, 229, 0.10)',
-              }}
-            >
+            {preferences.alertas_citas_proximas ? (
+              <Box
+                sx={{
+                  mt: 2.5,
+                  p: 2,
+                  borderRadius: 2.5,
+                  backgroundColor: 'rgba(30, 136, 229, 0.04)',
+                  border: '1px solid rgba(30, 136, 229, 0.10)',
+                }}
+              >
               <Stack spacing={2}>
                 <Box>
                   <Typography sx={{ fontWeight: 700, color: 'info.dark' }}>
@@ -703,26 +806,179 @@ export default function NotificationsPage() {
                   </Stack>
                 )}
               </Stack>
-            </Box>
-          ) : null}
+              </Box>
+            ) : null}
+          </Collapse>
 
         </CardContent>
       </Card>
 
       <Card sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
-            <SavingsIcon color="primary" />
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Creditos mensuales
-            </Typography>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ cursor: 'pointer' }}
+            onClick={() => setTemplatesExpanded((current) => !current)}
+          >
+            <Box>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                  Plantillas
+                </Typography>
+                <Box
+                  sx={{
+                    px: 1.5,
+                    py: 0.75,
+                    borderRadius: 999,
+                    backgroundColor: 'rgba(30, 136, 229, 0.12)',
+                    color: 'info.main',
+                    fontWeight: 700,
+                    fontSize: 13,
+                  }}
+                >
+                  {resultTemplates.length} activas
+                </Box>
+              </Stack>
+              <Typography variant="body2" color="text.secondary">
+                Administra las plantillas de resultados que aparecen en `Pacientes &gt; Mas opciones` y en la pagina publica del enlace enviado al paciente.
+              </Typography>
+            </Box>
+            {templatesExpanded ? <ExpandLessIcon color="action" /> : <ExpandMoreIcon color="action" />}
           </Stack>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Este resumen te ayuda a validar rapidamente el limite mensual contratado y el consumo acumulado por mes.
-          </Typography>
+          <Collapse in={templatesExpanded}>
+            <Stack
+              direction={{ xs: 'column', md: 'row' }}
+              spacing={1.5}
+              alignItems={{ xs: 'stretch', md: 'center' }}
+              justifyContent="space-between"
+              sx={{ mt: 2, mb: 2 }}
+            >
+              <FormControl size="small" sx={{ maxWidth: 360 }}>
+                <InputLabel id="notifications-templates-office-label">Consultorio</InputLabel>
+                <Select
+                  labelId="notifications-templates-office-label"
+                  value={selectedOfficeId}
+                  label="Consultorio"
+                  onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
+                >
+                  {offices.map((office) => (
+                    <MenuItem key={office.id} value={office.id}>
+                      {office.title}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                <Typography variant="body2" color="text.secondary">
+                  {resultTemplates.length} plantilla{resultTemplates.length === 1 ? '' : 's'} activa{resultTemplates.length === 1 ? '' : 's'}
+                </Typography>
+                <Button
+                  variant="contained"
+                  startIcon={<AddCircleOutlineIcon />}
+                  disabled={!selectedOfficeId}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleOpenCreateTemplate();
+                  }}
+                >
+                  Nueva plantilla
+                </Button>
+              </Stack>
+            </Stack>
+
+            {templatesLoading ? (
+              <Box sx={{ py: 3, display: 'flex', justifyContent: 'center' }}>
+                <CircularProgress size={24} />
+              </Box>
+            ) : resultTemplates.length === 0 ? (
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                Todavia no hay plantillas creadas para este consultorio.
+              </Alert>
+            ) : (
+              <Stack spacing={1.5}>
+                {resultTemplates.map((template) => (
+                  <Box
+                    key={template.id}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2.5,
+                      border: '1px solid rgba(0,0,0,0.08)',
+                      backgroundColor: '#fff',
+                    }}
+                  >
+                    <Stack
+                      direction={{ xs: 'column', md: 'row' }}
+                      spacing={1.5}
+                      alignItems={{ xs: 'flex-start', md: 'center' }}
+                      justifyContent="space-between"
+                    >
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, color: 'primary.main' }}>
+                          {template.code}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'pre-wrap', mt: 0.5 }}>
+                          {template.data || 'Sin descripcion.'}
+                        </Typography>
+                      </Box>
+                      <Button
+                        variant="outlined"
+                        startIcon={<EditOutlinedIcon />}
+                        onClick={() => handleOpenEditTemplate(template)}
+                      >
+                        Editar
+                      </Button>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </Collapse>
+        </CardContent>
+      </Card>
+
+      <Card sx={{ borderRadius: 3 }}>
+        <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+          <Stack
+            direction="row"
+            spacing={1.5}
+            alignItems="center"
+            justifyContent="space-between"
+            sx={{ cursor: 'pointer' }}
+            onClick={() => setCreditsExpanded((current) => !current)}
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <SavingsIcon color="primary" />
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Creditos mensuales
+              </Typography>
+              <Box
+                sx={{
+                  px: 1.5,
+                  py: 0.75,
+                  borderRadius: 999,
+                  backgroundColor: 'rgba(76, 175, 80, 0.12)',
+                  color: 'success.main',
+                  fontWeight: 700,
+                  fontSize: 13,
+                }}
+              >
+                {settings?.available_credits ?? 0} disponibles
+              </Box>
+            </Stack>
+            {creditsExpanded ? <ExpandLessIcon color="action" /> : <ExpandMoreIcon color="action" />}
+          </Stack>
+
+          <Collapse in={creditsExpanded}>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
+              Este resumen te ayuda a validar rapidamente el limite mensual contratado y el consumo acumulado por mes.
+            </Typography>
+
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
             <Box
               sx={{
                 flex: 1,
@@ -758,41 +1014,84 @@ export default function NotificationsPage() {
                 {settings?.available_credits ?? 0}
               </Typography>
             </Box>
-          </Stack>
+            </Stack>
 
-          <Box sx={{ overflowX: 'auto' }}>
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Mes</TableCell>
-                  <TableCell align="center">SMS</TableCell>
-                  <TableCell align="center">WhatsApp</TableCell>
-                  <TableCell align="center">Utilizados</TableCell>
-                  <TableCell align="center">Disponibles</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {(settings?.history ?? []).map((item) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell>{item.month_label}</TableCell>
-                    <TableCell align="center">{item.sms_count}</TableCell>
-                    <TableCell align="center">{item.whatsapp_count}</TableCell>
-                    <TableCell align="center">{item.used_count}</TableCell>
-                    <TableCell align="center">{item.available_count}</TableCell>
-                  </TableRow>
-                ))}
-                {(settings?.history ?? []).length === 0 ? (
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table size="small">
+                <TableHead>
                   <TableRow>
-                    <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                      Todavia no hay historico de consumo para este usuario.
-                    </TableCell>
+                    <TableCell>Mes</TableCell>
+                    <TableCell align="center">SMS</TableCell>
+                    <TableCell align="center">WhatsApp</TableCell>
+                    <TableCell align="center">Utilizados</TableCell>
+                    <TableCell align="center">Disponibles</TableCell>
                   </TableRow>
-                ) : null}
-              </TableBody>
-            </Table>
-          </Box>
+                </TableHead>
+                <TableBody>
+                  {(settings?.history ?? []).map((item) => (
+                    <TableRow key={item.id} hover>
+                      <TableCell>{item.month_label}</TableCell>
+                      <TableCell align="center">{item.sms_count}</TableCell>
+                      <TableCell align="center">{item.whatsapp_count}</TableCell>
+                      <TableCell align="center">{item.used_count}</TableCell>
+                      <TableCell align="center">{item.available_count}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(settings?.history ?? []).length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
+                        Todavia no hay historico de consumo para este usuario.
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </TableBody>
+              </Table>
+            </Box>
+          </Collapse>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={templateDialogOpen}
+        onClose={handleCloseTemplateDialog}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          {editingTemplate ? 'Editar plantilla' : 'Nueva plantilla'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <TextField
+              label="Titulo"
+              value={templateCode}
+              onChange={(event) => setTemplateCode(event.target.value)}
+              fullWidth
+              autoFocus
+            />
+            <TextField
+              label="Descripcion"
+              value={templateData}
+              onChange={(event) => setTemplateData(event.target.value)}
+              fullWidth
+              multiline
+              minRows={6}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={handleCloseTemplateDialog} disabled={templateSaving}>
+            Cancelar
+          </Button>
+          <Button
+            variant="contained"
+            disabled={templateSaving || !templateCode.trim() || !templateData.trim()}
+            onClick={() => void handleSaveTemplate()}
+          >
+            {templateSaving ? 'Guardando...' : editingTemplate ? 'Guardar cambios' : 'Crear plantilla'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={!!assistantToDelete}
