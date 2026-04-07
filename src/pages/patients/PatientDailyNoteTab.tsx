@@ -80,6 +80,36 @@ function isDailyNoteFieldVisible(visibility: DailyNoteVisibilityMap, key: string
   return visibility[key] !== false;
 }
 
+const ExpandableTextareaField = memo(function ExpandableTextareaField({
+  collapsedRows = 1,
+  expandedRows = 6,
+  onFocus,
+  onClick,
+  minRows,
+  ...props
+}: React.ComponentProps<typeof TextField> & {
+  collapsedRows?: number;
+  expandedRows?: number;
+}) {
+  const [rows, setRows] = useState(collapsedRows);
+
+  return (
+    <TextField
+      {...props}
+      multiline
+      minRows={minRows ?? rows}
+      onFocus={(event) => {
+        setRows(expandedRows);
+        onFocus?.(event);
+      }}
+      onClick={(event) => {
+        setRows(expandedRows);
+        onClick?.(event);
+      }}
+    />
+  );
+});
+
 const DAILY_NOTE_CLINICAL_HISTORY_GROUPS = [
   {
     title: 'Antecedentes heredofamiliares',
@@ -603,7 +633,7 @@ const ObjectiveSection = memo(function ObjectiveSection({
       <SoapSectionTitle initial="O" title="Objetivo" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulestatura') ? undefined : 'none' }}>
-          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} slotProps={{ inputLabel: { shrink: Boolean(form.height) } }} />
+          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} InputLabelProps={{ shrink: Boolean(form.height) }} />
           <PreviousFieldHint text={previousConsultation?.height} showDate={false} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulpeso') ? undefined : 'none' }}>
@@ -696,23 +726,35 @@ const AnalysisSection = memo(function AnalysisSection({
             <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
             <Typography variant="body2" sx={{ fontWeight: 600 }}>{`An\u00e1lisis`}</Typography>
           </Box>
-          <TextField key={`${formInstanceKey}-examination`} fullWidth size="small" defaultValue={form.examination} onChange={(e) => onExaminationChange(e.target.value)} />
+          <ExpandableTextareaField
+            key={`${formInstanceKey}-examination`}
+            fullWidth
+            size="small"
+            expandedRows={2}
+            defaultValue={form.examination}
+            onChange={(e) => onExaminationChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+              }
+            }}
+          />
           <PreviousFieldHint date={previousConsultation?.created_at} text={previousConsultation?.examination} />
         </Grid>
         {form.diagnostics.map((diagnostic, index) => (
           <Grid key={`diagnostic-${index}`} size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consuldiagnostico') ? undefined : 'none' }}>
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <TextField
+              <ExpandableTextareaField
                 key={`${formInstanceKey}-diagnostic-${index}`}
                 fullWidth
                 size="small"
                 label={`Diagn\u00f3stico ${index + 1}`}
+                expandedRows={2}
                 defaultValue={diagnostic}
                 onChange={(e) => onDiagnosticChange(index, e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === 'Enter') {
                     e.preventDefault();
-                    onAddDiagnostic();
                   }
                 }}
               />
@@ -1001,7 +1043,15 @@ const PlanSection = memo(function PlanSection({
             ) : null}
           </Grid>
         ))}
-        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulindicaciones') ? undefined : 'none' }}><TextField key={`${formInstanceKey}-additionalInstructions`} multiline minRows={2} fullWidth label="Indicaciones adicionales" defaultValue={form.additionalInstructions} onChange={(e) => onAdditionalInstructionsChange(e.target.value)} /></Grid>
+        <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulindicaciones') ? undefined : 'none' }}>
+          <ExpandableTextareaField
+            key={`${formInstanceKey}-additionalInstructions`}
+            fullWidth
+            label="Indicaciones adicionales"
+            defaultValue={form.additionalInstructions}
+            onChange={(e) => onAdditionalInstructionsChange(e.target.value)}
+          />
+        </Grid>
         <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulanalisis') ? undefined : 'none' }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap', mt: 0.5 }}>
             <Button
@@ -1048,7 +1098,7 @@ const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
       <SoapSectionTitle initial="O" title="Objetivo" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulestatura') ? undefined : 'none' }}>
-          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} slotProps={{ inputLabel: { shrink: Boolean(form.height) } }} />
+          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} InputLabelProps={{ shrink: Boolean(form.height) }} />
           <PreviousFieldHint text={previousConsultation?.height} showDate={false} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulpeso') ? undefined : 'none' }}>
@@ -1272,6 +1322,18 @@ function PatientDailyNoteTab({
   );
 
   const refreshFormInstance = useCallback(() => setFormInstanceKey((current) => current + 1), []);
+  const saveCurrentDraft = useCallback(() => {
+    if (!draftRestoredRef.current) return;
+    saveDraft(patient.id, {
+      subjectiveForm: subjectiveFormRef.current,
+      objectiveForm: objectiveFormRef.current,
+      analysisForm: analysisFormRef.current,
+      planForm: planFormRef.current,
+      personalNotes: personalNotesRef.current,
+      selectedOfficeLabels,
+      editingConsultationId: editingConsultation?.consultation_id ?? null,
+    });
+  }, [editingConsultation, patient.id, selectedOfficeLabels]);
 
   useEffect(() => {
     return () => {
@@ -1376,28 +1438,24 @@ function PatientDailyNoteTab({
     setPlanForm(draft.planForm);
     setPersonalNotes(draft.personalNotes);
     setSelectedOfficeLabels(draft.selectedOfficeLabels);
-  }, [patient.id]);
+    subjectiveFormRef.current = draft.subjectiveForm;
+    objectiveFormRef.current = draft.objectiveForm;
+    analysisFormRef.current = draft.analysisForm;
+    planFormRef.current = draft.planForm;
+    personalNotesRef.current = draft.personalNotes;
+    refreshFormInstance();
+  }, [patient.id, refreshFormInstance]);
 
-  // Save draft to localStorage on changes (debounced)
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!draftRestoredRef.current) return;
-    if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-    draftTimerRef.current = setTimeout(() => {
-      saveDraft(patient.id, {
-        subjectiveForm,
-        objectiveForm,
-        analysisForm,
-        planForm,
-        personalNotes,
-        selectedOfficeLabels,
-        editingConsultationId: editingConsultation?.consultation_id ?? null,
-      });
-    }, 500);
-    return () => {
-      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+    const handlePageHide = () => {
+      saveCurrentDraft();
     };
-  }, [patient.id, subjectiveForm, objectiveForm, analysisForm, planForm, personalNotes, selectedOfficeLabels, editingConsultation]);
+
+    window.addEventListener('pagehide', handlePageHide);
+    return () => {
+      window.removeEventListener('pagehide', handlePageHide);
+    };
+  }, [saveCurrentDraft]);
 
   useEffect(() => {
     subjectiveFormRef.current = subjectiveForm;
@@ -1662,10 +1720,18 @@ function PatientDailyNoteTab({
     });
   }, []);
   const handleMedicationChange = useCallback((index: number, field: 'medicament' | 'prescription', value: string) => {
+    if (field === 'prescription') {
+      const medications = [...planFormRef.current.medications];
+      const currentRow = medications[index] ?? { medicament: '', prescription: '' };
+      medications[index] = { ...currentRow, prescription: value };
+      planFormRef.current = { ...planFormRef.current, medications };
+      return;
+    }
+
     setPlanForm((current) => {
       const medications = [...current.medications];
       const currentRow = medications[index] ?? { medicament: '', prescription: '' };
-      medications[index] = { ...currentRow, [field]: value };
+      medications[index] = { ...currentRow, medicament: value };
       const next = { ...current, medications };
       planFormRef.current = next;
       return next;
@@ -1818,7 +1884,7 @@ function PatientDailyNoteTab({
 
   return (
     <>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, bgcolor: '#cbf7cb', p: 2, borderRadius: 2 }}>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, bgcolor: '#cbf7cb', p: 2, borderRadius: 2 }} onBlurCapture={saveCurrentDraft}>
         {editingConsultation && (
           <Alert severity="info" action={canCreateDailyNote ? <Button color="inherit" size="small" onClick={handleStartNewConsultation}>Nueva consulta</Button> : undefined}>
             Editando la consulta del {formatDisplayDate(editingConsultation.created_at)}

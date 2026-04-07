@@ -38,8 +38,10 @@ interface ApiActivityLogListResponse {
   status: string;
   data: ActivityLogItem[];
   meta?: {
+    selected_date?: string;
     window_start?: string;
     window_end?: string;
+    next_before?: string | null;
     has_more?: boolean;
   };
 }
@@ -62,12 +64,14 @@ interface FutureActiveAppointmentWarning {
 export const appointmentService = {
   async getAppointmentsByRange(
     startDate: string,
-    endDate: string
+    endDate: string,
+    search?: string
   ): Promise<Appointment[]> {
     const response = await apiClient.get<ApiListResponse>('/v2/appointments', {
       params: {
         start_date: startDate,
         end_date: endDate,
+        search: search?.trim() ? search.trim() : undefined,
       },
     });
     return response.data.data;
@@ -190,7 +194,7 @@ export const appointmentService = {
 
   async getAppointmentActivityLogs(
     appointmentId: number,
-    options?: { days?: number; before?: string | null }
+    options?: { days?: number; before?: string | null; date?: string; limit?: number }
   ): Promise<ActivityLogWindow> {
     const response = await apiClient.get<ApiActivityLogListResponse>(
       `/v2/appointments/${appointmentId}/activity-logs`,
@@ -198,6 +202,8 @@ export const appointmentService = {
         params: {
           days: options?.days ?? 7,
           before: options?.before ?? undefined,
+          date: options?.date ?? undefined,
+          limit: options?.limit ?? undefined,
         },
       }
     );
@@ -205,7 +211,7 @@ export const appointmentService = {
     return {
       logs: response.data.data ?? [],
       hasMore: Boolean(response.data.meta?.has_more),
-      nextBefore: response.data.meta?.window_start ?? null,
+      nextBefore: response.data.meta?.next_before ?? response.data.meta?.window_start ?? null,
     };
   },
 
@@ -213,18 +219,22 @@ export const appointmentService = {
     officeId?: number;
     days?: number;
     before?: string | null;
+    date?: string;
+    limit?: number;
   }): Promise<ActivityLogWindow> {
     const response = await apiClient.get<ApiActivityLogListResponse>('/v2/activity-logs', {
       params: {
         office_id: options?.officeId,
         days: options?.days ?? 7,
         before: options?.before ?? undefined,
+        date: options?.date ?? undefined,
+        limit: options?.limit ?? undefined,
       },
     });
     return {
       logs: response.data.data ?? [],
       hasMore: Boolean(response.data.meta?.has_more),
-      nextBefore: response.data.meta?.window_start ?? null,
+      nextBefore: response.data.meta?.next_before ?? response.data.meta?.window_start ?? null,
     };
   },
 

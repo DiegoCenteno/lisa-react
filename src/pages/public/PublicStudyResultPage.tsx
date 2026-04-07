@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Alert,
@@ -8,8 +8,12 @@ import {
   CardContent,
   Checkbox,
   CircularProgress,
+  Dialog,
+  DialogContent,
+  DialogTitle,
   Divider,
   FormControlLabel,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
@@ -18,6 +22,7 @@ import {
 import {
   CheckCircleOutline as CheckCircleOutlineIcon,
   Chat as ChatIcon,
+  Close as CloseIcon,
   Download as DownloadIcon,
   EventAvailable as EventAvailableIcon,
   HighlightOff as HighlightOffIcon,
@@ -100,16 +105,12 @@ function normalizePhoneForWhatsApp(value: string): string {
   return digits.startsWith('52') ? digits : `52${digits}`;
 }
 
-function StudyResultView({
-  study,
-  previewUrl,
-}: {
-  study: PublicStudyResult;
-  previewUrl: string | null;
-}) {
-  const downloadUrl = useMemo(() => study.file.download_url ?? null, [study]);
+function StudyResultView({ study }: { study: PublicStudyResult }) {
+  const [previewFile, setPreviewFile] = useState<PublicStudyResult['files'][number] | null>(null);
+  const hasMultipleFiles = study.files.length > 1;
 
   return (
+    <>
     <Card
       sx={{
         borderRadius: 4,
@@ -172,87 +173,139 @@ function StudyResultView({
               pt: 3,
             }}
           >
-            <Stack
-              direction={{ xs: 'column', sm: 'row' }}
-              spacing={2}
-              alignItems={{ xs: 'stretch', sm: 'center' }}
-              justifyContent="space-between"
-              sx={{ mb: 2 }}
-            >
-              <Box>
-                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                  Archivo adjunto
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {study.file.name}
-                </Typography>
-              </Box>
-              {downloadUrl ? (
-                <Button
-                  component="a"
-                  href={downloadUrl}
-                  variant="contained"
-                  startIcon={<DownloadIcon />}
-                >
-                  Descargar archivo
-                </Button>
-              ) : null}
-            </Stack>
+            <Stack spacing={2.5}>
+              {study.files.map((file, index) => (
+                <Box key={file.id}>
+                  <Stack
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={2}
+                    alignItems={{ xs: 'stretch', sm: 'center' }}
+                    justifyContent="space-between"
+                    sx={{ mb: 2 }}
+                  >
+                    <Box>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                        {study.files.length > 1 ? `Archivo adjunto ${index + 1}` : 'Archivo adjunto'}
+                      </Typography>
+                      {file.preview_url ? (
+                        <Button
+                          variant="text"
+                          onClick={() => setPreviewFile(file)}
+                          sx={{ px: 0, minWidth: 'auto', textTransform: 'none' }}
+                        >
+                          {file.name}
+                        </Button>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          {file.name}
+                        </Typography>
+                      )}
+                    </Box>
+                    {file.download_url ? (
+                      <Button
+                        component="a"
+                        href={file.download_url}
+                        variant="contained"
+                        startIcon={<DownloadIcon />}
+                      >
+                        Descargar archivo
+                      </Button>
+                    ) : null}
+                  </Stack>
 
-            {study.file.type === 'image' && previewUrl ? (
-              <Box
-                component="img"
-                src={previewUrl}
-                alt={study.file.name}
-                sx={{
-                  width: '100%',
-                  maxHeight: 520,
-                  objectFit: 'contain',
-                  borderRadius: 3,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  backgroundColor: '#fff',
-                }}
-              />
-            ) : null}
+                  {!hasMultipleFiles && file.type === 'image' && file.preview_url ? (
+                    <Box
+                      component="img"
+                      src={file.preview_url}
+                      alt={file.name}
+                      sx={{
+                        width: '100%',
+                        maxHeight: 520,
+                        objectFit: 'contain',
+                        borderRadius: 3,
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        backgroundColor: '#fff',
+                      }}
+                    />
+                  ) : null}
 
-            {study.file.type === 'pdf' && previewUrl ? (
-              <Box
-                sx={{
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 3,
-                  overflow: 'hidden',
-                  backgroundColor: '#fff',
-                }}
-              >
-                <Box
-                  sx={{
-                    px: 2,
-                    py: 1.25,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    color: 'text.secondary',
-                  }}
-                >
-                  <PdfIcon fontSize="small" />
-                  <Typography variant="body2">{study.file.name}</Typography>
+                  {!hasMultipleFiles && file.type === 'pdf' && file.preview_url ? (
+                    <Box
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 3,
+                        overflow: 'hidden',
+                        backgroundColor: '#fff',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          px: 2,
+                          py: 1.25,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          color: 'text.secondary',
+                        }}
+                      >
+                        <PdfIcon fontSize="small" />
+                        <Typography variant="body2">{file.name}</Typography>
+                      </Box>
+                      <Box
+                        component="iframe"
+                        title={file.name}
+                        src={`${file.preview_url}#toolbar=0&navpanes=0&pagemode=none&view=FitH`}
+                        sx={{ width: '100%', height: 560, border: 0 }}
+                      />
+                    </Box>
+                  ) : null}
                 </Box>
-                <Box
-                  component="iframe"
-                  title={study.file.name}
-                  src={`${previewUrl}#toolbar=0&navpanes=0&pagemode=none&view=FitH`}
-                  sx={{ width: '100%', height: 560, border: 0 }}
-                />
-              </Box>
-            ) : null}
+              ))}
+            </Stack>
           </Box>
         </Stack>
       </CardContent>
     </Card>
+
+      <Dialog open={Boolean(previewFile)} onClose={() => setPreviewFile(null)} maxWidth="lg" fullWidth>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            {previewFile?.name ?? 'Vista previa'}
+          </Typography>
+          <IconButton onClick={() => setPreviewFile(null)}>
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ p: 0 }}>
+          {previewFile?.type === 'image' && previewFile.preview_url ? (
+            <Box
+              component="img"
+              src={previewFile.preview_url}
+              alt={previewFile.name}
+              sx={{
+                display: 'block',
+                width: '100%',
+                maxHeight: '78vh',
+                objectFit: 'contain',
+                backgroundColor: '#fff',
+              }}
+            />
+          ) : null}
+          {previewFile?.type === 'pdf' && previewFile.preview_url ? (
+            <Box
+              component="iframe"
+              title={previewFile.name}
+              src={`${previewFile.preview_url}#toolbar=0&navpanes=0&pagemode=none&view=FitH`}
+              sx={{ width: '100%', height: '78vh', border: 0, backgroundColor: '#fff' }}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -433,7 +486,7 @@ function AppointmentConfirmationView({
               <Stack spacing={2.25}>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                    {appointment.history_form_title ?? 'Historia clínica básica'}
+                    {appointment.history_form_title ?? 'Historia clÃ­nica bÃ¡sica'}
                   </Typography>
                   {appointment.history_form_message ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
@@ -444,12 +497,12 @@ function AppointmentConfirmationView({
 
                 <Stack spacing={2}>
                   <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                    Las respuestas son opcionales y puedes contestar únicamente las que tú desees.
+                    Las respuestas son opcionales y puedes contestar Ãºnicamente las que tÃº desees.
                   </Typography>
 
                   <TextField
                     select
-                      label="¿Cuál es tu tipo de sangre?"
+                      label="Â¿CuÃ¡l es tu tipo de sangre?"
                     value={historyFormState.tiposangre}
                     onChange={(event) => onHistoryFormChange('tiposangre', event.target.value)}
                     fullWidth
@@ -464,7 +517,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="¿En dónde naciste?"
+                      label="Â¿En dÃ³nde naciste?"
                     value={historyFormState.originaria}
                     onChange={(event) => onHistoryFormChange('originaria', event.target.value)}
                     fullWidth
@@ -478,7 +531,7 @@ function AppointmentConfirmationView({
                   </TextField>
 
                   <TextField
-                      label="¿En dónde vives?"
+                      label="Â¿En dÃ³nde vives?"
                     value={historyFormState.residente}
                     onChange={(event) => onHistoryFormChange('residente', event.target.value)}
                     fullWidth
@@ -530,7 +583,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="¿Qué tan frecuente realizas ejercicio?"
+                      label="Â¿QuÃ© tan frecuente realizas ejercicio?"
                     value={historyFormState.txtejercicio}
                     onChange={(event) => onHistoryFormChange('txtejercicio', event.target.value)}
                     fullWidth
@@ -707,7 +760,6 @@ export default function PublicStudyResultPage() {
   const [study, setStudy] = useState<PublicStudyResult | null>(null);
   const [appointment, setAppointment] = useState<PublicAppointmentConfirmation | null>(null);
   const [linkType, setLinkType] = useState<PublicAppLinkResponse['type'] | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [historyFormState, setHistoryFormState] = useState<PublicHistoryFormState>(EMPTY_HISTORY_FORM);
@@ -717,7 +769,6 @@ export default function PublicStudyResultPage() {
 
   useEffect(() => {
     let active = true;
-    let objectUrl: string | null = null;
 
     const load = async () => {
       try {
@@ -735,22 +786,17 @@ export default function PublicStudyResultPage() {
 
         if (data.type === 'study_result' && data.study) {
           setStudy(data.study);
-          const blob = await publicStudyService.getStudyFileBlob(code);
-          if (!active) return;
-          objectUrl = window.URL.createObjectURL(blob);
-          setPreviewUrl(objectUrl);
           return;
         }
 
         if (data.type === 'appointment_confirmation' && data.appointment) {
           setAppointment(data.appointment);
-          setPreviewUrl(null);
           return;
         }
 
         setError('Este tipo de enlace público todavía no está disponible.');
       } catch (requestError) {
-        console.error('Error cargando enlace público:', requestError);
+        console.error('Error cargando enlace pÃºblico:', requestError);
         if (!active) return;
         setError('No se encontró información para este enlace.');
       } finally {
@@ -764,9 +810,6 @@ export default function PublicStudyResultPage() {
 
     return () => {
       active = false;
-      if (objectUrl) {
-        window.URL.revokeObjectURL(objectUrl);
-      }
     };
   }, [code]);
 
@@ -793,7 +836,7 @@ export default function PublicStudyResultPage() {
         );
       }
     } catch (requestError) {
-      console.error('Error respondiendo cita pública:', requestError);
+      console.error('Error respondiendo cita pÃºblica:', requestError);
       setError('No se pudo actualizar el estatus de tu cita.');
     } finally {
       setActionLoading(false);
@@ -822,8 +865,8 @@ export default function PublicStudyResultPage() {
       setAppointment(response);
       setHistoryMessage('Gracias por contestar la encuesta.');
     } catch (requestError) {
-      console.error('Error guardando historia clínica pública:', requestError);
-      setError('No se pudieron guardar tus respuestas de historia clínica.');
+      console.error('Error guardando historia clÃ­nica pÃºblica:', requestError);
+      setError('No se pudieron guardar tus respuestas de historia clÃ­nica.');
     } finally {
       setHistoryLoading(false);
     }
@@ -843,7 +886,7 @@ export default function PublicStudyResultPage() {
       >
         <Stack spacing={2} alignItems="center">
           <CircularProgress />
-          <Typography color="text.secondary">Cargando enlace público...</Typography>
+          <Typography color="text.secondary">Cargando enlace pÃºblico...</Typography>
         </Stack>
       </Box>
     );
@@ -880,7 +923,7 @@ export default function PublicStudyResultPage() {
     >
       <Box sx={{ maxWidth: 860, mx: 'auto' }}>
         {linkType === 'study_result' && study ? (
-          <StudyResultView study={study} previewUrl={previewUrl} />
+          <StudyResultView study={study} />
         ) : null}
         {linkType === 'appointment_confirmation' && appointment ? (
           <AppointmentConfirmationView

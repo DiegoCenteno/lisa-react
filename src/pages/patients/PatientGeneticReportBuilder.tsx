@@ -13,6 +13,7 @@ import {
   type BasicObstetricInterpretationUltrasoundPayload,
   type PatientReportRecord,
 } from '../../api/consultationService';
+import { patientService } from '../../api/patientService';
 import { UltrasoundInterpretationDisplay, UltrasoundInterpretationSection } from './UltrasoundInterpretationSection';
 
 type GeneticReportPayload = any;
@@ -31,6 +32,28 @@ type Option = { value: string | number; label: string };
 type FlatField = { key: string; label: string; hiddenKey?: string; options?: Option[]; placeholder?: string };
 type ReportVariant = 'genetic' | 'structural' | 'wellbeing';
 type EditSectionKey = 'growth' | 'basic' | 'anatomy' | 'screenings' | 'hemodynamic' | 'biophysical' | 'interpretation' | 'conclusion';
+
+function applyReferencePhysicianFallback<T extends { study_context?: { reference_physician?: string } }>(
+  payload: T,
+  referencePhysician?: string | null
+): T {
+  const fallback = String(referencePhysician ?? '').trim();
+  if (!fallback) {
+    return payload;
+  }
+
+  if (String(payload?.study_context?.reference_physician ?? '').trim() !== '') {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    study_context: {
+      ...payload.study_context,
+      reference_physician: fallback,
+    },
+  };
+}
 
 const collapsedEditSections: Record<EditSectionKey, boolean> = {
   growth: true,
@@ -1941,9 +1964,13 @@ function PatientGeneticReportBuilder({
       setLoading(true);
       try {
         const loaded = await consultationService.getPatientReport<GeneticReportPayload>(reportId);
+        const history = await patientService.getClinicalHistory(loaded.patient_id);
         if (!active) return;
         setReport(loaded);
-        setPayload(buildNormalizedPayload(loaded.report_payload, variant));
+        setPayload(applyReferencePhysicianFallback(
+          buildNormalizedPayload(loaded.report_payload, variant),
+          history.reference_physician
+        ));
         clearTextDrafts();
       } catch (error) {
         console.error('Error cargando reporte de genetico:', error);

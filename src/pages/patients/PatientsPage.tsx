@@ -124,20 +124,32 @@ export default function PatientsPage() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [attachPatientId, setAttachPatientId] = useState<number | null>(null);
+  const [attachOfficeId, setAttachOfficeId] = useState<number | null>(null);
   const [attachControl, setAttachControl] = useState<PatientTagControlData | null>(null);
   const [attachLoading, setAttachLoading] = useState(false);
   const [attachSaving, setAttachSaving] = useState(false);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachMessage, setAttachMessage] = useState<string | null>(null);
+  const [attachWarningMessage, setAttachWarningMessage] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [attachFiles, setAttachFiles] = useState<PatientFile[]>([]);
   const [templateMessage, setTemplateMessage] = useState<string | null>(null);
+  const [sentResultLink, setSentResultLink] = useState<{ url: string } | null>(null);
   const [openTagIds, setOpenTagIds] = useState<number[]>([]);
   const [newOfficeLabelName, setNewOfficeLabelName] = useState('');
   const [savingOfficeLabel, setSavingOfficeLabel] = useState(false);
   const [showNewLabelInput, setShowNewLabelInput] = useState(false);
-  const [attachSelectedFile, setAttachSelectedFile] = useState<File | null>(null);
-  const [attachPreviewUrl, setAttachPreviewUrl] = useState<string | null>(null);
+  const [attachSelectedFiles, setAttachSelectedFiles] = useState<File[]>([]);
+  const [singleAttachPreviewUrl, setSingleAttachPreviewUrl] = useState<string | null>(null);
+  const [singleAttachPreviewType, setSingleAttachPreviewType] = useState<string>('');
+  const [singleAttachPreviewName, setSingleAttachPreviewName] = useState<string>('');
+  const [showStoredFiles, setShowStoredFiles] = useState(false);
+  const [storedFilesLoading, setStoredFilesLoading] = useState(false);
+  const [storedFilesVisible, setStoredFilesVisible] = useState<PatientFile[]>([]);
+  const [selectedStoredFileIds, setSelectedStoredFileIds] = useState<number[]>([]);
+  const [storedFilesHasMore, setStoredFilesHasMore] = useState(false);
+  const [storedFilesNextOffset, setStoredFilesNextOffset] = useState<number | null>(null);
+  const [storedFilesLoads, setStoredFilesLoads] = useState(0);
   const [sendResultToPatient, setSendResultToPatient] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
@@ -210,27 +222,31 @@ export default function PatientsPage() {
   }, [searchQuery, patients]);
 
   useEffect(() => {
-    if (!attachSelectedFile) {
-      setAttachPreviewUrl(null);
+    if (attachSelectedFiles.length !== 1) {
+      if (singleAttachPreviewUrl) {
+        window.URL.revokeObjectURL(singleAttachPreviewUrl);
+      }
+      setSingleAttachPreviewUrl(null);
+      setSingleAttachPreviewType('');
+      setSingleAttachPreviewName('');
       return;
     }
 
-    if (
-      attachSelectedFile.type !== 'image/jpeg' &&
-      attachSelectedFile.type !== 'image/png' &&
-      attachSelectedFile.type !== 'application/pdf'
-    ) {
-      setAttachPreviewUrl(null);
-      return;
+    const file = attachSelectedFiles[0];
+    const blobUrl = window.URL.createObjectURL(file);
+
+    if (singleAttachPreviewUrl) {
+      window.URL.revokeObjectURL(singleAttachPreviewUrl);
     }
 
-    const objectUrl = window.URL.createObjectURL(attachSelectedFile);
-    setAttachPreviewUrl(objectUrl);
+    setSingleAttachPreviewUrl(blobUrl);
+    setSingleAttachPreviewType(file.type);
+    setSingleAttachPreviewName(file.name);
 
     return () => {
-      window.URL.revokeObjectURL(objectUrl);
+      window.URL.revokeObjectURL(blobUrl);
     };
-  }, [attachSelectedFile]);
+  }, [attachSelectedFiles]);
 
   useEffect(() => {
     return () => {
@@ -239,6 +255,42 @@ export default function PatientsPage() {
       }
     };
   }, [previewFileUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (singleAttachPreviewUrl) {
+        window.URL.revokeObjectURL(singleAttachPreviewUrl);
+      }
+    };
+  }, [singleAttachPreviewUrl]);
+
+  useEffect(() => {
+    if (!attachMessage) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAttachMessage(null);
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [attachMessage]);
+
+  useEffect(() => {
+    if (!attachWarningMessage) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAttachWarningMessage(null);
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [attachWarningMessage]);
 
   useEffect(() => {
     if (attachPatientId === null && !attachLoading) {
@@ -285,17 +337,25 @@ export default function PatientsPage() {
     }
   };
 
-  const handleOpenAttach = async (patientId: number) => {
-    setAttachPatientId(patientId);
+  const handleOpenAttach = async (patient: Patient) => {
+    setAttachPatientId(patient.id);
+    setAttachOfficeId(patient.office_id ?? null);
     setAttachLoading(true);
     setAttachError(null);
     setAttachMessage(null);
     setTemplateMessage(null);
+    setSentResultLink(null);
     setAttachFiles([]);
     setNewOfficeLabelName('');
     setShowNewLabelInput(false);
-    setAttachSelectedFile(null);
-    setAttachPreviewUrl(null);
+    setAttachSelectedFiles([]);
+    setShowStoredFiles(false);
+    setStoredFilesLoading(false);
+    setStoredFilesVisible([]);
+    setSelectedStoredFileIds([]);
+    setStoredFilesHasMore(false);
+    setStoredFilesNextOffset(null);
+    setStoredFilesLoads(0);
     setSendResultToPatient(false);
     setSelectedTemplateId(null);
     setShowTemplateForm(false);
@@ -308,8 +368,8 @@ export default function PatientsPage() {
 
     try {
       const [data, files] = await Promise.all([
-        patientService.getPatientTagControl(patientId),
-        patientService.getFiles(patientId),
+        patientService.getPatientTagControl(patient.id, patient.office_id ?? null),
+        patientService.getFiles(patient.id),
       ]);
       setAttachControl(data);
       setAttachFiles(
@@ -500,6 +560,140 @@ export default function PatientsPage() {
     }
   };
 
+  const handleOpenStoredFilePreview = async (file: PatientFile) => {
+    const isPreviewable =
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/');
+
+    if (!isPreviewable) {
+      setAttachError('Solo es posible previsualizar archivos en imagen o PDF.');
+      return;
+    }
+
+    setPreviewLoading(true);
+    setAttachError(null);
+
+    try {
+      const blob = await patientService.getFileBlob(file.id);
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      if (previewFileUrl) {
+        window.URL.revokeObjectURL(previewFileUrl);
+      }
+
+      setPreviewFileUrl(blobUrl);
+      setPreviewFileName(file.name);
+      setPreviewFileType(file.type);
+    } catch (error) {
+      console.error('Error cargando vista previa del archivo:', error);
+      setAttachError('No se pudo cargar la vista previa del archivo.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleOpenSelectedFilePreview = (file: File) => {
+    const isPreviewable =
+      file.type === 'application/pdf' ||
+      file.type.startsWith('image/');
+
+    if (!isPreviewable) {
+      setAttachError('Solo es posible previsualizar archivos en imagen o PDF.');
+      return;
+    }
+
+    const blobUrl = window.URL.createObjectURL(file);
+
+    if (previewFileUrl) {
+      window.URL.revokeObjectURL(previewFileUrl);
+    }
+
+    setPreviewLoading(false);
+    setPreviewFileUrl(blobUrl);
+    setPreviewFileName(file.name);
+    setPreviewFileType(file.type);
+  };
+
+  const handleRemoveSelectedFile = (fileToRemove: File) => {
+    setAttachSelectedFiles((current) =>
+      current.filter(
+        (file) =>
+          !(
+            file.name === fileToRemove.name &&
+            file.size === fileToRemove.size &&
+            file.lastModified === fileToRemove.lastModified
+        )
+      )
+    );
+  };
+
+  const totalSelectedForPatientResult = attachSelectedFiles.length + selectedStoredFileIds.length;
+
+  const loadStoredFilesWindow = async (options?: { limit?: number; offset?: number; append?: boolean }) => {
+    if (!attachPatientId) return;
+
+    const limit = options?.limit ?? 5;
+    const offset = options?.offset ?? 0;
+    const append = options?.append ?? false;
+
+    try {
+      setStoredFilesLoading(true);
+      const response = await patientService.getFilesWindow(attachPatientId, { limit, offset });
+      setStoredFilesVisible((current) => {
+        if (!append) {
+          return response.files;
+        }
+
+        const merged = [...current];
+        response.files.forEach((file) => {
+          if (!merged.some((item) => item.id === file.id)) {
+            merged.push(file);
+          }
+        });
+        return merged;
+      });
+      setStoredFilesHasMore(response.hasMore);
+      setStoredFilesNextOffset(response.nextOffset);
+      setStoredFilesLoads((current) => current + 1);
+    } catch (error) {
+      console.error('Error cargando archivos almacenados:', error);
+      setAttachError('No se pudieron cargar los archivos almacenados.');
+    } finally {
+      setStoredFilesLoading(false);
+    }
+  };
+
+  const handleToggleStoredFiles = async () => {
+    const nextOpen = !showStoredFiles;
+    setShowStoredFiles(nextOpen);
+
+    if (nextOpen && storedFilesVisible.length === 0 && !storedFilesLoading) {
+      await loadStoredFilesWindow({ limit: 5, offset: 0, append: false });
+    }
+  };
+
+  const handleLoadMoreStoredFiles = async () => {
+    if (!storedFilesHasMore || storedFilesNextOffset === null || storedFilesLoading || storedFilesLoads >= 6) {
+      return;
+    }
+
+    await loadStoredFilesWindow({ limit: 10, offset: storedFilesNextOffset, append: true });
+  };
+
+  const handleToggleStoredFileSelection = (fileId: number) => {
+    const alreadySelected = selectedStoredFileIds.includes(fileId);
+
+    if (!alreadySelected && totalSelectedForPatientResult >= 3) {
+      setAttachWarningMessage('Solo puedes seleccionar hasta 3 documentos en total para el envio.');
+      return;
+    }
+
+    setAttachError(null);
+    setSelectedStoredFileIds((current) =>
+      alreadySelected ? current.filter((id) => id !== fileId) : [...current, fileId]
+    );
+  };
+
   const handleCreateOfficeLabel = async () => {
     const code = newOfficeLabelName.trim();
     if (!code || !attachPatientId) return;
@@ -509,9 +703,10 @@ export default function PatientsPage() {
     setAttachMessage(null);
 
     try {
-      const createdLabel = await patientService.createOfficeLabel(code);
+      const createdLabel = await patientService.createOfficeLabel(code, undefined, attachOfficeId);
       const refreshed = await patientService.updatePatientTagStatuses(attachPatientId, [], {
         officeLabelIds: [createdLabel.id],
+        officeId: attachOfficeId,
       });
       setAttachControl(refreshed);
       setNewOfficeLabelName('');
@@ -535,7 +730,7 @@ export default function PatientsPage() {
     try {
       const data = await patientService.updatePatientTagStatuses(attachPatientId, [
         { tag_id: tagId, status_id: statusId },
-      ]);
+      ], { officeId: attachOfficeId });
       setAttachControl(data);
       setOpenTagIds((current) => current.filter((id) => id !== tagId));
       setAttachMessage('Estatus de etiqueta actualizado correctamente.');
@@ -555,7 +750,7 @@ export default function PatientsPage() {
     setAttachMessage(null);
 
     try {
-      const data = await patientService.finalizePatientTag(attachPatientId, finalizeTag.id);
+      const data = await patientService.finalizePatientTag(attachPatientId, finalizeTag.id, attachOfficeId);
       setAttachControl(data);
       setAttachMessage('Etiqueta finalizada correctamente.');
       setFinalizeTag(null);
@@ -574,27 +769,44 @@ export default function PatientsPage() {
   };
 
   const handleChooseAttachFile = () => {
+    if (totalSelectedForPatientResult >= 3) {
+      setAttachWarningMessage('Solo puedes seleccionar hasta 3 documentos en total para el envio.');
+      return;
+    }
     attachFileInputRef.current?.click();
   };
 
   const handleAttachFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0] ?? null;
+    const selectedFiles = Array.from(event.target.files ?? []);
 
-    if (!selectedFile) {
-      setAttachSelectedFile(null);
-      setAttachPreviewUrl(null);
-      setSendResultToPatient(false);
-      setSelectedTemplateId(null);
+    if (selectedFiles.length === 0) {
       return;
     }
 
     const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-    if (!allowedTypes.includes(selectedFile.type)) {
-      setAttachSelectedFile(null);
-      setAttachPreviewUrl(null);
-      setSendResultToPatient(false);
-      setSelectedTemplateId(null);
+    if (selectedFiles.some((file) => !allowedTypes.includes(file.type))) {
       setAttachError('Solo se permiten documentos en imagen JPG/PNG o PDF.');
+      event.target.value = '';
+      return;
+    }
+
+    const mergedFiles = [...attachSelectedFiles];
+
+    selectedFiles.forEach((file) => {
+      const alreadyIncluded = mergedFiles.some(
+        (existing) =>
+          existing.name === file.name &&
+          existing.size === file.size &&
+          existing.lastModified === file.lastModified
+      );
+
+      if (!alreadyIncluded) {
+        mergedFiles.push(file);
+      }
+    });
+
+    if (mergedFiles.length + selectedStoredFileIds.length > 3) {
+      setAttachWarningMessage('Solo puedes seleccionar hasta 3 documentos en total para el envio.');
       event.target.value = '';
       return;
     }
@@ -602,9 +814,10 @@ export default function PatientsPage() {
     setAttachError(null);
     setAttachMessage(null);
     setTemplateMessage(null);
-    setAttachSelectedFile(selectedFile);
+    setAttachSelectedFiles(mergedFiles);
     setSendResultToPatient(false);
     setSelectedTemplateId(null);
+    event.target.value = '';
   };
 
   const handleToggleTemplate = (templateId: number) => {
@@ -624,10 +837,11 @@ export default function PatientsPage() {
     setAttachError(null);
     setAttachMessage(null);
     setTemplateMessage(null);
+    setSentResultLink(null);
 
     try {
-      const createdTemplate = await patientService.createOfficeResultTemplate(title, description);
-      const refreshed = await patientService.getPatientTagControl(attachPatientId);
+      const createdTemplate = await patientService.createOfficeResultTemplate(title, description, attachOfficeId);
+      const refreshed = await patientService.getPatientTagControl(attachPatientId, attachOfficeId);
       setAttachControl(refreshed);
       setSendResultToPatient(true);
       setSelectedTemplateId(createdTemplate.id);
@@ -655,8 +869,8 @@ export default function PatientsPage() {
       return;
     }
 
-    if (!attachSelectedFile) {
-      setAttachError('Selecciona un documento antes de enviarlo.');
+    if (attachSelectedFiles.length === 0 && selectedStoredFileIds.length === 0) {
+      setAttachError('Selecciona al menos un documento antes de enviarlo.');
       return;
     }
 
@@ -671,21 +885,29 @@ export default function PatientsPage() {
 
     try {
       const data = await patientService.updatePatientTagStatuses(attachPatientId, [], {
-        file: attachSelectedFile,
+        files: attachSelectedFiles,
+        existingFileIds: selectedStoredFileIds,
         notifyPatient: sendResultToPatient,
         templateId: selectedTemplateId,
+        officeId: attachOfficeId,
       });
 
       setAttachControl(data);
-      setAttachSelectedFile(null);
-      setAttachPreviewUrl(null);
+      setSentResultLink(
+        sendResultToPatient && selectedTemplateId && data.result_link?.url
+          ? { url: data.result_link.url }
+          : null
+      );
+      setAttachSelectedFiles([]);
+      setSelectedStoredFileIds([]);
       setSendResultToPatient(false);
       setSelectedTemplateId(null);
       setTemplateMessage(null);
       if (attachFileInputRef.current) {
         attachFileInputRef.current.value = '';
       }
-      setAttachMessage('Documento guardado correctamente.');
+      const sentCount = attachSelectedFiles.length + selectedStoredFileIds.length;
+      setAttachMessage(sentCount > 1 ? 'Documentos guardados correctamente.' : 'Documento guardado correctamente.');
     } catch (error) {
       console.error('Error actualizando estatus de etiquetas:', error);
       setAttachError('No se pudieron guardar los cambios del paciente.');
@@ -814,39 +1036,105 @@ export default function PatientsPage() {
                     <input
                       ref={attachFileInputRef}
                       type="file"
+                      multiple
                       accept=".jpg,.jpeg,.png,.pdf,application/pdf,image/jpeg,image/png"
                       hidden
                       onChange={handleAttachFileChange}
                     />
-                    <Button variant="contained" sx={{ minWidth: 170 }} onClick={handleChooseAttachFile}>
-                      Subir documento
+                    <Button
+                      variant="contained"
+                      sx={{ minWidth: 170 }}
+                      onClick={handleChooseAttachFile}
+                      disabled={totalSelectedForPatientResult >= 3}
+                    >
+                      Subir documentos
                     </Button>
-                    {attachSelectedFile ? (
-                      <Typography variant="body2" color="text.secondary">
-                        Documento seleccionado: {attachSelectedFile.name}
-                      </Typography>
+                    {totalSelectedForPatientResult > 0 ? (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                        <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 700 }}>
+                          {totalSelectedForPatientResult} de 3 documento{totalSelectedForPatientResult === 1 ? '' : 's'} seleccionado{totalSelectedForPatientResult === 1 ? '' : 's'}:
+                        </Typography>
+                        {attachSelectedFiles.map((file) => (
+                          <Box
+                            key={file.name + file.size}
+                            sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}
+                          >
+                            <Link
+                              component="button"
+                              type="button"
+                              underline="hover"
+                              onClick={() => handleOpenSelectedFilePreview(file)}
+                              sx={{ color: 'error.main', fontSize: '0.875rem', textAlign: 'left' }}
+                            >
+                              • {file.name} (pendiente por subir)
+                            </Link>
+                            <Link
+                              component="button"
+                              type="button"
+                              underline="hover"
+                              onClick={() => handleRemoveSelectedFile(file)}
+                              sx={{ color: 'error.main', fontSize: '0.84rem', fontWeight: 600 }}
+                            >
+                              Eliminar
+                            </Link>
+                          </Box>
+                        ))}
+                        {selectedStoredFileIds.map((fileId) => {
+                          const selectedFile = storedFilesVisible.find((file) => file.id === fileId);
+                          return selectedFile ? (
+                            <Box
+                              key={fileId}
+                              sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}
+                            >
+                              <Link
+                                component="button"
+                                type="button"
+                                underline="hover"
+                                onClick={() => void handleOpenStoredFilePreview(selectedFile)}
+                                sx={{ color: 'text.secondary', fontSize: '0.875rem', textAlign: 'left' }}
+                              >
+                                • {selectedFile.name} (ya almacenado)
+                              </Link>
+                              <Link
+                                component="button"
+                                type="button"
+                                underline="hover"
+                                onClick={() => handleToggleStoredFileSelection(fileId)}
+                                sx={{ color: 'error.main', fontSize: '0.84rem', fontWeight: 600 }}
+                              >
+                                Eliminar
+                              </Link>
+                            </Box>
+                          ) : null;
+                        })}
+                      </Box>
                     ) : (
                       <Typography variant="caption" sx={{ width: '100%', color: 'text.secondary' }}>
-                        Solo se permiten archivos JPG, PNG o PDF.
+                        Solo se permiten archivos JPG, PNG o PDF. Maximo 3 documentos.
                       </Typography>
                     )}
-                    {attachSelectedFile && attachPreviewUrl ? (
+                    {attachSelectedFiles.length > 0 ? (
+                      <Alert severity="error" sx={{ mt: 1, width: '100%', maxWidth: 820 }}>
+                        Los documentos aun no se han almacenado. Para terminar el proceso da clic en Enviar.
+                      </Alert>
+                    ) : null}
+                    {attachSelectedFiles.length === 1 && singleAttachPreviewUrl ? (
                       <Box
                         sx={{
                           mt: 1,
+                          width: '100%',
+                          maxWidth: 820,
                           p: 1,
                           border: '1px solid #dfe7ef',
                           borderRadius: 2,
                           backgroundColor: '#fafcfe',
-                          width: '100%',
-                          maxWidth: 560,
                         }}
                       >
-                        {attachSelectedFile.type === 'application/pdf' ? (
+                        {singleAttachPreviewType === 'application/pdf' ? (
                           <Box
                             component="iframe"
-                            src={`${attachPreviewUrl}#toolbar=0&navpanes=0&pagemode=none&view=FitH`}
-                            title="Vista previa del PDF"
+                            src={`${singleAttachPreviewUrl}#toolbar=0&navpanes=0&pagemode=none&view=FitH`}
+                            title={`Vista previa de ${singleAttachPreviewName}`}
                             sx={{
                               width: '100%',
                               height: 260,
@@ -858,8 +1146,8 @@ export default function PatientsPage() {
                         ) : (
                           <Box
                             component="img"
-                            src={attachPreviewUrl}
-                            alt="Vista previa del documento"
+                            src={singleAttachPreviewUrl}
+                            alt={`Vista previa de ${singleAttachPreviewName}`}
                             sx={{
                               display: 'block',
                               width: '100%',
@@ -872,7 +1160,107 @@ export default function PatientsPage() {
                         )}
                       </Box>
                     ) : null}
-                    {attachSelectedFile ? (
+                    <Link
+                      component="button"
+                      type="button"
+                      underline="hover"
+                      onClick={() => void handleToggleStoredFiles()}
+                      sx={{ mt: 0.5 }}
+                    >
+                      {showStoredFiles ? 'Ocultar archivos almacenados' : 'Enlistar archivos almacenados'}
+                    </Link>
+                    {showStoredFiles ? (
+                      <Box
+                        sx={{
+                          mt: 1,
+                          width: '100%',
+                          maxWidth: 560,
+                          border: '1px solid #dfe7ef',
+                          borderRadius: 2,
+                          backgroundColor: '#fafcfe',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {storedFilesLoading && storedFilesVisible.length === 0 ? (
+                          <Box sx={{ p: 2 }}>
+                            <Skeleton height={28} />
+                            <Skeleton height={28} />
+                            <Skeleton height={28} />
+                          </Box>
+                        ) : storedFilesVisible.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+                            No hay archivos almacenados disponibles para este paciente en este consultorio.
+                          </Typography>
+                        ) : (
+                          <>
+                            {storedFilesVisible.map((file, index) => {
+                              const checked = selectedStoredFileIds.includes(file.id);
+                              return (
+                                <Box
+                                  key={file.id}
+                                  sx={{
+                                    px: 1.25,
+                                    py: 1,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: 1.5,
+                                    borderTop: index === 0 ? 'none' : '1px solid #e7edf3',
+                                  }}
+                                >
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, flex: 1 }}>
+                                    <Checkbox
+                                      checked={checked}
+                                      onChange={() => handleToggleStoredFileSelection(file.id)}
+                                      disabled={!checked && totalSelectedForPatientResult >= 3}
+                                      sx={{ p: 0.25 }}
+                                    />
+                                    <Link
+                                      component="button"
+                                      type="button"
+                                      underline="hover"
+                                      onClick={() => handleToggleStoredFileSelection(file.id)}
+                                      sx={{
+                                        textAlign: 'left',
+                                        color: checked ? 'primary.main' : 'text.primary',
+                                        fontWeight: checked ? 700 : 500,
+                                        opacity: !checked && totalSelectedForPatientResult >= 3 ? 0.5 : 1,
+                                        pointerEvents: !checked && totalSelectedForPatientResult >= 3 ? 'none' : 'auto',
+                                      }}
+                                    >
+                                      {file.name}
+                                    </Link>
+                                  </Box>
+                                  <Link
+                                    component="button"
+                                    type="button"
+                                    underline="hover"
+                                    onClick={() => void handleOpenStoredFilePreview(file)}
+                                    sx={{ whiteSpace: 'nowrap' }}
+                                  >
+                                    Ver archivo
+                                  </Link>
+                                </Box>
+                              );
+                            })}
+                            {storedFilesHasMore && storedFilesLoads < 6 ? (
+                              <Box sx={{ px: 1.25, py: 1, borderTop: '1px solid #e7edf3' }}>
+                                <Link
+                                  component="button"
+                                  type="button"
+                                  underline="hover"
+                                  onClick={() => void handleLoadMoreStoredFiles()}
+                                  disabled={storedFilesLoading}
+                                >
+                                  {storedFilesLoading ? 'Cargando...' : 'Mostrar mas'}
+                                </Link>
+                              </Box>
+                            ) : null}
+                          </>
+                        )}
+                      </Box>
+                    ) : null}
+                    {totalSelectedForPatientResult > 0 ? (
                       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
                         <Box
                           sx={{ display: 'flex', alignItems: 'center', gap: 0.75, cursor: 'pointer' }}
@@ -1030,6 +1418,25 @@ export default function PatientsPage() {
                                 </Box>
                               </Box>
                             ) : null}
+
+                            {sentResultLink?.url ? (
+                              <Alert severity="success" sx={{ mt: 2, maxWidth: 560 }}>
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                                    Link del resultado enviado
+                                  </Typography>
+                                  <Link
+                                    href={sentResultLink.url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    underline="hover"
+                                    sx={{ wordBreak: 'break-all' }}
+                                  >
+                                    {sentResultLink.url}
+                                  </Link>
+                                </Box>
+                              </Alert>
+                            ) : null}
                           </Box>
                         ) : null}
                       </Box>
@@ -1037,19 +1444,9 @@ export default function PatientsPage() {
                   </Box>
                 </Box>
 
-                <Button
-                  variant="contained"
-                  color="success"
-                  sx={{ mt: 3, minWidth: 120 }}
-                  onClick={() => void handleSendStatuses()}
-                  disabled={attachSaving || !attachSelectedFile}
-                >
-                  {attachSaving ? 'Guardando...' : 'Enviar'}
-                </Button>
-
                 <Divider sx={{ my: 3 }} />
 
-                <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+                <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
                   <Box component="span" sx={{ color: '#ffcf48', fontSize: 24, lineHeight: 1 }}>
                     &#9873;
                   </Box>
@@ -1057,7 +1454,7 @@ export default function PatientsPage() {
                 </Typography>
                 <Typography
                   variant="caption"
-                  sx={{ display: 'block', color: 'text.secondary', mb: 2, fontSize: '0.82rem' }}
+                  sx={{ display: 'block', color: 'text.secondary', mb: 1, fontSize: '0.82rem' }}
                 >
                   Selecciona un nuevo estado de la etiqueta
                 </Typography>
@@ -1089,10 +1486,10 @@ export default function PatientsPage() {
                     Este paciente no tiene etiquetas activas para editar.
                   </Typography>
                 ) : (
-                  <Box sx={{ mb: 2 }}>
+                  <Box sx={{ mb: 1 }}>
                     {attachControl.tags.map((tag, index) => (
                       <Box key={tag.id}>
-                        {index > 0 && <Divider sx={{ my: 2 }} />}
+                        {index > 0 && <Divider sx={{ my: 1.2 }} />}
                         {(() => {
                           const isOpen = openTagIds.includes(tag.id);
                           const availableStatuses = attachControl.statuses.filter(
@@ -1100,8 +1497,8 @@ export default function PatientsPage() {
                           );
 
                           return (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
                             <Typography
                               variant="body1"
                               sx={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.9 }}
@@ -1144,6 +1541,15 @@ export default function PatientsPage() {
                                 {tag.current_status.date}
                               </Typography>
                             ) : null}
+                            <Button
+                              variant="text"
+                              color="error"
+                              sx={{ px: 0, minWidth: 'auto', ml: 'auto' }}
+                              onClick={() => setFinalizeTag({ id: tag.id, code: tag.code })}
+                              disabled={finalizingTagId === tag.id}
+                            >
+                              finalizar etiqueta
+                            </Button>
                           </Box>
 
                           <Box
@@ -1170,17 +1576,6 @@ export default function PatientsPage() {
                               </Button>
                               ))
                               : null}
-                          </Box>
-                          <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                            <Button
-                              variant="text"
-                              color="error"
-                              sx={{ px: 0, minWidth: 'auto' }}
-                              onClick={() => setFinalizeTag({ id: tag.id, code: tag.code })}
-                              disabled={finalizingTagId === tag.id}
-                            >
-                              finalizar etiqueta
-                            </Button>
                           </Box>
                         </Box>
                           );
@@ -1252,6 +1647,15 @@ export default function PatientsPage() {
                     </Box>
                   )}
                 </Box>
+                <Button
+                  variant="contained"
+                  color="success"
+                  sx={{ mt: 1, minWidth: 120 }}
+                  onClick={() => void handleSendStatuses()}
+                  disabled={attachSaving || totalSelectedForPatientResult === 0}
+                >
+                  {attachSaving ? 'Guardando...' : 'Enviar'}
+                </Button>
                     </>
                   );
                 })()}
@@ -1338,7 +1742,7 @@ export default function PatientsPage() {
                           <Button
                             size="small"
                             variant="outlined"
-                            onClick={() => void handleOpenAttach(patient.id)}
+                            onClick={() => void handleOpenAttach(patient)}
                           >
                             Más opciones
                           </Button>
@@ -1427,7 +1831,7 @@ export default function PatientsPage() {
                         <Button
                           size="small"
                           variant="outlined"
-                          onClick={() => void handleOpenAttach(patient.id)}
+                          onClick={() => void handleOpenAttach(patient)}
                         >
                           Más opciones
                         </Button>
@@ -1584,6 +1988,22 @@ export default function PatientsPage() {
           sx={{ width: '100%' }}
         >
           {attachMessage}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={Boolean(attachWarningMessage)}
+        autoHideDuration={2500}
+        onClose={() => setAttachWarningMessage(null)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert
+          severity="warning"
+          variant="filled"
+          onClose={() => setAttachWarningMessage(null)}
+          sx={{ width: '100%' }}
+        >
+          {attachWarningMessage}
         </Alert>
       </Snackbar>
 

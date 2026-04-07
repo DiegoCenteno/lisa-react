@@ -78,6 +78,8 @@ export interface SettingsFormsData {
   patient_detail: {
     camera_menu_enabled: boolean;
     camera_menu_title: string;
+    daily_note_title_enabled: boolean;
+    daily_note_title: string;
   };
   new_appointment: {
     default_gender: 'M' | 'F' | '';

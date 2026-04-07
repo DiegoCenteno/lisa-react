@@ -35,6 +35,8 @@ type ApiPatientRecord = {
   detail_menu?: {
     camera_menu_enabled?: boolean;
     camera_menu_title?: string;
+    daily_note_title_enabled?: boolean;
+    daily_note_title?: string;
   };
   effective_consultations_count?: number;
   is_first_time?: boolean;
@@ -100,6 +102,12 @@ interface ApiOfficeLabelsResponse {
 interface ApiPatientFilesResponse {
   status: string;
   data: PatientFile[];
+  meta?: {
+    limit?: number;
+    offset?: number;
+    has_more?: boolean;
+    next_offset?: number | null;
+  };
 }
 
 interface ApiPatientTagControlResponse {
@@ -111,8 +119,10 @@ interface ApiActivityLogListResponse {
   status: string;
   data: ActivityLogItem[];
   meta?: {
+    selected_date?: string;
     window_start?: string;
     window_end?: string;
+    next_before?: string | null;
     has_more?: boolean;
   };
 }
@@ -155,6 +165,8 @@ function normalizePatient(record: ApiPatientRecord): Patient {
     detail_menu: {
       camera_menu_enabled: Boolean(record.detail_menu?.camera_menu_enabled),
       camera_menu_title: record.detail_menu?.camera_menu_title?.trim() || 'Camara',
+      daily_note_title_enabled: Boolean(record.detail_menu?.daily_note_title_enabled),
+      daily_note_title: record.detail_menu?.daily_note_title?.trim() || 'Nota diaria',
     },
     effective_consultations_count: record.effective_consultations_count ?? 0,
     is_first_time: record.is_first_time ?? (record.effective_consultations_count ?? 0) === 0,
@@ -215,6 +227,14 @@ async function resolveOfficeId(): Promise<number> {
   }
 
   return officeIdPromise;
+}
+
+async function resolveOfficeIdWithOverride(officeIdOverride?: number | null): Promise<number> {
+  if (officeIdOverride && Number.isFinite(officeIdOverride) && officeIdOverride > 0) {
+    return officeIdOverride;
+  }
+
+  return resolveOfficeId();
 }
 
 export const patientService = {
@@ -384,8 +404,8 @@ export const patientService = {
     return response.data.data;
   },
 
-  async createOfficeLabel(code: string, identify?: string): Promise<OfficeLabelItem> {
-    const officeId = await resolveOfficeId();
+  async createOfficeLabel(code: string, identify?: string, officeIdOverride?: number | null): Promise<OfficeLabelItem> {
+    const officeId = await resolveOfficeIdWithOverride(officeIdOverride);
     const response = await apiClient.post<{ status: string; data: OfficeLabelItem }>('/v2/datahelp/office-labels', {
       office_id: officeId,
       code,
@@ -406,8 +426,12 @@ export const patientService = {
     return response.data.data;
   },
 
-  async createOfficeResultTemplate(code: string, data: string): Promise<PatientResultTemplate> {
-    const officeId = await resolveOfficeId();
+  async createOfficeResultTemplate(
+    code: string,
+    data: string,
+    officeIdOverride?: number | null
+  ): Promise<PatientResultTemplate> {
+    const officeId = await resolveOfficeIdWithOverride(officeIdOverride);
     const response = await apiClient.post<{ status: string; data: PatientResultTemplate }>(
       '/v2/datahelp/office-result-templates',
       {
@@ -424,6 +448,24 @@ export const patientService = {
   async getFiles(patientId: number): Promise<PatientFile[]> {
     const response = await apiClient.get<ApiPatientFilesResponse>(`/v2/patients/${patientId}/files`);
     return response.data.data ?? [];
+  },
+
+  async getFilesWindow(
+    patientId: number,
+    options: { limit: number; offset: number }
+  ): Promise<{ files: PatientFile[]; hasMore: boolean; nextOffset: number | null }> {
+    const response = await apiClient.get<ApiPatientFilesResponse>(`/v2/patients/${patientId}/files`, {
+      params: {
+        limit: options.limit,
+        offset: options.offset,
+      },
+    });
+
+    return {
+      files: response.data.data ?? [],
+      hasMore: Boolean(response.data.meta?.has_more),
+      nextOffset: response.data.meta?.next_offset ?? null,
+    };
   },
 
   async uploadPatientFile(patientId: number, file: File): Promise<PatientFile> {
@@ -445,8 +487,12 @@ export const patientService = {
     return response.data.data;
   },
 
-  async getPatientTagControl(patientId: number): Promise<PatientTagControlData> {
-    const officeId = await resolveOfficeId();
+  async deleteFile(fileId: number): Promise<void> {
+    await apiClient.delete(`/v2/files/${fileId}`);
+  },
+
+  async getPatientTagControl(patientId: number, officeIdOverride?: number | null): Promise<PatientTagControlData> {
+    const officeId = await resolveOfficeIdWithOverride(officeIdOverride);
     const response = await apiClient.get<ApiPatientTagControlResponse>(`/v2/patients/${patientId}/tag-control`, {
       params: { office_id: officeId },
     });
@@ -455,18 +501,20 @@ export const patientService = {
 
   async getPatientActivityLogs(
     patientId: number,
-    options?: { days?: number; before?: string | null }
+    options?: { days?: number; before?: string | null; date?: string; limit?: number }
   ): Promise<ActivityLogWindow> {
     const response = await apiClient.get<ApiActivityLogListResponse>(`/v2/patients/${patientId}/activity-logs`, {
       params: {
         days: options?.days ?? 7,
         before: options?.before ?? undefined,
+        date: options?.date ?? undefined,
+        limit: options?.limit ?? undefined,
       },
     });
     return {
       logs: response.data.data ?? [],
       hasMore: Boolean(response.data.meta?.has_more),
-      nextBefore: response.data.meta?.window_start ?? null,
+      nextBefore: response.data.meta?.next_before ?? response.data.meta?.window_start ?? null,
     };
   },
 
@@ -474,13 +522,15 @@ export const patientService = {
     patientId: number,
     updates: Array<{ tag_id: number; status_id: number }>,
     options?: {
-      file?: File | null;
+      files?: File[];
+      existingFileIds?: number[];
       notifyPatient?: boolean;
       templateId?: number | null;
       officeLabelIds?: number[];
+      officeId?: number | null;
     }
   ): Promise<PatientTagControlData> {
-    const officeId = await resolveOfficeId();
+    const officeId = await resolveOfficeIdWithOverride(options?.officeId);
     const payload = new FormData();
     payload.append('office_id', String(officeId));
     payload.append('updates', JSON.stringify(updates));
@@ -489,12 +539,21 @@ export const patientService = {
       payload.append('office_label_ids', JSON.stringify(options.officeLabelIds));
     }
 
-    if (options?.file) {
-      payload.append('file', options.file);
-      payload.append('notify_patient', options.notifyPatient ? '1' : '0');
+    if (options?.existingFileIds && options.existingFileIds.length > 0) {
+      payload.append('existing_file_ids', JSON.stringify(options.existingFileIds));
+    }
+
+    if (options?.files && options.files.length > 0) {
+      options.files.forEach((file) => payload.append('files[]', file));
+    }
+
+    if (options?.notifyPatient) {
+      payload.append('notify_patient', '1');
       if (options?.templateId) {
         payload.append('template_id', String(options.templateId));
       }
+    } else {
+      payload.append('notify_patient', '0');
     }
 
     const response = await apiClient.post<ApiPatientTagControlResponse>(
@@ -510,8 +569,8 @@ export const patientService = {
     return response.data.data;
   },
 
-  async finalizePatientTag(patientId: number, tagId: number): Promise<PatientTagControlData> {
-    const officeId = await resolveOfficeId();
+  async finalizePatientTag(patientId: number, tagId: number, officeIdOverride?: number | null): Promise<PatientTagControlData> {
+    const officeId = await resolveOfficeIdWithOverride(officeIdOverride);
     const response = await apiClient.post<ApiPatientTagControlResponse>(
       `/v2/patients/${patientId}/tag-control/tags/${tagId}/finalize`,
       {

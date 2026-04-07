@@ -72,11 +72,17 @@ export default function PatientDetailPage() {
   const [dailyNoteMessage, setDailyNoteMessage] = useState<string | null>(null);
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [dailyNoteEditRequest, setDailyNoteEditRequest] = useState<SOAPNote | null>(null);
+  const [soapTabSessionKey, setSoapTabSessionKey] = useState(0);
   const [showCompactSticky, setShowCompactSticky] = useState(false);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
   const headerSectionRef = useRef<HTMLDivElement | null>(null);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+  const [tabsOverflowing, setTabsOverflowing] = useState(false);
   const cameraMenuEnabled = Boolean(patient?.detail_menu?.camera_menu_enabled) && !iconOnlyPatientTabs;
   const cameraMenuTitle = (patient?.detail_menu?.camera_menu_title?.trim() || 'Camara');
+  const dailyNoteButtonTitle = patient?.detail_menu?.daily_note_title_enabled
+    ? (patient?.detail_menu?.daily_note_title?.trim() || 'Nota diaria')
+    : 'Nota diaria';
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
@@ -112,7 +118,34 @@ export default function PatientDetailPage() {
     }
   }, [tab, patient?.detail_menu?.camera_menu_enabled, setSearchParams]);
 
+  useEffect(() => {
+    const evaluateTabsOverflow = () => {
+      const scroller = tabsRef.current?.querySelector('.MuiTabs-scroller');
+      if (!(scroller instanceof HTMLElement)) {
+        setTabsOverflowing(false);
+        return;
+      }
+
+      setTabsOverflowing(scroller.scrollWidth - scroller.clientWidth > 2);
+    };
+
+    evaluateTabsOverflow();
+    window.addEventListener('resize', evaluateTabsOverflow);
+
+    return () => {
+      window.removeEventListener('resize', evaluateTabsOverflow);
+    };
+  }, [cameraMenuEnabled, compactPatientTabs, veryCompactPatientTabs, iconOnlyPatientTabs, ultraCompactPatientTabs, dailyNoteButtonTitle]);
+
   const handleTabChange = (_event: React.SyntheticEvent, nextTab: number) => {
+    if (nextTab === 2) {
+      setDailyNoteEditRequest(null);
+      setSoapTabSessionKey((current) => current + 1);
+      setTab(2);
+      setSearchParams({ tab: 'soap' }, { replace: true });
+      return;
+    }
+
     setTab(nextTab);
 
     const queryTabMap: Record<number, string> = {
@@ -131,6 +164,8 @@ export default function PatientDetailPage() {
   };
 
   const handleOpenDailyNoteTab = () => {
+    setDailyNoteEditRequest(null);
+    setSoapTabSessionKey((current) => current + 1);
     setTab(2);
     setSearchParams({ tab: 'soap' }, { replace: true });
   };
@@ -210,6 +245,7 @@ export default function PatientDetailPage() {
     }
 
     setDailyNoteEditRequest(note);
+    setSoapTabSessionKey((current) => current + 1);
     setTab(2);
     setSearchParams({ tab: 'soap' }, { replace: true });
   };
@@ -362,21 +398,22 @@ export default function PatientDetailPage() {
           sx={{
             alignSelf: { xs: 'stretch', sm: 'flex-start' },
             ml: { xs: 0, sm: 'auto' },
-            backgroundColor: '#1e88e5',
+            backgroundColor: '#2e7d32',
             '&:hover': {
-              backgroundColor: '#1565c0',
+              backgroundColor: '#1b5e20',
             },
           }}
         >
-          Nota diaria
+          {dailyNoteButtonTitle}
         </Button>
       </Box>
 
       <Tabs
+        ref={tabsRef}
         value={tab}
         onChange={handleTabChange}
         variant="scrollable"
-        scrollButtons="auto"
+        scrollButtons={tabsOverflowing ? 'auto' : false}
         sx={{
           borderBottom: 1,
           borderColor: 'divider',
@@ -392,6 +429,7 @@ export default function PatientDetailPage() {
       >
         <Tab value={0} icon={<PersonIcon />} label={compactPatientTabs ? '' : 'Perfil'} iconPosition="start" />
         <Tab value={1} icon={<MedicalIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'HC' : compactPatientTabs ? 'H. Clínica' : 'Historia clínica'} iconPosition="start" />
+        <Tab value={7} icon={<HistoryIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Citas previas'} iconPosition="start" />
         <Tab value={8} icon={<AssessmentIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'REPO' : 'Reportes'} iconPosition="start" />
         <Tab value={3} icon={<FileIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? 'ARCH' : 'Archivos'} iconPosition="start" />
         {cameraMenuEnabled && (
@@ -399,8 +437,6 @@ export default function PatientDetailPage() {
         )}
         <Tab value={5} icon={<TagIcon />} label={iconOnlyPatientTabs ? '' : 'Etiquetas'} iconPosition="start" />
         <Tab value={6} label="" sx={{ display: 'none', minWidth: 0, p: 0, m: 0 }} />
-        <Tab value={7} icon={<HistoryIcon />} label={iconOnlyPatientTabs ? '' : veryCompactPatientTabs ? '' : 'Histórico'} iconPosition="start" />
-        <Tab value={2} icon={<NoteIcon />} label={iconOnlyPatientTabs ? '' : 'Nota Diaria'} iconPosition="start" />
       </Tabs>
       </Box>
       </Box>
@@ -418,6 +454,7 @@ export default function PatientDetailPage() {
       {/* Tab 2: Nota Diaria (SOAP) */}
       <TabPanel value={tab} index={2}>
         <PatientDailyNoteTab
+          key={`soap-session-${patient.id}-${soapTabSessionKey}`}
           patient={patient}
           patientTagControl={patientTagControl}
           canCreateDailyNote={canCreateDailyNote}

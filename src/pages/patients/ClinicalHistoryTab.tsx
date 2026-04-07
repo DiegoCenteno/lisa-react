@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -56,11 +56,11 @@ const expandedClinicalHistorySections: Record<ClinicalHistorySectionKey, boolean
   gynecological: false,
 };
 
-const collapsedClinicalHistorySections: Record<ClinicalHistorySectionKey, boolean> = {
-  hereditary: true,
-  non_pathological: true,
-  pathological: true,
-  gynecological: true,
+const inactiveEditingSections: Record<ClinicalHistorySectionKey, boolean> = {
+  hereditary: false,
+  non_pathological: false,
+  pathological: false,
+  gynecological: false,
 };
 
 type SectionCardProps = {
@@ -69,6 +69,14 @@ type SectionCardProps = {
   children: React.ReactNode;
   collapsed?: boolean;
   onToggle?: () => void;
+  canEdit?: boolean;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
+  editDisabled?: boolean;
+  saveDisabled?: boolean;
+  saving?: boolean;
 };
 
 type SubsectionCardProps = {
@@ -101,6 +109,10 @@ type CheckFieldProps = {
   onValueChange?: (value: string) => void;
   multiline?: boolean;
   rows?: number;
+  expandable?: boolean;
+  collapsedRows?: number;
+  expandedRows?: number;
+  preventEnter?: boolean;
 };
 
 type DocumentFieldProps = {
@@ -116,6 +128,44 @@ type PregnancySummary = {
   fpp: string;
   gestation: string;
 };
+
+const ExpandableTextareaField = memo(function ExpandableTextareaField({
+  collapsedRows = 1,
+  expandedRows = 2,
+  onFocus,
+  onClick,
+  minRows,
+  ...props
+}: React.ComponentProps<typeof TextField> & {
+  collapsedRows?: number;
+  expandedRows?: number;
+}) {
+  const [rows, setRows] = useState(collapsedRows);
+
+  useEffect(() => {
+    setRows(collapsedRows);
+  }, [collapsedRows]);
+
+  return (
+    <TextField
+      {...props}
+      multiline
+      minRows={minRows ?? rows}
+      onFocus={(event) => {
+        setRows(expandedRows);
+        onFocus?.(event);
+      }}
+      onClick={(event) => {
+        setRows(expandedRows);
+        onClick?.(event);
+      }}
+      sx={{
+        '& .MuiInputBase-inputMultiline': { overflow: 'hidden' },
+        ...(props.sx ?? {}),
+      }}
+    />
+  );
+});
 
 const INFO_ALERT_TEXT =
   'Se recuperó un borrador local de historia clínica. Puedes continuar editando o cancelar para volver a la versión guardada.';
@@ -266,6 +316,14 @@ const SectionCard = memo(function SectionCard({
   children,
   collapsed = false,
   onToggle,
+  canEdit = false,
+  editing = false,
+  onEdit,
+  onCancel,
+  onSave,
+  editDisabled = false,
+  saveDisabled = false,
+  saving = false,
 }: SectionCardProps) {
   return (
     <Card
@@ -296,12 +354,71 @@ const SectionCard = memo(function SectionCard({
           {title}
         </Typography>
         {onToggle ? (
-          <Box sx={{ ml: 'auto', color: '#1297a8', display: 'flex', alignItems: 'center' }}>
+          <Box
+            sx={{
+              ml: 'auto',
+              color: '#1297a8',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
             {collapsed ? <ExpandMoreIcon /> : <ExpandLessIcon />}
           </Box>
         ) : null}
       </Box>
-      {!collapsed ? <CardContent sx={{ p: { xs: 2, md: 3 } }}>{children}</CardContent> : null}
+      {!collapsed ? (
+        <CardContent sx={{ p: { xs: 2, md: 3 } }}>
+          {canEdit ? (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+              {editing ? (
+                <>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    color="inherit"
+                    startIcon={<CancelIcon fontSize="small" />}
+                    onClick={onCancel}
+                    disabled={saving}
+                    sx={{ minWidth: 0, px: 1.5, borderRadius: 2.5, textTransform: 'none' }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<SaveIcon fontSize="small" />}
+                    onClick={onSave}
+                    disabled={saveDisabled}
+                    sx={{
+                      minWidth: 0,
+                      px: 1.5,
+                      borderRadius: 2.5,
+                      textTransform: 'none',
+                      backgroundColor: '#089c95',
+                      '&:hover': { backgroundColor: '#067f79' },
+                    }}
+                  >
+                    {saving ? 'Guardando...' : 'Guardar'}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  startIcon={<EditIcon fontSize="small" />}
+                  onClick={onEdit}
+                  disabled={editDisabled}
+                  sx={{ minWidth: 0, px: 1.5, borderRadius: 2.5, textTransform: 'none' }}
+                >
+                  Editar
+                </Button>
+              )}
+            </Box>
+          ) : null}
+          {children}
+        </CardContent>
+      ) : null}
     </Card>
   );
 });
@@ -387,7 +504,40 @@ const Field = memo(function Field({
   }, [stringValue]);
 
   if (disabled) {
-    return <DocumentField label={label} value={value ?? ''} xs={xs} sm={sm} />;
+    if (!hasDisplayValue(value ?? '')) {
+      return null;
+    }
+
+    if (isDateField) {
+      return (
+        <Grid size={{ xs, sm }}>
+          <ClickableDateField
+            label={label}
+            value={stringValue}
+            disabled
+          />
+        </Grid>
+      );
+    }
+
+    return (
+      <Grid size={{ xs, sm }}>
+        <TextField
+          fullWidth
+          size="small"
+          label={label}
+          value={stringValue}
+          disabled
+          select={select}
+          multiline={multiline}
+          rows={rows}
+          type={type}
+          InputLabelProps={type === 'date' ? { shrink: true } : undefined}
+        >
+          {children}
+        </TextField>
+      </Grid>
+    );
   }
 
   if (isDateField) {
@@ -496,6 +646,8 @@ const LegacyCheckField = memo(function LegacyCheckField({
   );
 });
 
+void LegacyCheckField;
+
 const BufferedCheckField = memo(function BufferedCheckField({
   label,
   checked,
@@ -504,6 +656,10 @@ const BufferedCheckField = memo(function BufferedCheckField({
   hidden = false,
   onCheckedChange,
   onValueChange,
+  expandable = false,
+  collapsedRows = 1,
+  expandedRows = 2,
+  preventEnter = false,
 }: CheckFieldProps) {
   if (hidden) {
     return null;
@@ -511,21 +667,48 @@ const BufferedCheckField = memo(function BufferedCheckField({
 
   const stringValue = String(value ?? '');
   const [draftValue, setDraftValue] = useState(stringValue);
+  const [currentRows, setCurrentRows] = useState(collapsedRows);
 
   useEffect(() => {
     setDraftValue(stringValue);
   }, [stringValue]);
 
+  useEffect(() => {
+    setCurrentRows(collapsedRows);
+  }, [collapsedRows, checked, stringValue]);
+
   if (disabled) {
+    if (!checked && !hasDisplayValue(value ?? '')) {
+      return null;
+    }
+
     return (
-        <LegacyCheckField
-          label={label}
-          checked={checked}
-          value={value}
-          disabled={disabled}
-          onCheckedChange={onCheckedChange}
-          onValueChange={onValueChange}
-        />
+      <Grid size={{ xs: 12 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '260px minmax(0, 1fr)' },
+            gap: 1.5,
+            alignItems: 'start',
+          }}
+        >
+          <FormControlLabel
+            control={<Checkbox checked={Boolean(checked)} disabled />}
+            label={label}
+            sx={{ m: 0 }}
+          />
+          <TextField
+            fullWidth
+            size="small"
+            value={value ?? ''}
+            disabled
+            placeholder="Anotaciones adicionales"
+            multiline={expandable}
+            minRows={expandable ? currentRows : undefined}
+            sx={expandable ? { '& .MuiInputBase-inputMultiline': { overflow: 'hidden' } } : undefined}
+          />
+        </Box>
+      </Grid>
     );
   }
 
@@ -557,19 +740,43 @@ const BufferedCheckField = memo(function BufferedCheckField({
           label={label}
           sx={{ m: 0 }}
         />
-        <TextField
-          fullWidth
-          size="small"
-          value={draftValue}
-          onChange={(event) => setDraftValue(event.target.value)}
-          onBlur={() => {
-            if (draftValue !== stringValue) {
-              onValueChange?.(draftValue);
-            }
-          }}
-          disabled={disabled || !checked}
-          placeholder="Anotaciones adicionales"
-        />
+        {expandable ? (
+          <TextField
+            key={`${label}-${String(checked)}-${stringValue}`}
+            fullWidth
+            size="small"
+            defaultValue={stringValue}
+            onBlur={(event) => {
+              onValueChange?.(event.target.value);
+            }}
+            onFocus={() => setCurrentRows(expandedRows)}
+            onClick={() => setCurrentRows(expandedRows)}
+            onKeyDown={(event) => {
+              if (preventEnter && event.key === 'Enter') {
+                event.preventDefault();
+              }
+            }}
+            disabled={disabled || !checked}
+            placeholder="Anotaciones adicionales"
+            multiline
+            minRows={currentRows}
+            sx={{ '& .MuiInputBase-inputMultiline': { overflow: 'hidden' } }}
+          />
+        ) : (
+          <TextField
+            fullWidth
+            size="small"
+            value={draftValue}
+            onChange={(event) => setDraftValue(event.target.value)}
+            onBlur={() => {
+              if (draftValue !== stringValue) {
+                onValueChange?.(draftValue);
+              }
+            }}
+            disabled={disabled || !checked}
+            placeholder="Anotaciones adicionales"
+          />
+        )}
       </Box>
     </Grid>
   );
@@ -583,6 +790,13 @@ type HereditarySectionProps = {
   onPatch: (patch: Partial<HereditaryBackground>) => void;
   collapsed?: boolean;
   onToggle?: () => void;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
+  editDisabled?: boolean;
+  saveDisabled?: boolean;
+  saving?: boolean;
   fieldVisible?: (key: string) => boolean;
 };
 
@@ -592,6 +806,13 @@ const HereditarySection = memo(function HereditarySection({
   onPatch,
   collapsed,
   onToggle,
+  editing,
+  onEdit,
+  onCancel,
+  onSave,
+  editDisabled,
+  saveDisabled,
+  saving,
   fieldVisible,
 }: HereditarySectionProps) {
   const isVisible = (key: string) => fieldVisible?.(key) ?? true;
@@ -602,6 +823,14 @@ const HereditarySection = memo(function HereditarySection({
       icon={<FamilyRestroomIcon />}
       collapsed={collapsed}
       onToggle={onToggle}
+      canEdit
+      editing={editing}
+      onEdit={onEdit}
+      onCancel={onCancel}
+      onSave={onSave}
+      editDisabled={editDisabled}
+      saveDisabled={saveDisabled}
+      saving={saving}
     >
       <Grid container spacing={2}>
         <Field
@@ -801,6 +1030,13 @@ type NonPathologicalSectionProps = {
   onPatch: (patch: Partial<PersonalNonPathological>) => void;
   collapsed?: boolean;
   onToggle?: () => void;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
+  editDisabled?: boolean;
+  saveDisabled?: boolean;
+  saving?: boolean;
   fieldVisible?: (key: string) => boolean;
 };
 
@@ -810,6 +1046,13 @@ const NonPathologicalSection = memo(function NonPathologicalSection({
   onPatch,
   collapsed,
   onToggle,
+  editing,
+  onEdit,
+  onCancel,
+  onSave,
+  editDisabled,
+  saveDisabled,
+  saving,
   fieldVisible,
 }: NonPathologicalSectionProps) {
   const isVisible = (key: string) => fieldVisible?.(key) ?? true;
@@ -820,6 +1063,14 @@ const NonPathologicalSection = memo(function NonPathologicalSection({
       icon={<PersonIcon />}
       collapsed={collapsed}
       onToggle={onToggle}
+      canEdit
+      editing={editing}
+      onEdit={onEdit}
+      onCancel={onCancel}
+      onSave={onSave}
+      editDisabled={editDisabled}
+      saveDisabled={saveDisabled}
+      saving={saving}
     >
       <Grid container spacing={2}>
         <Field label="Origen" value={value.origin} disabled={disabled} hidden={!isVisible('originaria')} onChange={(origin) => onPatch({ origin })} />
@@ -853,6 +1104,13 @@ type PathologicalSectionProps = {
   onPatch: (patch: Partial<PersonalPathological>) => void;
   collapsed?: boolean;
   onToggle?: () => void;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
+  editDisabled?: boolean;
+  saveDisabled?: boolean;
+  saving?: boolean;
   fieldVisible?: (key: string) => boolean;
 };
 
@@ -862,6 +1120,13 @@ const PathologicalSection = memo(function PathologicalSection({
   onPatch,
   collapsed,
   onToggle,
+  editing,
+  onEdit,
+  onCancel,
+  onSave,
+  editDisabled,
+  saveDisabled,
+  saving,
   fieldVisible,
 }: PathologicalSectionProps) {
   const isVisible = (key: string) => fieldVisible?.(key) ?? true;
@@ -872,18 +1137,50 @@ const PathologicalSection = memo(function PathologicalSection({
       icon={<BiotechIcon />}
       collapsed={collapsed}
       onToggle={onToggle}
+      canEdit
+      editing={editing}
+      onEdit={onEdit}
+      onCancel={onCancel}
+      onSave={onSave}
+      editDisabled={editDisabled}
+      saveDisabled={saveDisabled}
+      saving={saving}
     >
       <Grid container spacing={2}>
-        <Field
-          label="Alergias"
-          value={value.allergies}
-          disabled={disabled}
-          hidden={!isVisible('alergias')}
-          onChange={(allergies) => onPatch({ allergies })}
-          multiline
-          rows={2}
-          xs={12}
-        />
+        {!isVisible('alergias') ? null : disabled ? (
+          hasDisplayValue(value.allergies) ? (
+            <Grid size={{ xs: 12, sm: 12 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Alergias"
+                value={String(value.allergies ?? '')}
+                disabled
+                multiline
+                minRows={1}
+                sx={{ '& .MuiInputBase-inputMultiline': { overflow: 'hidden' } }}
+              />
+            </Grid>
+          ) : null
+        ) : (
+          <Grid size={{ xs: 12, sm: 12 }}>
+            <ExpandableTextareaField
+              key={`allergies-${value.allergies ?? ''}`}
+              fullWidth
+              size="small"
+              label="Alergias"
+              defaultValue={String(value.allergies ?? '')}
+              collapsedRows={1}
+              expandedRows={2}
+              onBlur={(event: React.FocusEvent<HTMLInputElement | HTMLTextAreaElement>) => onPatch({ allergies: event.target.value })}
+              onKeyDown={(event: React.KeyboardEvent<HTMLDivElement>) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                }
+              }}
+            />
+          </Grid>
+        )}
         <CheckField
           label="Hijo con síndrome de Down"
           hidden={!isVisible('hijosindromedown')}
@@ -901,6 +1198,10 @@ const PathologicalSection = memo(function PathologicalSection({
           disabled={disabled}
           onCheckedChange={(chronic_diseases_checked) => onPatch({ chronic_diseases_checked })}
           onValueChange={(chronic_diseases) => onPatch({ chronic_diseases })}
+          expandable
+          collapsedRows={1}
+          expandedRows={2}
+          preventEnter
         />
         <CheckField
           label="Cirugías"
@@ -910,6 +1211,10 @@ const PathologicalSection = memo(function PathologicalSection({
           disabled={disabled}
           onCheckedChange={(surgeries_checked) => onPatch({ surgeries_checked })}
           onValueChange={(surgeries) => onPatch({ surgeries })}
+          expandable
+          collapsedRows={1}
+          expandedRows={2}
+          preventEnter
         />
         <CheckField
           label="Transfusiones"
@@ -919,6 +1224,10 @@ const PathologicalSection = memo(function PathologicalSection({
           disabled={disabled}
           onCheckedChange={(transfusions_checked) => onPatch({ transfusions_checked })}
           onValueChange={(transfusions) => onPatch({ transfusions })}
+          expandable
+          collapsedRows={1}
+          expandedRows={2}
+          preventEnter
         />
         <CheckField
           label="Fracturas"
@@ -928,6 +1237,10 @@ const PathologicalSection = memo(function PathologicalSection({
           disabled={disabled}
           onCheckedChange={(fractures_checked) => onPatch({ fractures_checked })}
           onValueChange={(fractures) => onPatch({ fractures })}
+          expandable
+          collapsedRows={1}
+          expandedRows={2}
+          preventEnter
         />
         <CheckField
           label="Otras"
@@ -951,6 +1264,13 @@ type GynecologicalSectionProps = {
   onPatch: (patch: Partial<GynecologicalBackground>) => void;
   collapsed?: boolean;
   onToggle?: () => void;
+  editing?: boolean;
+  onEdit?: () => void;
+  onCancel?: () => void;
+  onSave?: () => void;
+  editDisabled?: boolean;
+  saveDisabled?: boolean;
+  saving?: boolean;
   fieldVisible?: (key: string) => boolean;
 };
 
@@ -971,7 +1291,41 @@ const GynecologyPregnancyBlock = memo(function GynecologyPregnancyBlock({
     <SubsectionCard title="Embarazo y control">
       <Grid container spacing={2}>
         <Field label="Menarca" value={value.menarche} disabled={disabled} hidden={!isVisible('menarca')} onChange={(menarche) => onPatch({ menarche })} />
-        <Field label="Ciclos menstruales" value={value.menstrual_cycles} disabled={disabled} hidden={!isVisible('ciclosmestruales')} onChange={(menstrual_cycles) => onPatch({ menstrual_cycles })} />
+        {!isVisible('ciclosmestruales') ? null : disabled ? (
+          hasDisplayValue(value.menstrual_cycles) ? (
+            <Grid size={{ xs: 12, sm: 6 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Ciclos menstruales"
+                value={String(value.menstrual_cycles ?? '')}
+                disabled
+                multiline
+                minRows={2}
+                sx={{ '& .MuiInputBase-inputMultiline': { overflow: 'hidden' } }}
+              />
+            </Grid>
+          ) : null
+        ) : (
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              key={`menstrual-cycles-${value.menstrual_cycles ?? ''}`}
+              fullWidth
+              size="small"
+              label="Ciclos menstruales"
+              defaultValue={String(value.menstrual_cycles ?? '')}
+              multiline
+              minRows={2}
+              onBlur={(event) => onPatch({ menstrual_cycles: event.target.value })}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                }
+              }}
+              sx={{ '& .MuiInputBase-inputMultiline': { overflow: 'hidden' } }}
+            />
+          </Grid>
+        )}
         {disabled ? (
           <DocumentField label="Embarazada" hidden={!isVisible('embarazada')} value={value.pregnant ? 'Sí' : 'No'} />
         ) : (
@@ -1126,6 +1480,13 @@ const GynecologicalSection = memo(function GynecologicalSection({
   onPatch,
   collapsed,
   onToggle,
+  editing,
+  onEdit,
+  onCancel,
+  onSave,
+  editDisabled,
+  saveDisabled,
+  saving,
   fieldVisible,
 }: GynecologicalSectionProps) {
 
@@ -1135,6 +1496,14 @@ const GynecologicalSection = memo(function GynecologicalSection({
       icon={<PregnantWomanIcon />}
       collapsed={collapsed}
       onToggle={onToggle}
+      canEdit
+      editing={editing}
+      onEdit={onEdit}
+      onCancel={onCancel}
+      onSave={onSave}
+      editDisabled={editDisabled}
+      saveDisabled={saveDisabled}
+      saving={saving}
     >
       <Box sx={{ display: 'grid', gap: 2 }}>
         <GynecologyPregnancyBlock value={value} disabled={disabled} onPatch={onPatch} fieldVisible={fieldVisible} />
@@ -1146,10 +1515,16 @@ const GynecologicalSection = memo(function GynecologicalSection({
 
 function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveEnabled, setSaveEnabled] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Record<ClinicalHistorySectionKey, boolean>>(expandedClinicalHistorySections);
+  const [editingSections, setEditingSections] = useState<Record<ClinicalHistorySectionKey, boolean>>(inactiveEditingSections);
+  const sectionRefs = useRef<Record<ClinicalHistorySectionKey, HTMLDivElement | null>>({
+    hereditary: null,
+    non_pathological: null,
+    pathological: null,
+    gynecological: null,
+  });
   const [formSettings, setFormSettings] = useState<SettingsFormsData | null>(null);
   const [draftRecovered, setDraftRecovered] = useState(false);
   const [clinicalHistory, setClinicalHistory] = useState<ClinicalHistory | null>(null);
@@ -1159,6 +1534,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
     text: '',
     severity: 'success',
   });
+  const editing = useMemo(() => Object.values(editingSections).some(Boolean), [editingSections]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1181,14 +1557,14 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
         setClinicalHistory(history);
         setForm(initialForm);
         setFormSettings(settings);
-        setEditing(false);
+        setEditingSections(inactiveEditingSections);
         setCollapsedSections(expandedClinicalHistorySections);
         setDraftRecovered(Boolean(draft));
       } catch {
         if (cancelled) return;
         setMessage({
           open: true,
-          text: 'No se pudo cargar la historia clínica.',
+        text: 'No se pudo cargar la historia clínica.',
           severity: 'error',
         });
       } finally {
@@ -1309,17 +1685,39 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
     );
   }, []);
 
-  const startEditing = useCallback(() => {
+  const patchReferencePhysician = useCallback((reference_physician: string) => {
+    setSaveEnabled(true);
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            reference_physician,
+          }
+        : prev
+    );
+  }, []);
+
+  const startEditingSection = useCallback((sectionKey: ClinicalHistorySectionKey) => {
     setSaveEnabled(false);
-    setCollapsedSections(collapsedClinicalHistorySections);
-    setEditing(true);
+    setEditingSections({
+      hereditary: true,
+      non_pathological: true,
+      pathological: true,
+      gynecological: true,
+    });
+    window.setTimeout(() => {
+      sectionRefs.current[sectionKey]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }, 50);
   }, []);
 
   const cancelEditing = useCallback(() => {
     if (clinicalHistory) {
       setForm(clinicalHistory);
     }
-    setEditing(false);
+    setEditingSections(inactiveEditingSections);
     setSaveEnabled(false);
     setDraftRecovered(false);
     setCollapsedSections(expandedClinicalHistorySections);
@@ -1335,7 +1733,7 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
       const saved = await patientService.updateClinicalHistory(patientId, form);
       setClinicalHistory(saved);
       setForm(saved);
-      setEditing(false);
+      setEditingSections(inactiveEditingSections);
       setSaveEnabled(false);
       setDraftRecovered(false);
       clearDraft(patientId);
@@ -1396,36 +1794,9 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
                 Historia clínica
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                La historia se divide por secciones independientes para reducir renders y conservar
-                un borrador local mientras editas.
+                La historia clínica se muestra en lectura con campos deshabilitados. Cada panel se
+                habilita por separado al seleccionar Editar.
               </Typography>
-            </Box>
-            <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-              {!editing ? (
-                <Button variant="contained" startIcon={<EditIcon />} onClick={startEditing}>
-                  Editar
-                </Button>
-              ) : (
-                <>
-                  <Button
-                    variant="outlined"
-                    color="inherit"
-                    startIcon={<CancelIcon />}
-                    onClick={cancelEditing}
-                    disabled={saving}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    variant="contained"
-                    startIcon={<SaveIcon />}
-                    onClick={saveClinicalHistory}
-                    disabled={saving || !saveEnabled}
-                  >
-                    {saving ? 'Guardando...' : 'Guardar'}
-                  </Button>
-                </>
-              )}
             </Box>
           </Box>
 
@@ -1435,61 +1806,89 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
             </Alert>
           )}
 
+          <Box sx={{ mb: 2 }}>
+            <Grid container spacing={2}>
+              <Field
+                label="Médico de referencia"
+                value={form.reference_physician}
+                disabled={!editing || saving}
+                onChange={patchReferencePhysician}
+                xs={12}
+                sm={12}
+              />
+            </Grid>
+          </Box>
+
           <Box sx={{ display: 'grid', gap: 2 }}>
-            <HereditarySection
+            <Box ref={(node: HTMLDivElement | null) => { sectionRefs.current.hereditary = node; }}>
+              <HereditarySection
               value={form.hereditary_background}
               disabled={!editing || saving}
               onPatch={patchHereditary}
               collapsed={collapsedSections.hereditary}
               onToggle={() => toggleSection('hereditary')}
               fieldVisible={fieldVisible}
+              editing={editing}
+              onEdit={() => startEditingSection('hereditary')}
+              onCancel={cancelEditing}
+              onSave={saveClinicalHistory}
+              editDisabled={saving}
+              saveDisabled={saving || !saveEnabled}
+              saving={saving}
             />
-            <NonPathologicalSection
+            </Box>
+            <Box ref={(node: HTMLDivElement | null) => { sectionRefs.current.non_pathological = node; }}>
+              <NonPathologicalSection
               value={form.personal_non_pathological}
               disabled={!editing || saving}
               onPatch={patchNonPathological}
               collapsed={collapsedSections.non_pathological}
               onToggle={() => toggleSection('non_pathological')}
               fieldVisible={fieldVisible}
+              editing={editing}
+              onEdit={() => startEditingSection('non_pathological')}
+              onCancel={cancelEditing}
+              onSave={saveClinicalHistory}
+              editDisabled={saving}
+              saveDisabled={saving || !saveEnabled}
+              saving={saving}
             />
-            <PathologicalSection
+            </Box>
+            <Box ref={(node: HTMLDivElement | null) => { sectionRefs.current.pathological = node; }}>
+              <PathologicalSection
               value={form.personal_pathological}
               disabled={!editing || saving}
               onPatch={patchPathological}
               collapsed={collapsedSections.pathological}
               onToggle={() => toggleSection('pathological')}
               fieldVisible={fieldVisible}
+              editing={editing}
+              onEdit={() => startEditingSection('pathological')}
+              onCancel={cancelEditing}
+              onSave={saveClinicalHistory}
+              editDisabled={saving}
+              saveDisabled={saving || !saveEnabled}
+              saving={saving}
             />
-            <GynecologicalSection
+            </Box>
+            <Box ref={(node: HTMLDivElement | null) => { sectionRefs.current.gynecological = node; }}>
+              <GynecologicalSection
               value={form.gynecological ?? {}}
               disabled={!editing || saving}
               onPatch={patchGynecological}
               collapsed={collapsedSections.gynecological}
               onToggle={() => toggleSection('gynecological')}
               fieldVisible={fieldVisible}
+              editing={editing}
+              onEdit={() => startEditingSection('gynecological')}
+              onCancel={cancelEditing}
+              onSave={saveClinicalHistory}
+              editDisabled={saving}
+              saveDisabled={saving || !saveEnabled}
+              saving={saving}
             />
-          </Box>
-          {editing ? (
-            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
-              <Button
-                variant="outlined"
-                color="inherit"
-                startIcon={<CancelIcon />}
-                onClick={cancelEditing}
-                disabled={saving}
-              >
-                Cancelar
-              </Button>
-              <Button
-                variant="contained"
-                startIcon={<SaveIcon />}
-                onClick={saveClinicalHistory}
-                disabled={saving || !saveEnabled}
-              >
-                {saving ? 'Guardando...' : 'Guardar'}
-              </Button>
             </Box>
-          ) : null}
+          </Box>
           {!editing && !hasVisibleData ? (
             <Alert severity="info" sx={{ mt: 2 }}>
               Aún no hay información registrada en la historia clínica.
@@ -1518,6 +1917,11 @@ function ClinicalHistoryTabInner({ patientId }: ClinicalHistoryTabProps) {
 }
 
 export default memo(ClinicalHistoryTabInner);
+
+
+
+
+
 
 
 

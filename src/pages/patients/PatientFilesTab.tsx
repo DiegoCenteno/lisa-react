@@ -7,6 +7,7 @@ import {
   Chip,
   CircularProgress,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   IconButton,
@@ -19,6 +20,7 @@ import {
 import {
   Add as AddIcon,
   Close as CloseIcon,
+  DeleteOutline as DeleteIcon,
   InsertDriveFile as DocIcon,
 } from '@mui/icons-material';
 import Lightbox from 'yet-another-react-lightbox';
@@ -201,6 +203,8 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [pdfPreviewName, setPdfPreviewName] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PatientFile | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const viewerLoadingIdsRef = useRef<Record<number, boolean>>({});
   const onErrorRef = useRef(onError);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -438,6 +442,35 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
     }
   };
 
+  const handleRequestDelete = (file: PatientFile) => {
+    setDeleteTarget(file);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    if (deleting) {
+      return;
+    }
+    setDeleteTarget(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      await patientService.deleteFile(deleteTarget.id);
+      setDeleteTarget(null);
+      await loadFiles();
+    } catch (err) {
+      console.error('Error eliminando archivo:', err);
+      onErrorRef.current('No se pudo eliminar el archivo');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <>
       <Card>
@@ -504,6 +537,14 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
                     <Button size="small" onClick={() => handleDownloadFile(file)}>
                       Descargar
                     </Button>
+                    <Button
+                      size="small"
+                      color="error"
+                      startIcon={<DeleteIcon />}
+                      onClick={() => handleRequestDelete(file)}
+                    >
+                      Eliminar
+                    </Button>
                   </Box>
                 </ListItem>
               ))}
@@ -542,6 +583,27 @@ function PatientFilesTabInner({ patientId, refreshKey = 0, cameraModuleTitle = '
             />
           )}
         </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(deleteTarget)} onClose={handleCloseDeleteDialog} maxWidth="xs" fullWidth>
+        <DialogTitle>Eliminar archivo</DialogTitle>
+        <DialogContent>
+          <Typography>
+            ¿Estás seguro de que deseas eliminar este archivo?
+          </Typography>
+          {deleteTarget ? (
+            <Typography sx={{ mt: 1, fontWeight: 600 }}>
+              {deleteTarget.name}
+            </Typography>
+          ) : null}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteDialog} disabled={deleting}>
+            Cancelar
+          </Button>
+          <Button color="error" variant="contained" onClick={handleConfirmDelete} disabled={deleting}>
+            {deleting ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
       </Dialog>
     </>
   );

@@ -26,6 +26,7 @@ import {
   type BasicObstetricReportPayload,
   type PatientReportRecord,
 } from '../../api/consultationService';
+import { patientService } from '../../api/patientService';
 import {
   calculateInterpretationDerivedValues,
   UltrasoundInterpretationDisplay,
@@ -33,6 +34,28 @@ import {
 } from './UltrasoundInterpretationSection';
 
 dayjs.locale('es');
+
+function applyReferencePhysicianFallback<T extends { study_context?: { reference_physician?: string } }>(
+  payload: T,
+  referencePhysician?: string | null
+): T {
+  const fallback = String(referencePhysician ?? '').trim();
+  if (!fallback) {
+    return payload;
+  }
+
+  if (String(payload?.study_context?.reference_physician ?? '').trim() !== '') {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    study_context: {
+      ...payload.study_context,
+      reference_physician: fallback,
+    },
+  };
+}
 
 interface PatientBasicObstetricReportBuilderProps {
   reportId: number;
@@ -954,9 +977,13 @@ function PatientBasicObstetricReportBuilder({
       setLoading(true);
       try {
         const loaded = await consultationService.getPatientReport<BasicObstetricReportPayload>(reportId);
+        const history = await patientService.getClinicalHistory(loaded.patient_id);
         if (!mounted) return;
         setReport(loaded);
-        setPayload(buildNormalizedPayload(loaded.report_payload));
+        setPayload(applyReferencePhysicianFallback(
+          buildNormalizedPayload(loaded.report_payload),
+          history.reference_physician
+        ));
         setEditing(!loaded.updated_at || loaded.updated_at === loaded.created_at);
       } catch (loadError) {
         console.error('Error cargando reporte obstetrico basico:', loadError);

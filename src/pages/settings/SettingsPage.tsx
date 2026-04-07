@@ -1301,6 +1301,7 @@ function FormSettingsPanel({
     patient_detail_menu: true,
   });
   const cameraMenuTitleInputRef = useRef<HTMLInputElement | null>(null);
+  const dailyNoteTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (ownerOffices.length === 0) {
@@ -1433,6 +1434,8 @@ function FormSettingsPanel({
       patient_detail: {
         camera_menu_enabled: payload.camera_menu_enabled,
         camera_menu_title: payload.camera_menu_title.trim() || 'Camara',
+        daily_note_title_enabled: payload.daily_note_title_enabled,
+        daily_note_title: payload.daily_note_title.trim() || 'Nota diaria',
       },
     };
 
@@ -1473,6 +1476,7 @@ function FormSettingsPanel({
       return {
         ...current,
         patient_detail: {
+          ...current.patient_detail,
           camera_menu_enabled: checked,
           camera_menu_title: nextTitle,
         },
@@ -1485,6 +1489,36 @@ function FormSettingsPanel({
       setTimeout(() => {
         cameraMenuTitleInputRef.current?.focus();
         cameraMenuTitleInputRef.current?.select();
+      }, 0);
+    }
+  };
+
+  const handlePatientDetailDailyNoteTitleToggle = (checked: boolean) => {
+    setData((current) => {
+      if (!current) return current;
+
+      const nextTitle = checked
+        ? ((current.patient_detail.daily_note_title_enabled && current.patient_detail.daily_note_title.trim())
+            ? current.patient_detail.daily_note_title
+            : 'Nota diaria')
+        : current.patient_detail.daily_note_title;
+
+      return {
+        ...current,
+        patient_detail: {
+          ...current.patient_detail,
+          daily_note_title_enabled: checked,
+          daily_note_title: nextTitle,
+        },
+      };
+    });
+
+    setCameraMenuDirty(true);
+
+    if (checked) {
+      setTimeout(() => {
+        dailyNoteTitleInputRef.current?.focus();
+        dailyNoteTitleInputRef.current?.select();
       }, 0);
     }
   };
@@ -1929,6 +1963,36 @@ function FormSettingsPanel({
                                 patient_detail: {
                                   ...current.patient_detail,
                                   camera_menu_title: nextValue,
+                                },
+                              }) : current);
+                              setCameraMenuDirty(true);
+                            }}
+                          />
+                        ) : null}
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Checkbox
+                            checked={data.patient_detail.daily_note_title_enabled}
+                            disabled={saving}
+                            onChange={(event) => handlePatientDetailDailyNoteTitleToggle(event.target.checked)}
+                          />
+                          <Typography>Título de la nota diaria</Typography>
+                        </Box>
+                        {data.patient_detail.daily_note_title_enabled ? (
+                          <TextField
+                            inputRef={dailyNoteTitleInputRef}
+                            label="Título del botón"
+                            value={data.patient_detail.daily_note_title}
+                            fullWidth
+                            variant="standard"
+                            disabled={saving}
+                            inputProps={{ maxLength: 24 }}
+                            onChange={(event) => {
+                              const nextValue = event.target.value.slice(0, 24);
+                              setData((current) => current ? ({
+                                ...current,
+                                patient_detail: {
+                                  ...current.patient_detail,
+                                  daily_note_title: nextValue,
                                 },
                               }) : current);
                               setCameraMenuDirty(true);

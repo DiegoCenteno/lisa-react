@@ -12,6 +12,7 @@ import {
   type FetalVitalityReportPayload,
   type PatientReportRecord,
 } from '../../api/consultationService';
+import { patientService } from '../../api/patientService';
 import { UltrasoundInterpretationDisplay, UltrasoundInterpretationSection } from './UltrasoundInterpretationSection';
 
 dayjs.locale('es');
@@ -33,6 +34,28 @@ const normalAbnormalOptions = ['normal', 'anormal'];
 const embryoOptions = ['presente', 'ausente'];
 const uterusAndAdnexaOptions = ['normal', 'anormal', 'no valorable'];
 const internalOsOptions = ['cerrado', 'abierto'];
+
+function applyReferencePhysicianFallback<T extends { study_context?: { reference_physician?: string } }>(
+  payload: T,
+  referencePhysician?: string | null
+): T {
+  const fallback = String(referencePhysician ?? '').trim();
+  if (!fallback) {
+    return payload;
+  }
+
+  if (String(payload?.study_context?.reference_physician ?? '').trim() !== '') {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    study_context: {
+      ...payload.study_context,
+      reference_physician: fallback,
+    },
+  };
+}
 const recommendedStudyOptions = ['tipoest1', 'tipoest2', 'tipoest3', 'tipoest4', 'tipoest5', 'tipoest7', 'ninguno'];
 
 function formatDateDisplay(value?: string | null) {
@@ -179,9 +202,13 @@ function PatientFetalVitalityReportBuilder({
       setLoading(true);
       try {
         const loaded = await consultationService.getPatientReport<FetalVitalityReportPayload>(reportId);
+        const history = await patientService.getClinicalHistory(loaded.patient_id);
         if (!mounted) return;
         setReport(loaded);
-        setPayload(buildNormalizedPayload(loaded.report_payload));
+        setPayload(applyReferencePhysicianFallback(
+          buildNormalizedPayload(loaded.report_payload),
+          history.reference_physician
+        ));
         setEditing(!loaded.updated_at || loaded.updated_at === loaded.created_at);
       } catch (error) {
         console.error('Error cargando reporte de vitalidad fetal:', error);

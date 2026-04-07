@@ -43,6 +43,8 @@ export interface Patient {
   detail_menu?: {
     camera_menu_enabled: boolean;
     camera_menu_title: string;
+    daily_note_title_enabled: boolean;
+    daily_note_title: string;
   };
   effective_consultations_count?: number;
   is_first_time?: boolean;
@@ -115,6 +117,7 @@ export interface ClinicalHistory {
   id: number;
   patient_id: number;
   raw_datahc?: Record<string, unknown>;
+  reference_physician?: string;
   hereditary_background: HereditaryBackground;
   personal_non_pathological: PersonalNonPathological;
   personal_pathological: PersonalPathological;
@@ -482,6 +485,12 @@ export interface PatientTagControlData {
   statuses: PatientTagStatusOption[];
   tags: PatientTagControlTag[];
   templates: PatientResultTemplate[];
+  result_link?: {
+    id: number;
+    code: string;
+    url: string;
+    created_at?: string | null;
+  } | null;
 }
 
 export interface PublicStudyResult {
@@ -490,7 +499,7 @@ export interface PublicStudyResult {
   template_text: string;
   patient_name: string;
   medic_name: string;
-  file: {
+  files: Array<{
     id: number;
     name: string;
     description?: string | null;
@@ -498,7 +507,7 @@ export interface PublicStudyResult {
     mime_type: string;
     preview_url: string;
     download_url: string;
-  };
+  }>;
 }
 
 export interface PublicAppointmentConfirmation {

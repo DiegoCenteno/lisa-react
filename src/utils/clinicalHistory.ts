@@ -88,6 +88,7 @@ export function createEmptyClinicalHistory(patientId: number, allergy?: string, 
     id: patientId,
     patient_id: patientId,
     raw_datahc: raw ?? {},
+    reference_physician: '',
     hereditary_background: {
       blood_type_rh: '',
     },
@@ -108,6 +109,7 @@ export function decodeClinicalHistory(patient: Patient): ClinicalHistory {
     id: patient.id,
     patient_id: patient.id,
     raw_datahc: raw,
+    reference_physician: asString(raw.medicoreferencia),
     hereditary_background: {
       blood_type_rh: BLOOD_TYPE_LABELS[asString(raw.tiposangre)] ?? asString(raw.tiposangre),
       cgdm_checked: hasFlag(raw, 'cgdm'),
@@ -243,6 +245,7 @@ export function encodeClinicalHistory(history: ClinicalHistory): HistoryRecord {
   const pathological = history.personal_pathological;
   const gyn = history.gynecological ?? {};
 
+  setValue(raw, 'medicoreferencia', history.reference_physician);
   const bloodTypeCode = BLOOD_TYPE_CODES[asString(hereditary.blood_type_rh).toLowerCase()];
   setValue(raw, 'tiposangre', bloodTypeCode ?? hereditary.blood_type_rh);
   setFlagWithText(raw, 'cgdm', Boolean(hereditary.cgdm_checked), 'txtcgdm', hereditary.cgdm);

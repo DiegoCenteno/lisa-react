@@ -11,6 +11,7 @@ import {
   type NuchalTranslucencyReportPayload,
   type PatientReportRecord,
 } from '../../api/consultationService';
+import { patientService } from '../../api/patientService';
 import { UltrasoundInterpretationDisplay, UltrasoundInterpretationSection } from './UltrasoundInterpretationSection';
 
 interface Props {
@@ -33,6 +34,28 @@ const umbilicalCordOptions: Option[] = [
   { value: 'si asa', label: 'Si asa' },
 ];
 const fetusCountOptions: Option[] = [{ value: 1, label: 'Unico' }, { value: 2, label: 'Dos' }, { value: 3, label: 'Triple' }];
+
+function applyReferencePhysicianFallback<T extends { study_context?: { reference_physician?: string } }>(
+  payload: T,
+  referencePhysician?: string | null
+): T {
+  const fallback = String(referencePhysician ?? '').trim();
+  if (!fallback) {
+    return payload;
+  }
+
+  if (String(payload?.study_context?.reference_physician ?? '').trim() !== '') {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    study_context: {
+      ...payload.study_context,
+      reference_physician: fallback,
+    },
+  };
+}
 const conclusionFetusCountOptions: Option[] = [
   { value: 'unico', label: 'Unico' },
   { value: 'bicorial - biamniotico', label: 'Bicorial - biamniotico' },
@@ -1162,9 +1185,13 @@ function PatientNuchalTranslucencyReportBuilder({
       setLoading(true);
       try {
         const loaded = await consultationService.getPatientReport<NuchalTranslucencyReportPayload>(reportId);
+        const history = await patientService.getClinicalHistory(loaded.patient_id);
         if (!active) return;
         setReport(loaded);
-        setPayload(buildNormalizedPayload(loaded.report_payload));
+        setPayload(applyReferencePhysicianFallback(
+          buildNormalizedPayload(loaded.report_payload),
+          history.reference_physician
+        ));
       } catch (error) {
         console.error('Error cargando reporte de translucencia nucal:', error);
         if (active) {
