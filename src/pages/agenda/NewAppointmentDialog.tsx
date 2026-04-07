@@ -602,7 +602,7 @@ export default function NewAppointmentDialog({
   // â”€â”€ Filtered patients (client-side search with deferred value for instant typing) â”€â”€
   const deferredSearch = useDeferredValue(patientSearch);
   const filteredPatients = useMemo(() => {
-    if (!deferredSearch.trim()) return patients.slice(0, 5);
+    if (!deferredSearch.trim()) return patients.slice(0, 10);
     const q = deferredSearch.toLowerCase();
     return patients.filter(
       (p) =>
@@ -1680,18 +1680,32 @@ export default function NewAppointmentDialog({
       <DialogActions sx={{ justifyContent: 'space-between', px: 3, pb: 2 }}>
         <Button
           variant="contained"
-          size="small"
+          size="medium"
           onClick={onClose}
-          sx={{ backgroundColor: TEAL, '&:hover': { backgroundColor: '#00796b' } }}
+          sx={{
+            backgroundColor: TEAL,
+            '&:hover': { backgroundColor: '#00796b' },
+            px: 2.2,
+            py: 0.9,
+            fontSize: '0.95rem',
+            fontWeight: 700,
+          }}
         >
           Cerrar
         </Button>
         <Button
           variant="contained"
-          size="small"
+          size="medium"
           onClick={handleSave}
           disabled={saving}
-          sx={{ backgroundColor: MAGENTA, '&:hover': { backgroundColor: '#c2185b' } }}
+          sx={{
+            backgroundColor: MAGENTA,
+            '&:hover': { backgroundColor: '#c2185b' },
+            px: 2.4,
+            py: 0.9,
+            fontSize: '0.95rem',
+            fontWeight: 700,
+          }}
         >
           {saving ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : mode === 'reschedule' ? 'Guardar cambio' : 'Guardar cita'}
         </Button>
@@ -1744,13 +1758,14 @@ export default function NewAppointmentDialog({
         )}
         {step === 'dates' && !showManualForm && (
           <Button
-            size="small"
-            startIcon={<CopyIcon sx={{ fontSize: '0.85rem !important' }} />}
+            size="medium"
+            startIcon={<CopyIcon sx={{ fontSize: '1rem !important' }} />}
             onClick={handleCopy}
             sx={{
-              position: 'absolute', left: 8, top: 10,
-              textTransform: 'uppercase', fontSize: '0.7rem', color: TEAL, fontWeight: 600,
-              minWidth: 'auto', px: 1, py: 0.5,
+              position: 'absolute', left: 8, top: 8,
+              textTransform: 'uppercase', fontSize: '0.82rem', color: TEAL, fontWeight: 700,
+              minWidth: 'auto', px: 1.4, py: 0.75,
+              borderRadius: 2,
               '&:hover': { backgroundColor: 'rgba(0,137,123,0.08)' },
             }}
           >
