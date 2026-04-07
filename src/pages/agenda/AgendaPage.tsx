@@ -39,11 +39,13 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin from '@fullcalendar/interaction';
 import type { EventInput, EventClickArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
+import { patientService } from '../../api/patientService';
 import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultationSummary } from '../../types';
 import ActivityLogTimeline from '../../components/activity/ActivityLogTimeline';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
 import { useAuth } from '../../hooks/useAuth';
+import ClickableDateField from '../../components/ClickableDateField';
 
 const FIRST_TIME_BG = 'rgb(195 236 255)';
 const FIRST_TIME_HOVER_BG = 'rgb(176 229 255)';
@@ -286,6 +288,13 @@ export default function AgendaPage() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryData, setSummaryData] = useState<LastConsultationSummary | null>(null);
+  const [selectedPatientRecord, setSelectedPatientRecord] = useState<Appointment['patient'] & { birth_date?: string; age?: number | string } | null>(null);
+  const [birthEditorOpen, setBirthEditorOpen] = useState(false);
+  const [birthEditorValue, setBirthEditorValue] = useState('');
+  const [birthSaving, setBirthSaving] = useState(false);
+  const [reasonEditorOpen, setReasonEditorOpen] = useState(false);
+  const [reasonSaving, setReasonSaving] = useState(false);
+  const reasonInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
@@ -479,8 +488,15 @@ export default function AgendaPage() {
   const isSelectedEventToday = selectedEvent
     ? dayjs(selectedEvent.event.start).isSame(dayjs(), 'day')
     : false;
+  const selectedEventStatus = Number(selectedEvent?.event.extendedProps.status ?? -1);
+  const selectedEventIsConfirmed = Boolean(
+    selectedEvent
+    && selectedEventStatus !== 2
+    && selectedEventStatus !== 3
+    && (selectedEvent.event.extendedProps.confirmed || selectedEventStatus === 1)
+  );
   const canConfirmSelectedEvent = selectedEvent
-    ? dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day') < 3
+    ? !selectedEventIsConfirmed && dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day') < 3
     : false;
   const selectedEventCanNotifyPatient = Boolean(
     String(selectedEvent?.event.extendedProps.phone ?? '').trim()
@@ -502,8 +518,65 @@ export default function AgendaPage() {
     }
   }, []);
 
+  const handleSaveBirthDate = useCallback(async () => {
+    if (!selectedPatientRecord?.id) return;
+
+    setBirthSaving(true);
+    try {
+      const updatedPatient = await patientService.updatePatient(selectedPatientRecord.id, {
+        name: selectedPatientRecord.name,
+        last_name: selectedPatientRecord.last_name,
+        phone: selectedPatientRecord.phone,
+        birth: birthEditorValue || '',
+        gender: undefined,
+        allergy: undefined,
+      });
+
+      setSelectedPatientRecord((prev) => prev ? {
+        ...prev,
+        birth_date: updatedPatient.birth_date,
+        age: updatedPatient.age,
+      } : prev);
+      setBirthEditorValue(String(updatedPatient.birth_date ?? ''));
+      setBirthEditorOpen(false);
+      setActionToast('Fecha de nacimiento actualizada');
+    } catch (error) {
+      console.error('Error actualizando fecha de nacimiento:', error);
+      setActionToast('No se pudo actualizar la fecha de nacimiento');
+    } finally {
+      setBirthSaving(false);
+    }
+  }, [birthEditorValue, selectedPatientRecord]);
+
+  const handleSaveAppointmentReason = useCallback(async () => {
+    if (!selectedEvent) return;
+
+    setReasonSaving(true);
+    try {
+      const nextReason = String(reasonInputRef.current?.value ?? '').trim();
+      await appointmentService.updateAppointment(Number(selectedEvent.event.id), {
+        reason: nextReason,
+      });
+
+      selectedEvent.event.setExtendedProp('reason', nextReason);
+      setReasonEditorOpen(false);
+      setActionToast('Motivo actualizado');
+    } catch (error) {
+      console.error('Error actualizando motivo de la cita:', error);
+      setActionToast('No se pudo actualizar el motivo');
+    } finally {
+      setReasonSaving(false);
+    }
+  }, [selectedEvent]);
+
   const handleCloseSelectedEvent = useCallback(() => {
     setSelectedEvent(null);
+    setSelectedPatientRecord(null);
+    setBirthEditorOpen(false);
+    setBirthEditorValue('');
+    setBirthSaving(false);
+    setReasonEditorOpen(false);
+    setReasonSaving(false);
     setPendingAction(null);
     setNotifyPatientAction(false);
     setActionLoading(false);
@@ -522,6 +595,39 @@ export default function AgendaPage() {
       return 'Sin especialidad';
     }
   }, []);
+
+  useEffect(() => {
+    const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
+    if (!patientId) {
+      setSelectedPatientRecord(null);
+      return;
+    }
+
+    let cancelled = false;
+    void patientService.getPatient(patientId)
+      .then((patient) => {
+        if (cancelled) return;
+        setSelectedPatientRecord({
+          id: patient.id,
+          name: patient.name,
+          last_name: patient.last_name,
+          phone: patient.phone,
+          email: patient.email,
+          birth_date: patient.birth_date,
+          age: patient.age,
+        });
+        setBirthEditorValue(String(patient.birth_date ?? ''));
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Error cargando paciente para agenda:', error);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEvent]);
 
   const handleCopyAppointmentDetails = useCallback(async () => {
     if (!selectedEvent) return;
@@ -1048,13 +1154,13 @@ export default function AgendaPage() {
         sx={{
           '& .MuiDialog-container': {
             alignItems: 'flex-start',
-            pt: isShortViewport ? { xs: '2px', sm: '2px' } : { xs: '6px', sm: '6px' },
+            pt: isShortViewport ? { xs: '10px', sm: '2px' } : { xs: '14px', sm: '6px' },
           },
           '& .MuiDialog-paper': {
             width: isMobile ? 'calc(100vw - 8px)' : undefined,
             maxWidth: isMobile ? 'calc(100vw - 8px)' : 444,
             margin: isMobile
-              ? (isShortViewport ? '2px' : '4px')
+              ? (isShortViewport ? '10px 4px 4px' : '14px 4px 4px')
               : (isShortViewport ? '8px auto 24px' : '60px auto 32px'),
           },
         }}
@@ -1076,18 +1182,18 @@ export default function AgendaPage() {
         >
           {selectedEvent && (
             <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <Box
-                sx={{
-                  px: { xs: isShortViewport ? 1.25 : 1.5, sm: isShortViewport ? 2 : 3 },
-                  py: { xs: isShortViewport ? 0.9 : 1.25, sm: isShortViewport ? 1.25 : 2 },
-                  pt: { xs: isShortViewport ? 0.25 : 0.5, sm: isShortViewport ? 0.5 : 1 },
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: { xs: isShortViewport ? 0.8 : 1.25, sm: isShortViewport ? 1.1 : 2 },
-                  overflowY: 'auto',
-                  minHeight: 0,
-                }}
-              >
+                <Box
+                  sx={{
+                    px: { xs: isShortViewport ? 1.25 : 1.5, sm: isShortViewport ? 2 : 3 },
+                    py: { xs: isShortViewport ? 0.9 : 1.25, sm: isShortViewport ? 1.25 : 2 },
+                    pt: { xs: isShortViewport ? 0.25 : 0.5, sm: isShortViewport ? 0.5 : 1 },
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: { xs: isShortViewport ? 0.8 : 1.25, sm: isShortViewport ? 1.1 : 2 },
+                    overflowY: 'auto',
+                    minHeight: 0,
+                  }}
+                >
               <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
                 <Typography
                   sx={{
@@ -1125,7 +1231,7 @@ export default function AgendaPage() {
                     </Typography>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      {appointmentActivityLogs.slice(0, 3).map((log) => (
+                      {appointmentActivityLogs.slice(0, 10).map((log) => (
                         <Box
                           key={log.id}
                           sx={{
@@ -1168,7 +1274,7 @@ export default function AgendaPage() {
                         </Box>
                       ))}
 
-                      {appointmentActivityLogs.length > 3 ? (
+                      {appointmentActivityLogs.length > 10 ? (
                         <Button
                           variant="text"
                           onClick={handleOpenPatientLogbook}
@@ -1198,7 +1304,7 @@ export default function AgendaPage() {
                             textTransform: 'none',
                           }}
                         >
-                          {appointmentActivityLogsLoadingMore ? 'Cargando...' : 'Cargar 7 días más'}
+                          {appointmentActivityLogsLoadingMore ? 'Cargando...' : 'Mostrar más registros'}
                         </Button>
                       ) : null}
                     </Box>
@@ -1438,16 +1544,81 @@ export default function AgendaPage() {
                   ) : null}
                 </Box>
               ) : (
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: isShortViewport ? 0.35 : 0.55, sm: isShortViewport ? 0.7 : 1 } }}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: isShortViewport ? 0.2 : 0.35, sm: isShortViewport ? 0.45 : 0.65 } }}>
                 <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
-                  Paciente: {selectedEvent.event.title}
+                  Paciente: {selectedEvent.event.title}{' '}
+                  <Button
+                    variant="text"
+                    onClick={() => setBirthEditorOpen((current) => !current)}
+                    sx={{
+                      p: 0,
+                      minWidth: 0,
+                      textTransform: 'none',
+                      fontSize: 'inherit',
+                      verticalAlign: 'baseline',
+                    }}
+                  >
+                    ({selectedPatientRecord?.birth_date
+                      ? `${selectedPatientRecord.age ?? ''} años`
+                      : 'Edad no registrada'})
+                  </Button>
                 </Typography>
+                {birthEditorOpen ? (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <ClickableDateField
+                      label="Fecha de nacimiento"
+                      value={birthEditorValue}
+                      onChange={setBirthEditorValue}
+                    />
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={handleSaveBirthDate}
+                      disabled={birthSaving}
+                    >
+                      {birthSaving ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </Box>
+                ) : null}
                 <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
                   Fecha de la cita: {`${dayjs(selectedEvent.event.start).format('dddd, DD/MMM HH:mm')} hrs`}
                 </Typography>
                 <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
-                  Motivo de la consulta: {String(selectedEvent.event.extendedProps.reason || 'Consulta general')}
+                  Motivo de la consulta:{' '}
+                  <Button
+                    variant="text"
+                    onClick={() => setReasonEditorOpen((current) => !current)}
+                    sx={{
+                      p: 0,
+                      minWidth: 0,
+                      textTransform: 'none',
+                      fontSize: 'inherit',
+                      verticalAlign: 'baseline',
+                    }}
+                  >
+                    {String(selectedEvent.event.extendedProps.reason || 'No registrado')}
+                  </Button>
                 </Typography>
+                {reasonEditorOpen ? (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <TextField
+                      key={`reason-editor-${selectedEvent.event.id}-${String(selectedEvent.event.extendedProps.reason ?? '')}`}
+                      inputRef={reasonInputRef}
+                      size="small"
+                      fullWidth
+                      defaultValue={String(selectedEvent.event.extendedProps.reason ?? '')}
+                      sx={{ maxWidth: 420 }}
+                    />
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={handleSaveAppointmentReason}
+                      disabled={reasonSaving}
+                    >
+                      {reasonSaving ? 'Guardando...' : 'Guardar'}
+                    </Button>
+                  </Box>
+                ) : null}
               </Box>
               )}
 
@@ -1506,7 +1677,11 @@ export default function AgendaPage() {
 
               {!showAppointmentDetails && !showAppointmentMore && !pendingAction && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
-                  {canConfirmSelectedEvent && (
+                  {selectedEventIsConfirmed ? (
+                    <Typography sx={{ textAlign: 'center', color: '#2e7d32', fontWeight: 700, py: 0.9 }}>
+                      Cita confirmada
+                    </Typography>
+                  ) : canConfirmSelectedEvent ? (
                     <Button
                       fullWidth
                       variant="outlined"
@@ -1524,7 +1699,7 @@ export default function AgendaPage() {
                     >
                       CONFIRMAR CITA
                     </Button>
-                  )}
+                  ) : null}
                   <Button
                     fullWidth
                     variant="outlined"
@@ -1723,6 +1898,47 @@ export default function AgendaPage() {
                   ) : null}
                 </Box>
               )}
+              {showAppointmentMore && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    px: { xs: 1.5, sm: 3 },
+                    py: 1.25,
+                    borderTop: '1px solid #e5e9ef',
+                    backgroundColor: '#fff',
+                    position: 'sticky',
+                    bottom: 0,
+                    zIndex: 1,
+                  }}
+                >
+                  <Button
+                    variant="contained"
+                    onClick={() => setShowAppointmentMore(false)}
+                    sx={{
+                      backgroundColor: '#8c8c8c',
+                      '&:hover': { backgroundColor: '#7c7c7c' },
+                      minWidth: 92,
+                    }}
+                  >
+                    Regresar
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      setShowAppointmentMore(false);
+                      setShowAppointmentDetails(true);
+                    }}
+                    sx={{
+                      backgroundColor: '#5bc0eb',
+                      '&:hover': { backgroundColor: '#43b3e0' },
+                      minWidth: 140,
+                    }}
+                  >
+                    Datos de la cita
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
         </DialogContent>
@@ -1736,7 +1952,7 @@ export default function AgendaPage() {
         sx={{
           '& .MuiDialog-container': {
             alignItems: 'flex-start',
-            pt: isShortViewport ? { xs: '2px', sm: '2px' } : { xs: '6px', sm: '10px' },
+            pt: isShortViewport ? { xs: '10px', sm: '2px' } : { xs: '14px', sm: '10px' },
           },
         }}
         PaperProps={{
@@ -1745,7 +1961,7 @@ export default function AgendaPage() {
             overflow: 'hidden',
             width: { xs: 'calc(100% - 6px)', sm: 'auto' },
             maxWidth: { xs: 'calc(100% - 6px)', sm: 640 },
-            m: isShortViewport ? { xs: '2px', sm: '8px auto 24px' } : { xs: '3px', sm: '60px auto 32px' },
+            m: isShortViewport ? { xs: '10px 3px 4px', sm: '8px auto 24px' } : { xs: '14px 3px 4px', sm: '60px auto 32px' },
           },
         }}
       >

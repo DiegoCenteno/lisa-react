@@ -963,11 +963,25 @@ export default function PatientsPage() {
                         {attachControl.patient.full_name}
                       </Box>
                     </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                      {'Tel\u00e9fono:'}{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                        {attachControl.patient.phone || '-'}
+                    <Typography
+                      variant="body1"
+                      sx={{ color: 'text.secondary', mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}
+                    >
+                      <Box component="span">
+                        {'Tel\u00e9fono:'}{' '}
+                        <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                          {attachControl.patient.phone || '-'}
+                        </Box>
                       </Box>
+                      {attachControl.patient.phone ? (
+                        <IconButton
+                          size="small"
+                          sx={{ p: 0.4 }}
+                          onClick={(event) => handleCopyPhone(event, attachControl.patient.phone)}
+                        >
+                          <ContentCopyIcon sx={{ fontSize: 16 }} />
+                        </IconButton>
+                      ) : null}
                     </Typography>
                     <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
                       Edad:{' '}

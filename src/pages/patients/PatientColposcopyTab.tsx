@@ -432,19 +432,7 @@ function PatientColposcopyTabInner({ patientId, patientName, patientAge, moduleT
             }}
           >
             <Box sx={{ maxWidth: { xs: '100%', lg: 980 }, mx: 'auto', width: '100%' }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
-                <Typography
-                  variant="h4"
-                  sx={{
-                    textAlign: 'center',
-                    fontWeight: 700,
-                    color: 'primary.main',
-                    fontSize: { xs: '1.75rem', md: '2.35rem' },
-                  }}
-                >
-                  {patientName || 'Paciente en atencion'}
-                  {patientAge !== null && patientAge !== undefined && String(patientAge).trim() !== '' ? ` - ${patientAge} años` : ''}
-                </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '56px minmax(0, 1fr)', alignItems: 'center', gap: 1.5, mb: 2 }}>
                 <Box
                   sx={{
                     width: 56,
@@ -462,6 +450,18 @@ function PatientColposcopyTabInner({ patientId, patientName, patientAge, moduleT
                 >
                   {todaysColposcopyFiles.length}
                 </Box>
+                <Typography
+                  variant="h4"
+                  sx={{
+                    textAlign: 'center',
+                    fontWeight: 700,
+                    color: 'primary.main',
+                    fontSize: { xs: '1.75rem', md: '2.35rem' },
+                  }}
+                >
+                  {patientName || 'Paciente en atencion'}
+                  {patientAge !== null && patientAge !== undefined && String(patientAge).trim() !== '' ? ` - ${patientAge} años` : ''}
+                </Typography>
               </Box>
 
               <Box
