@@ -12,26 +12,23 @@ import {
 import {
   CameraAlt as CameraAltIcon,
 } from '@mui/icons-material';
-import Lightbox from 'yet-another-react-lightbox';
-import Zoom from 'yet-another-react-lightbox/plugins/zoom';
-import 'yet-another-react-lightbox/styles.css';
 import type { PatientFile } from '../../types';
 import { patientService } from '../../api/patientService';
 import { consultationService } from '../../api/consultationService';
-import { formatDisplayDateTimeLongEs } from '../../utils/date';
 
 interface Props {
   patientId: number;
   patientName?: string;
+  patientAge?: number | string | null;
   moduleTitle?: string;
   onCaptureSaved?: (file: PatientFile) => void;
 }
 
-function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Camara', onCaptureSaved }: Props) {
+function PatientColposcopyTabInner({ patientId, patientName, patientAge, moduleTitle = 'Camara', onCaptureSaved }: Props) {
   const captureLimit = 20;
   const captureCooldownMs = 3000;
   const [colposcopyFiles, setColposcopyFiles] = useState<PatientFile[]>([]);
-  const [loadingColposcopy, setLoadingColposcopy] = useState(false);
+  const [, setLoadingColposcopy] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [capturingColposcopy, setCapturingColposcopy] = useState(false);
@@ -46,9 +43,6 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
 
   const [imagePreviewUrls, setImagePreviewUrls] = useState<Record<number, string>>({});
   const imagePreviewUrlsRef = useRef<Record<number, string>>({});
-  const [lightboxSlides, setLightboxSlides] = useState<Array<{ src: string; alt: string }>>([]);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [lightboxIndex, setLightboxIndex] = useState(0);
   const patientIdRef = useRef(patientId);
   const navigationLockRef = useRef(false);
   const pollingInFlightRef = useRef(false);
@@ -59,7 +53,7 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
 
   const scrollToCameraSection = () => {
     window.requestAnimationFrame(() => {
-      const top = (sectionRef.current?.getBoundingClientRect().top ?? 0) + window.scrollY - 88;
+      const top = (sectionRef.current?.getBoundingClientRect().top ?? 0) + window.scrollY - 56;
       window.scrollTo({ top: Math.max(top, 0), behavior: 'auto' });
     });
   };
@@ -402,40 +396,6 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
     }
   };
 
-  const handlePreviewImage = async (selectedFile: PatientFile) => {
-    try {
-      const nextPreviewUrls = { ...imagePreviewUrlsRef.current };
-      const missingFiles = todaysColposcopyFiles.filter((file) => !nextPreviewUrls[file.id]);
-
-      if (missingFiles.length > 0) {
-        const loadedPreviews = await Promise.all(
-          missingFiles.map(async (file) => ({
-            fileId: file.id,
-            url: window.URL.createObjectURL(await patientService.getFileBlob(file.id)),
-          }))
-        );
-
-        loadedPreviews.forEach(({ fileId, url }) => {
-          nextPreviewUrls[fileId] = url;
-        });
-        setImagePreviewUrls(nextPreviewUrls);
-      }
-
-      const slides = todaysColposcopyFiles.map((file) => ({
-        src: nextPreviewUrls[file.id],
-        alt: file.name,
-      }));
-
-      setLightboxSlides(slides);
-      const selectedIndex = todaysColposcopyFiles.findIndex((file) => file.id === selectedFile.id);
-      setLightboxIndex(selectedIndex >= 0 ? selectedIndex : 0);
-      setLightboxOpen(true);
-    } catch (err) {
-      console.error('Error visualizando imagen:', err);
-      setError('No se pudo abrir la imagen');
-    }
-  };
-
   return (
     <>
       <Card>
@@ -459,10 +419,6 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
             </Button>
           </Box>
 
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Puedes capturar con el boton, con click sobre la vista previa o presionando la tecla <strong>B</strong>.
-          </Typography>
-
           {cameraError && !cameraReady && (
             <Alert severity="warning" sx={{ mb: 2 }}>
               {cameraError}
@@ -471,13 +427,11 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
 
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1fr) minmax(280px, 1fr)' },
-              gap: 2,
-              alignItems: 'start',
+              display: 'flex',
+              justifyContent: 'center',
             }}
           >
-            <Box sx={{ maxWidth: { xs: '100%', lg: 760 }, mx: { xs: 0, lg: 'auto' }, width: '100%' }}>
+            <Box sx={{ maxWidth: { xs: '100%', lg: 980 }, mx: 'auto', width: '100%' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
                 <Typography
                   variant="h4"
@@ -485,10 +439,11 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
                     textAlign: 'center',
                     fontWeight: 700,
                     color: 'primary.main',
-                    fontSize: { xs: '1.5rem', md: '2rem' },
+                    fontSize: { xs: '1.75rem', md: '2.35rem' },
                   }}
                 >
                   {patientName || 'Paciente en atencion'}
+                  {patientAge !== null && patientAge !== undefined && String(patientAge).trim() !== '' ? ` - ${patientAge} años` : ''}
                 </Typography>
                 <Box
                   sx={{
@@ -555,89 +510,13 @@ function PatientColposcopyTabInner({ patientId, patientName, moduleTitle = 'Cama
                 <canvas ref={canvasRef} style={{ display: 'none' }} />
               </Box>
             </Box>
-
-            <Box
-              sx={{
-                minHeight: { xs: 120, lg: 0 },
-                maxHeight: { xs: 'none', lg: 'calc(100vh - 260px)' },
-                overflowY: 'auto',
-                pr: { xs: 0, lg: 0.5 },
-              }}
-            >
-              {loadingColposcopy && todaysColposcopyFiles.length === 0 ? (
-                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                  <CircularProgress size={24} />
-                </Box>
-              ) : todaysColposcopyFiles.length === 0 ? (
-                <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-                  Sin capturas de hoy
-                </Typography>
-              ) : (
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fill, minmax(112px, 1fr))',
-                    gap: 1.25,
-                  }}
-                >
-                  {todaysColposcopyFiles.map((file) => (
-                    <Box
-                      key={file.id}
-                      onClick={() => void handlePreviewImage(file)}
-                      title={formatDisplayDateTimeLongEs(file.uploaded_at)}
-                      sx={{
-                        position: 'relative',
-                        aspectRatio: '1 / 1',
-                        borderRadius: 1.5,
-                        overflow: 'hidden',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        bgcolor: 'grey.100',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {imagePreviewUrls[file.id] ? (
-                        <Box
-                          component="img"
-                          src={imagePreviewUrls[file.id]}
-                          alt={file.name}
-                          sx={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            display: 'block',
-                          }}
-                        />
-                      ) : (
-                        <Box
-                          sx={{
-                            width: '100%',
-                            height: '100%',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                          }}
-                        >
-                          <CircularProgress size={18} />
-                        </Box>
-                      )}
-                    </Box>
-                  ))}
-                </Box>
-              )}
-            </Box>
           </Box>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, textAlign: 'center' }}>
+            Puedes capturar con el boton, con click sobre la vista previa o presionando la tecla <strong>B</strong>.
+          </Typography>
         </CardContent>
       </Card>
-
-      <Lightbox
-        open={lightboxOpen}
-        close={() => setLightboxOpen(false)}
-        slides={lightboxSlides}
-        index={lightboxIndex}
-        plugins={[Zoom]}
-        zoom={{ maxZoomPixelRatio: 6, scrollToZoom: true }}
-      />
 
       <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert onClose={() => setMessage(null)} severity="success" sx={{ width: '100%' }}>{message}</Alert>

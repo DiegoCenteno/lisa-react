@@ -489,6 +489,7 @@ export default function PatientDetailPage() {
           <PatientColposcopyTab
             patientId={patient.id}
             patientName={`${patient.name} ${patient.last_name}`.trim()}
+            patientAge={patient.age ?? null}
             moduleTitle={cameraMenuTitle}
             onCaptureSaved={refreshPatientFiles}
           />
