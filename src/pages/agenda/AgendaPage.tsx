@@ -361,7 +361,7 @@ export default function AgendaPage() {
     const selectedOffice = offices.find((office) => office.id === officeId);
     const firsttime = selectedOffice?.firsttime ?? 0;
     const recurrent = selectedOffice?.recurrent ?? 0;
-    return Math.max(firsttime, recurrent, 50);
+    return Math.max(firsttime, recurrent, 10);
   }, [officeId, offices]);
 
   useEffect(() => {

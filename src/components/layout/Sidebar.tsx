@@ -19,6 +19,7 @@ import {
   People as PeopleIcon,
   Assignment as ConsultationIcon,
   History as HistoryIcon,
+  PictureAsPdf as StudiesIcon,
   Sms as WhatsAppIcon,
   Settings as SettingsIcon,
 } from '@mui/icons-material';
@@ -67,6 +68,13 @@ const menuItems: MenuItem[] = [
     path: '/consultas',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
     permission: 'consultations.view',
+  },
+  {
+    text: 'Estudios',
+    icon: <StudiesIcon />,
+    path: '/estudios',
+    roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    permission: 'patients.view',
   },
   {
     text: 'Bitácora',

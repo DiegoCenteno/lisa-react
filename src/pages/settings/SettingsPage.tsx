@@ -298,7 +298,7 @@ function createDefaultAgendaRows(opendays?: Office['opendays']): AgendaDayRow[] 
   });
 }
 
-function formatMinutesToTime(value: number | null | undefined, fallback = '00:50'): string {
+function formatMinutesToTime(value: number | null | undefined, fallback = '00:10'): string {
   if (!value || value <= 0) {
     return fallback;
   }

@@ -41,6 +41,7 @@ import {
 import { consultationService } from '../../api/consultationService';
 import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
+import studyDeliveryService from '../../api/studyDeliveryService';
 import settingsService from '../../api/settingsService';
 import type { ClinicalHistory, MedicamentHistoryItem, OfficeLabelItem, Patient, PatientSoapContext, PatientTagControlData, SOAPNote } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
@@ -1168,7 +1169,7 @@ const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
 void ObjectiveSection;
 
 const PersonalNotesSection = memo(function PersonalNotesSection({
-  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility,
+  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility, sampleTaken, onSampleTakenChange, editingConsultation,
 }: {
   notes: string;
   formInstanceKey: number;
@@ -1180,6 +1181,9 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
   patientTagControl: PatientTagControlData | null;
   previousConsultation: PatientSoapContext['last_consultation'];
   visibility: DailyNoteVisibilityMap;
+  sampleTaken: boolean;
+  onSampleTakenChange: (checked: boolean) => void;
+  editingConsultation: SOAPNote | null;
 }) {
   const [newLabel, setNewLabel] = useState('');
   const [creatingLabel, setCreatingLabel] = useState(false);
@@ -1218,6 +1222,21 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
           {String(previousConsultation?.notes ?? '').trim() ? (
             <PreviousFieldHint date={previousConsultation?.created_at} text={previousConsultation?.notes} />
           ) : null}
+        </Grid>
+        <Grid size={{ xs: 12 }}>
+          <FormControlLabel
+            control={(
+              <Checkbox
+                checked={sampleTaken}
+                disabled={Boolean(editingConsultation)}
+                onChange={(event) => onSampleTakenChange(event.target.checked)}
+              />
+            )}
+            label="Se tomó muestra"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -0.5 }}>
+            Marca esta opción cuando durante la consulta se tomó la muestra del estudio. Esto deja el registro listo para después relacionar el resultado cuando se cargue al sistema.
+          </Typography>
         </Grid>
         <Grid size={{ xs: 12 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Etiquetas</Typography>
@@ -1302,6 +1321,7 @@ function PatientDailyNoteTab({
   const [recentMedicamentHistory, setRecentMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
   const [prescriptionPreviewUrl, setPrescriptionPreviewUrl] = useState<string | null>(null);
   const [prescriptionPreviewName, setPrescriptionPreviewName] = useState('Receta PDF');
+  const [sampleTaken, setSampleTaken] = useState(false);
   const draftRestoredRef = useRef(false);
   const [formInstanceKey, setFormInstanceKey] = useState(0);
   const subjectiveFormRef = useRef<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
@@ -1512,6 +1532,7 @@ function PatientDailyNoteTab({
     setPlanForm({ medications: editRequestNote.medications?.length ? editRequestNote.medications : [{ medicament: '', prescription: '' }], additionalInstructions: editRequestNote.indicaciones ?? '' });
     setPersonalNotes(editRequestNote.private_comments ?? '');
     setSelectedOfficeLabels(editRequestNote.office_label_ids ?? []);
+    setSampleTaken(false);
     subjectiveFormRef.current = { illnessStartDate: normalizeDateInputValue(editRequestNote.ailingdate) || '', currentCondition: editRequestNote.subjective ?? '' };
     objectiveFormRef.current = {
       height: editRequestNote.height ?? '',
@@ -1572,6 +1593,16 @@ function PatientDailyNoteTab({
         await consultationService.updateDailyNote(editingConsultation.consultation_id, payload);
       } else {
         await consultationService.createDailyNote(payload);
+        if (sampleTaken) {
+          const officeId = Number(patient.office_id ?? localStorage.getItem('cached_office_id') ?? 0);
+          if (officeId > 0) {
+            await studyDeliveryService.createSampleStudyDelivery({
+              office_id: officeId,
+              patient_id: patient.id,
+              processing_status: 'sample_collected',
+            });
+          }
+        }
       }
       const [nextPatient, nextClinicalHistory, nextSoapContext, nextSoapNotes] = await Promise.all([
         patientService.getPatient(patient.id),
@@ -1603,6 +1634,7 @@ function PatientDailyNoteTab({
       setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
       setPersonalNotes('');
       setSelectedOfficeLabels([]);
+      setSampleTaken(false);
       subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
       objectiveFormRef.current = {
         height: getSuggestedHeight(nextPatient.age, nextSoapContext.last_consultation?.height),
@@ -1649,6 +1681,7 @@ function PatientDailyNoteTab({
     setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
     setPersonalNotes('');
     setSelectedOfficeLabels([]);
+    setSampleTaken(false);
     subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
     objectiveFormRef.current = {
       height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
@@ -1997,14 +2030,18 @@ function PatientDailyNoteTab({
           notes={personalNotes}
           formInstanceKey={formInstanceKey}
           onNotesChange={handleNotesChange}
+          sampleTaken={sampleTaken}
+          onSampleTakenChange={setSampleTaken}
           selectedLabels={selectedOfficeLabels}
           onLabelsChange={handleLabelsChange}
           onCreateLabel={handleCreateOfficeLabel}
           officeLabels={officeLabels}
           patientTagControl={patientTagControl}
+          editingConsultation={editingConsultation}
           previousConsultation={lastConsultation}
           visibility={dailyNoteVisibility}
         />
+
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button variant="contained" color="primary" startIcon={savingDailyNote ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />} onClick={handleSaveDailyNote} disabled={savingDailyNote || (!editingConsultation && !canCreateDailyNote) || (Boolean(editingConsultation) && !canEditConsultationHistory)} sx={{ minWidth: 180 }}>

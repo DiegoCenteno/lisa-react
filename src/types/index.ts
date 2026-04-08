@@ -721,6 +721,70 @@ export interface NotificationAssistantRecipientsData {
   };
 }
 
+export interface StudyDeliveryFileItem {
+  id: number;
+  title: string;
+  file: string;
+  description?: string | null;
+  tipo: number;
+  position: number;
+}
+
+export interface StudyDeliveryItem {
+  id: number;
+  office_id: number;
+  patient_id: number;
+  created_at?: string | null;
+  patient_name?: string | null;
+  patient_phone?: string | null;
+  template_id?: number | null;
+  datahelp_id?: number | null;
+  public_code?: string | null;
+  channel: 'whatsapp_auto' | 'manual_direct' | 'manual_link';
+  processing_status:
+    | 'sample_collected'
+    | 'sent_to_lab'
+    | 'result_received'
+    | 'pending_review'
+    | 'reviewed'
+    | 'cancelled';
+  status: 'not_sent' | 'sent' | 'viewed' | 'downloaded' | 'cancelled';
+  sent_at?: string | null;
+  received_at?: string | null;
+  reviewed_at?: string | null;
+  laboratory_id?: number | null;
+  laboratory_name?: string | null;
+  viewed_at?: string | null;
+  first_downloaded_at?: string | null;
+  last_downloaded_at?: string | null;
+  download_count: number;
+  notes?: string | null;
+  sent_by?: string | null;
+  files: StudyDeliveryFileItem[];
+}
+
+export interface PaginatedStudyDeliveries {
+  current_page: number;
+  data: StudyDeliveryItem[];
+  last_page: number;
+  per_page: number;
+  total: number;
+}
+
+export interface LaboratoryItem {
+  id: number;
+  office_id: number;
+  name: string;
+}
+
+export interface PendingStudyDeliveryLink {
+  id: number;
+  processing_status: 'sample_collected' | 'sent_to_lab';
+  laboratory_id?: number | null;
+  laboratory_name?: string | null;
+  label: string;
+}
+
 export interface ConsultationListItem {
   consultation_id: number;
   patient_id: number;

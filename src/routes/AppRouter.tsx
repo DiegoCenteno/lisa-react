@@ -6,6 +6,10 @@ import ClearStoragePage from '../pages/auth/ClearStoragePage';
 import DashboardPage from '../pages/dashboard/DashboardPage';
 import AgendaPage from '../pages/agenda/AgendaPage';
 import ActivityLogsPage from '../pages/activity/ActivityLogsPage';
+import BulkStudyUploadPage from '../pages/activity/BulkStudyUploadPage';
+import InterpretStudiesPage from '../pages/activity/InterpretStudiesPage';
+import LaboratoriesPage from '../pages/activity/LaboratoriesPage';
+import StudyDeliveriesPage from '../pages/activity/StudyDeliveriesPage';
 import PatientsPage from '../pages/patients/PatientsPage';
 import PatientDetailPage from '../pages/patients/PatientDetailPage';
 import ConsultationsPage from '../pages/consultations/ConsultationsPage';
@@ -53,6 +57,40 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/estudios"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <StudyDeliveriesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estudios/carga-masiva"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <BulkStudyUploadPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estudios/interpretar"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <InterpretStudiesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estudios/laboratorios"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <LaboratoriesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/bitacora/envios-estudios" element={<Navigate to="/estudios" replace />} />
+          <Route path="/bitacora/carga-masiva-estudios" element={<Navigate to="/estudios/carga-masiva" replace />} />
           <Route
             path="/pacientes"
             element={

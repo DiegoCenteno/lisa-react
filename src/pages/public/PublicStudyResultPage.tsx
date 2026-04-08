@@ -1,5 +1,5 @@
-﻿import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useParams } from 'react-router-dom';
 import {
   Alert,
   Box,
@@ -755,6 +755,7 @@ function AppointmentConfirmationView({
 
 export default function PublicStudyResultPage() {
   const { code = '' } = useParams();
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [study, setStudy] = useState<PublicStudyResult | null>(null);
@@ -766,6 +767,7 @@ export default function PublicStudyResultPage() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyMessage, setHistoryMessage] = useState<string | null>(null);
   const historyFormRef = useRef<HTMLDivElement | null>(null);
+  const isPreviewMode = useMemo(() => new URLSearchParams(location.search).get('preview') === '1', [location.search]);
 
   useEffect(() => {
     let active = true;
@@ -780,12 +782,26 @@ export default function PublicStudyResultPage() {
         setAppointment(null);
         setHistoryFormState(EMPTY_HISTORY_FORM);
 
-        const data = await publicStudyService.resolvePublicCode(code);
+        const data = await publicStudyService.resolvePublicCode(code, { preview: isPreviewMode });
         if (!active) return;
         setLinkType(data.type);
 
         if (data.type === 'study_result' && data.study) {
-          setStudy(data.study);
+          const normalizedStudy = isPreviewMode
+            ? {
+                ...data.study,
+                files: data.study.files.map((file) => ({
+                  ...file,
+                  preview_url: file.preview_url
+                    ? `${file.preview_url}${file.preview_url.includes('?') ? '&' : '?'}preview=1`
+                    : file.preview_url,
+                  download_url: file.download_url
+                    ? `${file.download_url}${file.download_url.includes('?') ? '&' : '?'}preview=1`
+                    : file.download_url,
+                })),
+              }
+            : data.study;
+          setStudy(normalizedStudy);
           return;
         }
 
@@ -811,7 +827,7 @@ export default function PublicStudyResultPage() {
     return () => {
       active = false;
     };
-  }, [code]);
+  }, [code, isPreviewMode]);
 
   useEffect(() => {
     if (appointment?.status === 'confirmed' && appointment.show_history_form && actionMessage) {

@@ -42,10 +42,13 @@ import {
   Search as SearchIcon,
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
-import type { Patient, PatientFile, PatientTagControlData } from '../../types';
+import studyDeliveryService from '../../api/studyDeliveryService';
+import type { Patient, PatientFile, PatientTagControlData, PendingStudyDeliveryLink } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
 import { useAuth } from '../../hooks/useAuth';
 import ClickableDateField from '../../components/ClickableDateField';
+
+const CREATE_NEW_STUDY_RESULT_VALUE = '__create_new__';
 
 function formatPhone(phone?: string) {
   if (!phone) return '-';
@@ -151,6 +154,9 @@ export default function PatientsPage() {
   const [storedFilesNextOffset, setStoredFilesNextOffset] = useState<number | null>(null);
   const [storedFilesLoads, setStoredFilesLoads] = useState(0);
   const [sendResultToPatient, setSendResultToPatient] = useState(false);
+  const [sendResultPendingLinks, setSendResultPendingLinks] = useState<PendingStudyDeliveryLink[]>([]);
+  const [selectedSendResultStudyDeliveryId, setSelectedSendResultStudyDeliveryId] = useState('');
+  const [sendResultPendingLinksLoading, setSendResultPendingLinksLoading] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<number | null>(null);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [newTemplateTitle, setNewTemplateTitle] = useState('');
@@ -257,6 +263,42 @@ export default function PatientsPage() {
   }, [previewFileUrl]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    if (!sendResultToPatient || !attachPatientId || !attachOfficeId) {
+      setSendResultPendingLinks([]);
+      setSelectedSendResultStudyDeliveryId(CREATE_NEW_STUDY_RESULT_VALUE);
+      setSendResultPendingLinksLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setSendResultPendingLinksLoading(true);
+
+    studyDeliveryService.getPendingStudyLinks(attachOfficeId, attachPatientId)
+      .then((links) => {
+        if (cancelled) return;
+        setSendResultPendingLinks(links);
+        setSelectedSendResultStudyDeliveryId(links.length === 1 ? String(links[0].id) : CREATE_NEW_STUDY_RESULT_VALUE);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSendResultPendingLinks([]);
+        setSelectedSendResultStudyDeliveryId(CREATE_NEW_STUDY_RESULT_VALUE);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setSendResultPendingLinksLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sendResultToPatient, attachPatientId, attachOfficeId]);
+
+  useEffect(() => {
     return () => {
       if (singleAttachPreviewUrl) {
         window.URL.revokeObjectURL(singleAttachPreviewUrl);
@@ -357,6 +399,9 @@ export default function PatientsPage() {
     setStoredFilesNextOffset(null);
     setStoredFilesLoads(0);
     setSendResultToPatient(false);
+    setSendResultPendingLinks([]);
+    setSelectedSendResultStudyDeliveryId(CREATE_NEW_STUDY_RESULT_VALUE);
+    setSendResultPendingLinksLoading(false);
     setSelectedTemplateId(null);
     setShowTemplateForm(false);
     setNewTemplateTitle('');
@@ -888,6 +933,9 @@ export default function PatientsPage() {
         files: attachSelectedFiles,
         existingFileIds: selectedStoredFileIds,
         notifyPatient: sendResultToPatient,
+        studyDeliveryId: selectedSendResultStudyDeliveryId && selectedSendResultStudyDeliveryId !== CREATE_NEW_STUDY_RESULT_VALUE
+          ? Number(selectedSendResultStudyDeliveryId)
+          : null,
         templateId: selectedTemplateId,
         officeId: attachOfficeId,
       });
@@ -901,6 +949,8 @@ export default function PatientsPage() {
       setAttachSelectedFiles([]);
       setSelectedStoredFileIds([]);
       setSendResultToPatient(false);
+      setSendResultPendingLinks([]);
+      setSelectedSendResultStudyDeliveryId(CREATE_NEW_STUDY_RESULT_VALUE);
       setSelectedTemplateId(null);
       setTemplateMessage(null);
       if (attachFileInputRef.current) {
@@ -1283,6 +1333,8 @@ export default function PatientsPage() {
                             setSendResultToPatient(nextChecked);
                             if (!nextChecked) {
                               setSelectedTemplateId(null);
+                              setSendResultPendingLinks([]);
+                              setSelectedSendResultStudyDeliveryId(CREATE_NEW_STUDY_RESULT_VALUE);
                             }
                           }}
                         >
@@ -1293,6 +1345,8 @@ export default function PatientsPage() {
                               setSendResultToPatient(checked);
                               if (!checked) {
                                 setSelectedTemplateId(null);
+                                setSendResultPendingLinks([]);
+                                setSelectedSendResultStudyDeliveryId(CREATE_NEW_STUDY_RESULT_VALUE);
                               }
                             }}
                             sx={{ p: 0.25 }}
@@ -1318,6 +1372,27 @@ export default function PatientsPage() {
                               sobre el resultado de su estudio. Es necesario seleccionar un template
                               previamente configurado.
                             </Typography>
+
+                            <TextField
+                              select
+                              size="small"
+                              fullWidth
+                              label="Toma de muestra vinculada"
+                              value={selectedSendResultStudyDeliveryId}
+                              onChange={(event) => setSelectedSendResultStudyDeliveryId(event.target.value)}
+                              disabled={sendResultPendingLinksLoading}
+                              sx={{ mb: 1.5, maxWidth: 560 }}
+                              helperText={sendResultPendingLinksLoading
+                                ? 'Cargando tomas de muestra...'
+                                : 'Si seleccionas una toma previa, este envío quedará vinculado a ese seguimiento de estudio.'}
+                            >
+                              <MenuItem value={CREATE_NEW_STUDY_RESULT_VALUE}>Crear como recibido nuevo</MenuItem>
+                              {sendResultPendingLinks.map((link) => (
+                                <MenuItem key={link.id} value={String(link.id)}>
+                                  {link.label}
+                                </MenuItem>
+                              ))}
+                            </TextField>
 
                             {resultTemplates.map((template) => (
                               <Box
@@ -1399,7 +1474,7 @@ export default function PatientsPage() {
                               >
                                 <TextField
                                   size="small"
-                                  label="TÃ­tulo"
+                                  label="Título"
                                   value={newTemplateTitle}
                                   onChange={(event) => setNewTemplateTitle(event.target.value)}
                                 />
@@ -1407,7 +1482,7 @@ export default function PatientsPage() {
                                   size="small"
                                   multiline
                                   minRows={3}
-                                  label="DescripciÃ³n"
+                                  label="Descripción"
                                   value={newTemplateDescription}
                                   onChange={(event) => setNewTemplateDescription(event.target.value)}
                                 />

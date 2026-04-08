@@ -21,9 +21,14 @@ const publicApiClient = axios.create({
 });
 
 const publicStudyService = {
-  async resolvePublicCode(code: string): Promise<PublicAppLinkResponse> {
+  async resolvePublicCode(code: string, options?: { preview?: boolean }): Promise<PublicAppLinkResponse> {
     const response = await publicApiClient.get<{ status: string; data: PublicAppLinkResponse }>(
-      `/v2/public/app-links/${code}`
+      `/v2/public/app-links/${code}`,
+      {
+        params: {
+          preview: options?.preview ? 1 : undefined,
+        },
+      }
     );
 
     return response.data.data;

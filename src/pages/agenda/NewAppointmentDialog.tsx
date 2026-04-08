@@ -135,7 +135,7 @@ export default function NewAppointmentDialog({
   initialNotifyPatient = true,
   initialGenderDefault = '',
   consultationReasons = [],
-  defaultAvailabilityMinutes = 50,
+  defaultAvailabilityMinutes = 10,
 }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));

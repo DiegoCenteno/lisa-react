@@ -6,15 +6,17 @@ import ActivityLogTimeline from '../../components/activity/ActivityLogTimeline';
 export default function ActivityLogsPage() {
   return (
     <Box sx={{ display: 'grid', gap: 2.5 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-        <HistoryIcon sx={{ color: 'primary.main' }} />
-        <Box>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Bitácora
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Últimos 30 días de movimientos registrados en el sistema.
-          </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.25, flexWrap: 'wrap' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+          <HistoryIcon sx={{ color: 'primary.main' }} />
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700 }}>
+              Bitácora
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Últimos 30 días de movimientos registrados en el sistema.
+            </Typography>
+          </Box>
         </Box>
       </Box>
 

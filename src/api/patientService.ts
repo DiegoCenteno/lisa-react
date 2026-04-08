@@ -525,6 +525,7 @@ export const patientService = {
       files?: File[];
       existingFileIds?: number[];
       notifyPatient?: boolean;
+      studyDeliveryId?: number | null;
       templateId?: number | null;
       officeLabelIds?: number[];
       officeId?: number | null;
@@ -549,6 +550,9 @@ export const patientService = {
 
     if (options?.notifyPatient) {
       payload.append('notify_patient', '1');
+      if (options?.studyDeliveryId) {
+        payload.append('study_delivery_id', String(options.studyDeliveryId));
+      }
       if (options?.templateId) {
         payload.append('template_id', String(options.templateId));
       }
