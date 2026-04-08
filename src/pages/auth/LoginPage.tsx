@@ -17,22 +17,53 @@ import {
   VisibilityOff,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
+import { shouldRunClientReset } from '../../utils/clientReset';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, hardResetClientAuth } = useAuth();
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [preparing, setPreparing] = useState(true);
 
   useEffect(() => {
-    const cleanupUntil = new Date('2026-04-10T23:59:59');
-    if (new Date() <= cleanupUntil) {
-      localStorage.clear();
-    }
-  }, []);
+    let active = true;
+
+    const prepareLogin = async () => {
+      if (shouldRunClientReset()) {
+        await hardResetClientAuth();
+      }
+
+      if (active) {
+        setPreparing(false);
+      }
+    };
+
+    void prepareLogin();
+
+    return () => {
+      active = false;
+    };
+  }, [hardResetClientAuth]);
+
+  if (preparing) {
+    return (
+      <Box
+        sx={{
+          minHeight: '100vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <CircularProgress />
+      </Box>
+    );
+  }
+
   if (isAuthenticated) {
     navigate('/dashboard', { replace: true });
     return null;

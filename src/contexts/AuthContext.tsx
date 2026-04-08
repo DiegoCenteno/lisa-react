@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
 import { authService } from '../api/authService';
 import { AuthContext } from './authTypes';
+import { clearBrowserClientState } from '../utils/clientReset';
 
 export type { AuthContextType } from './authTypes';
 export { AuthContext } from './authTypes';
@@ -41,6 +42,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('refresh_token');
+  }, []);
+
+  const hardResetClientAuth = useCallback(async () => {
+    setUser(null);
+    setToken(null);
+    await clearBrowserClientState();
   }, []);
 
   const hasRole = useCallback(
@@ -84,10 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: false,
     login,
     logout,
+    hardResetClientAuth,
     hasRole,
     can,
     updateUser,
-  }), [user, token, login, logout, hasRole, can, updateUser]);
+  }), [user, token, login, logout, hardResetClientAuth, hasRole, can, updateUser]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -1,14 +1,12 @@
 import { useEffect } from 'react';
 import { Box, CircularProgress, Typography } from '@mui/material';
+import { clearBrowserClientState } from '../../utils/clientReset';
 
 export default function ClearStoragePage() {
   useEffect(() => {
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-    } finally {
-      window.location.replace('/login');
-    }
+    void clearBrowserClientState().finally(() => {
+      window.location.replace('/app/login');
+    });
   }, []);
 
   return (
