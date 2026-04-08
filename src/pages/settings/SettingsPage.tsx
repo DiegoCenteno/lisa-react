@@ -2260,8 +2260,8 @@ function AgendaPanel({
   const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
   const [agendaRows, setAgendaRows] = useState<AgendaDayRow[]>([]);
   const [savedAgendaRows, setSavedAgendaRows] = useState<AgendaDayRow[]>([]);
-  const [firstTime, setFirstTime] = useState('00:50');
-  const [recurrent, setRecurrent] = useState('00:50');
+  const [firstTime, setFirstTime] = useState('00:10');
+  const [recurrent, setRecurrent] = useState('00:10');
   const [formSettings, setFormSettings] = useState<SettingsFormsData | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formSaving, setFormSaving] = useState(false);

@@ -131,7 +131,7 @@ export const appointmentService = {
     return response.data.data;
   },
 
-  async getAvailableDates(officeId: number, minutes: number = 50): Promise<AvailableDatesResponse> {
+  async getAvailableDates(officeId: number, minutes: number = 10): Promise<AvailableDatesResponse> {
     const response = await apiClient.get<AvailableDatesResponse>(
       '/v2/appointments/available-dates',
       { params: { office_id: officeId, minutes } }
@@ -142,7 +142,7 @@ export const appointmentService = {
   async getAvailableSlots(
     officeId: number,
     date: string,
-    minutes: number = 50
+    minutes: number = 10
   ): Promise<AvailableSlot[]> {
     const response = await apiClient.get<ApiSlotsResponse>(
       '/v2/appointments/available-slots',
