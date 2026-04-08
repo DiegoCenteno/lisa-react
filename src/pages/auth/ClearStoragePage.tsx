@@ -5,7 +5,7 @@ import { clearBrowserClientState } from '../../utils/clientReset';
 export default function ClearStoragePage() {
   useEffect(() => {
     void clearBrowserClientState().finally(() => {
-      window.location.replace('/app/login');
+      window.location.replace('/login');
     });
   }, []);
 
