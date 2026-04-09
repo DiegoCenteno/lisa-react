@@ -486,7 +486,7 @@ function AppointmentConfirmationView({
               <Stack spacing={2.25}>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                    {appointment.history_form_title ?? 'Historia clÃ­nica bÃ¡sica'}
+                    {appointment.history_form_title ?? 'Historia cl�nica b�sica'}
                   </Typography>
                   {appointment.history_form_message ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
@@ -497,12 +497,12 @@ function AppointmentConfirmationView({
 
                 <Stack spacing={2}>
                   <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                    Las respuestas son opcionales y puedes contestar Ãºnicamente las que tÃº desees.
+                    Las respuestas son opcionales y puedes contestar �nicamente las que t� desees.
                   </Typography>
 
                   <TextField
                     select
-                      label="Â¿CuÃ¡l es tu tipo de sangre?"
+                      label="�Cu�l es tu tipo de sangre?"
                     value={historyFormState.tiposangre}
                     onChange={(event) => onHistoryFormChange('tiposangre', event.target.value)}
                     fullWidth
@@ -517,7 +517,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="Â¿En dÃ³nde naciste?"
+                      label="�En d�nde naciste?"
                     value={historyFormState.originaria}
                     onChange={(event) => onHistoryFormChange('originaria', event.target.value)}
                     fullWidth
@@ -531,7 +531,7 @@ function AppointmentConfirmationView({
                   </TextField>
 
                   <TextField
-                      label="Â¿En dÃ³nde vives?"
+                      label="�En d�nde vives?"
                     value={historyFormState.residente}
                     onChange={(event) => onHistoryFormChange('residente', event.target.value)}
                     fullWidth
@@ -959,3 +959,4 @@ export default function PublicStudyResultPage() {
     </Box>
   );
 }
+

@@ -9,6 +9,7 @@ import ActivityLogsPage from '../pages/activity/ActivityLogsPage';
 import BulkStudyUploadPage from '../pages/activity/BulkStudyUploadPage';
 import InterpretStudiesPage from '../pages/activity/InterpretStudiesPage';
 import LaboratoriesPage from '../pages/activity/LaboratoriesPage';
+import StudyTypesPage from '../pages/activity/StudyTypesPage';
 import StudyDeliveriesPage from '../pages/activity/StudyDeliveriesPage';
 import PatientsPage from '../pages/patients/PatientsPage';
 import PatientDetailPage from '../pages/patients/PatientDetailPage';
@@ -86,6 +87,14 @@ export default function AppRouter() {
             element={
               <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
                 <LaboratoriesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estudios/tipos"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+                <StudyTypesPage />
               </ProtectedRoute>
             }
           />

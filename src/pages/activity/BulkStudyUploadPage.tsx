@@ -39,7 +39,7 @@ import type { Office, PatientSimple, PendingStudyDeliveryLink } from '../../type
 
 GlobalWorkerOptions.workerSrc = pdfWorker;
 
-type DetectionStatus = 'processing' | 'detected' | 'manual' | 'multiple' | 'not_found' | 'no_text';
+type DetectionStatus = 'processing' | 'detected' | 'probable' | 'manual' | 'multiple' | 'not_found' | 'no_text';
 
 interface UploadRow {
   id: string;
@@ -47,6 +47,7 @@ interface UploadRow {
   fileName: string;
   extractedText: string;
   detectionStatus: DetectionStatus;
+  detectedPatientName: string;
   assignedPatient: PatientSimple | null;
   includeUpload: boolean;
   pendingLinks: PendingStudyDeliveryLink[];
@@ -59,6 +60,7 @@ const CREATE_NEW_PENDING_VALUE = '__create_new__';
 const detectionLabels: Record<DetectionStatus, string> = {
   processing: 'Procesando',
   detected: 'Detectado',
+  probable: 'Coincidencia probable',
   manual: 'Asignado manualmente',
   multiple: 'Coincidencia múltiple',
   not_found: 'Sin coincidencia',
@@ -78,9 +80,7 @@ function normalizeText(value: string): string {
 function buildPatientSearchTerms(patient: PatientSimple): string[] {
   const fullName = normalizeText(patient.full_name || '');
   const tokens = fullName.split(' ').filter((token) => token.length >= 3);
-  const combined = tokens.length > 1 ? [tokens.join(' ')] : [];
-
-  return Array.from(new Set([fullName, ...combined, ...tokens].filter(Boolean)));
+  return Array.from(new Set([fullName, ...tokens].filter(Boolean)));
 }
 
 function detectPatientFromText(text: string, patients: PatientSimple[]): { patient: PatientSimple | null; status: DetectionStatus } {
@@ -89,24 +89,35 @@ function detectPatientFromText(text: string, patients: PatientSimple[]): { patie
     return { patient: null, status: 'no_text' };
   }
 
+  const normalizedLines = text
+    .split(/\r?\n+/)
+    .map((line) => normalizeText(line))
+    .filter((line) => line.length > 0);
+
+  const exactMatches = patients.filter((patient) => {
+    const [fullName] = buildPatientSearchTerms(patient);
+    return Boolean(fullName) && normalizedText.includes(fullName);
+  });
+
+  if (exactMatches.length === 1) {
+    return { patient: exactMatches[0], status: 'detected' };
+  }
+
+  if (exactMatches.length > 1) {
+    return { patient: null, status: 'multiple' };
+  }
+
   let bestScore = 0;
   let bestPatients: PatientSimple[] = [];
 
   patients.forEach((patient) => {
-    const terms = buildPatientSearchTerms(patient);
-    if (terms.length === 0) return;
+    const [, ...tokens] = buildPatientSearchTerms(patient);
+    if (tokens.length === 0) return;
 
-    let score = 0;
-    const fullName = terms[0];
-
-    if (fullName && normalizedText.includes(fullName)) {
-      score = 100;
-    } else {
-      const tokenMatches = terms.slice(1).filter((term) => normalizedText.includes(term)).length;
-      if (tokenMatches >= 2) {
-        score = tokenMatches;
-      }
-    }
+    const score = normalizedLines.reduce((maxScore, line) => {
+      const tokenMatches = tokens.filter((term) => line.includes(term)).length;
+      return Math.max(maxScore, tokenMatches);
+    }, 0);
 
     if (score <= 0) return;
 
@@ -121,15 +132,15 @@ function detectPatientFromText(text: string, patients: PatientSimple[]): { patie
     }
   });
 
-  if (bestScore <= 0) {
-    return { patient: null, status: 'not_found' };
+  if (bestScore >= 3 && bestPatients.length === 1) {
+    return { patient: bestPatients[0], status: 'probable' };
   }
 
-  if (bestPatients.length === 1) {
-    return { patient: bestPatients[0], status: 'detected' };
+  if (bestPatients.length > 1) {
+    return { patient: null, status: 'multiple' };
   }
 
-  return { patient: null, status: 'multiple' };
+  return { patient: null, status: 'not_found' };
 }
 
 async function extractPdfText(file: File): Promise<string> {
@@ -140,14 +151,35 @@ async function extractPdfText(file: File): Promise<string> {
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const textContent = await page.getTextContent();
-    const pageText = textContent.items
-      .map((item) => ('str' in item ? item.str : ''))
-      .join(' ');
+    const pageChunks: string[] = [];
+    let currentLine: string[] = [];
 
-    chunks.push(pageText);
+    textContent.items.forEach((item) => {
+      if (!('str' in item)) {
+        return;
+      }
+
+      const value = item.str?.trim();
+      if (value) {
+        currentLine.push(value);
+      }
+
+      if ('hasEOL' in item && item.hasEOL) {
+        if (currentLine.length > 0) {
+          pageChunks.push(currentLine.join(' '));
+          currentLine = [];
+        }
+      }
+    });
+
+    if (currentLine.length > 0) {
+      pageChunks.push(currentLine.join(' '));
+    }
+
+    chunks.push(pageChunks.join('\n'));
   }
 
-  return chunks.join(' ').trim();
+  return chunks.join('\n').trim();
 }
 
 export default function BulkStudyUploadPage() {
@@ -164,6 +196,8 @@ export default function BulkStudyUploadPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState('');
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
+  const [detectedTextFileName, setDetectedTextFileName] = useState('');
+  const [detectedTextContent, setDetectedTextContent] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -297,7 +331,7 @@ export default function BulkStudyUploadPage() {
     return matchedPendingLink?.label ?? '';
   };
 
-  const applyAssignedPatient = (rowId: string, patient: PatientSimple | null, source: 'detected' | 'manual') => {
+  const applyAssignedPatient = (rowId: string, patient: PatientSimple | null) => {
     setRows((current) => current.map((row) => {
       if (row.id !== rowId) return row;
 
@@ -305,7 +339,12 @@ export default function BulkStudyUploadPage() {
         ...row,
         assignedPatient: patient,
         includeUpload: Boolean(patient),
-        detectionStatus: patient ? source : row.detectionStatus === 'detected' ? 'not_found' : row.detectionStatus,
+        detectionStatus: patient
+          ? 'manual'
+          : row.detectionStatus === 'detected' || row.detectionStatus === 'probable'
+            ? 'not_found'
+            : row.detectionStatus,
+        detectedPatientName: patient ? patient.full_name : row.detectedPatientName,
         pendingLinks: [],
         selectedPendingId: '',
         loadingPendingLinks: Boolean(patient),
@@ -363,8 +402,9 @@ export default function BulkStudyUploadPage() {
           fileName: file.name,
           extractedText,
           detectionStatus: detection.status,
+          detectedPatientName: detection.patient?.full_name ?? '',
           assignedPatient: detection.patient,
-          includeUpload: Boolean(detection.patient),
+          includeUpload: detection.status === 'detected' && Boolean(detection.patient),
           pendingLinks: [],
           selectedPendingId: '',
           loadingPendingLinks: false,
@@ -455,6 +495,7 @@ export default function BulkStudyUploadPage() {
     setPreviewFileName('');
     setPreviewFileUrl(null);
   };
+
 
   return (
     <Box sx={{ display: 'grid', gap: 2.5 }}>
@@ -558,7 +599,13 @@ export default function BulkStudyUploadPage() {
                         onChange={(event) => {
                           const checked = event.target.checked;
                           setRows((current) => current.map((item) => (
-                            item.id === row.id ? { ...item, includeUpload: checked } : item
+                            item.id === row.id
+                              ? {
+                                  ...item,
+                                  includeUpload: checked,
+                                  detectionStatus: checked && item.assignedPatient ? 'manual' : item.detectionStatus,
+                                }
+                              : item
                           )));
                         }}
                       />
@@ -576,11 +623,25 @@ export default function BulkStudyUploadPage() {
                       <Typography variant="caption" color="text.secondary">
                         {(row.file.size / 1024).toFixed(1)} KB
                       </Typography>
+                      {row.detectedPatientName ? (
+                        <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                          Detectado en PDF: {row.detectedPatientName}
+                        </Typography>
+                      ) : null}
+
                     </TableCell>
                     <TableCell sx={{ minWidth: 180 }}>
                       <Chip
                         size="small"
-                        color={row.detectionStatus === 'detected' ? 'success' : row.detectionStatus === 'manual' ? 'info' : 'default'}
+                        color={
+                          row.detectionStatus === 'detected'
+                            ? 'success'
+                            : row.detectionStatus === 'probable'
+                              ? 'warning'
+                              : row.detectionStatus === 'manual'
+                                ? 'info'
+                                : 'default'
+                        }
                         label={detectionLabels[row.detectionStatus]}
                       />
                     </TableCell>
@@ -590,7 +651,7 @@ export default function BulkStudyUploadPage() {
                         options={patients}
                         getOptionLabel={(option) => `${option.full_name}${option.full_phone ? ` | ${option.full_phone}` : ''}`}
                         value={row.assignedPatient}
-                        onChange={(_, value) => applyAssignedPatient(row.id, value, 'manual')}
+                        onChange={(_, value) => applyAssignedPatient(row.id, value)}
                         isOptionEqualToValue={(option, value) => option.id === value.id}
                         renderInput={(params) => (
                           <TextField
@@ -699,6 +760,8 @@ export default function BulkStudyUploadPage() {
           <Button onClick={handleClosePreview}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+
+
     </Box>
   );
 }

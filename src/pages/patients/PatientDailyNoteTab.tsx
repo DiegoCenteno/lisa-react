@@ -43,13 +43,14 @@ import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
 import studyDeliveryService from '../../api/studyDeliveryService';
 import settingsService from '../../api/settingsService';
-import type { ClinicalHistory, MedicamentHistoryItem, OfficeLabelItem, Patient, PatientSoapContext, PatientTagControlData, SOAPNote } from '../../types';
+import type { ClinicalHistory, MedicamentHistoryItem, OfficeLabelItem, Patient, PatientSoapContext, PatientTagControlData, SOAPNote, StudyTypeItem } from '../../types';
 import { formatDisplayDate } from '../../utils/date';
 import ClickableDateField from '../../components/ClickableDateField';
 
 type RefreshPayload = {
   patient: Patient;
   soapNotes: SOAPNote[];
+  targetTab?: 'historical';
 };
 
 type Props = {
@@ -190,6 +191,8 @@ type DraftData = {
   analysisForm: AnalysisFormData;
   planForm: PlanFormData;
   personalNotes: string;
+  sampleTaken: boolean;
+  selectedStudyTypeIds: number[];
   selectedOfficeLabels: number[];
   editingConsultationId: number | null;
   savedAt: number;
@@ -1169,7 +1172,7 @@ const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
 void ObjectiveSection;
 
 const PersonalNotesSection = memo(function PersonalNotesSection({
-  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility, sampleTaken, onSampleTakenChange, editingConsultation,
+  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility, sampleTaken, onSampleTakenChange, selectedStudyTypeIds, onStudyTypeToggle, studyTypes, onCreateStudyType, editingConsultation,
 }: {
   notes: string;
   formInstanceKey: number;
@@ -1183,11 +1186,18 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
   visibility: DailyNoteVisibilityMap;
   sampleTaken: boolean;
   onSampleTakenChange: (checked: boolean) => void;
+  selectedStudyTypeIds: number[];
+  onStudyTypeToggle: (studyTypeId: number) => void;
+  studyTypes: StudyTypeItem[];
+  onCreateStudyType: (name: string) => Promise<void>;
   editingConsultation: SOAPNote | null;
 }) {
   const [newLabel, setNewLabel] = useState('');
   const [creatingLabel, setCreatingLabel] = useState(false);
   const [createLabelError, setCreateLabelError] = useState<string | null>(null);
+  const [newStudyType, setNewStudyType] = useState('');
+  const [creatingStudyType, setCreatingStudyType] = useState(false);
+  const [createStudyTypeError, setCreateStudyTypeError] = useState<string | null>(null);
 
   const handleCreateLabel = async () => {
     const normalized = newLabel.trim();
@@ -1204,6 +1214,24 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
       setCreateLabelError('No se pudo agregar la etiqueta.');
     } finally {
       setCreatingLabel(false);
+    }
+  };
+
+  const handleCreateStudyType = async () => {
+    const normalized = newStudyType.trim();
+    if (!normalized || creatingStudyType || Boolean(editingConsultation)) {
+      return;
+    }
+
+    setCreatingStudyType(true);
+    setCreateStudyTypeError(null);
+    try {
+      await onCreateStudyType(normalized);
+      setNewStudyType('');
+    } catch {
+      setCreateStudyTypeError('No se pudo agregar el tipo de estudio.');
+    } finally {
+      setCreatingStudyType(false);
     }
   };
 
@@ -1237,6 +1265,65 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -0.5 }}>
             Marca esta opción cuando durante la consulta se tomó la muestra del estudio. Esto deja el registro listo para después relacionar el resultado cuando se cargue al sistema.
           </Typography>
+          {sampleTaken ? (
+            <Box sx={{ display: 'grid', gap: 1, mt: 1.5 }}>
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Tipos de estudio tomados
+              </Typography>
+              {studyTypes.length ? (
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1 }}>
+                  {studyTypes.map((studyType) => (
+                    <FormControlLabel
+                      key={studyType.id}
+                      control={(
+                        <Checkbox
+                          checked={selectedStudyTypeIds.includes(studyType.id)}
+                          disabled={Boolean(editingConsultation)}
+                          onChange={() => onStudyTypeToggle(studyType.id)}
+                        />
+                      )}
+                      label={studyType.name}
+                    />
+                  ))}
+                </Box>
+              ) : (
+                <Alert severity="warning" sx={{ mt: 0.5 }}>
+                  No hay tipos de estudio activos para este consultorio.
+                </Alert>
+              )}
+              <Typography variant="caption" color="text.secondary">
+                Selecciona una o varias muestras tomadas en esta consulta.
+              </Typography>
+              {!editingConsultation ? (
+                <Box
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
+                    gap: 1.5,
+                    alignItems: 'end',
+                    mt: 0.5,
+                  }}
+                >
+                  <TextField
+                    fullWidth
+                    size="small"
+                    label="Nuevo tipo de estudio"
+                    value={newStudyType}
+                    onChange={(event) => setNewStudyType(event.target.value)}
+                  />
+                  <Button
+                    variant="outlined"
+                    onClick={handleCreateStudyType}
+                    disabled={!newStudyType.trim() || creatingStudyType}
+                    sx={{ width: 'fit-content' }}
+                  >
+                    {creatingStudyType ? 'Guardando...' : 'Agregar tipo'}
+                  </Button>
+                </Box>
+              ) : null}
+              {createStudyTypeError ? <Alert severity="error">{createStudyTypeError}</Alert> : null}
+            </Box>
+          ) : null}
         </Grid>
         <Grid size={{ xs: 12 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Etiquetas</Typography>
@@ -1322,6 +1409,8 @@ function PatientDailyNoteTab({
   const [prescriptionPreviewUrl, setPrescriptionPreviewUrl] = useState<string | null>(null);
   const [prescriptionPreviewName, setPrescriptionPreviewName] = useState('Receta PDF');
   const [sampleTaken, setSampleTaken] = useState(false);
+  const [studyTypes, setStudyTypes] = useState<StudyTypeItem[]>([]);
+  const [selectedStudyTypeIds, setSelectedStudyTypeIds] = useState<number[]>([]);
   const draftRestoredRef = useRef(false);
   const [formInstanceKey, setFormInstanceKey] = useState(0);
   const subjectiveFormRef = useRef<SubjectiveFormData>({ illnessStartDate: '', currentCondition: '' });
@@ -1331,7 +1420,9 @@ function PatientDailyNoteTab({
   const personalNotesRef = useRef('');
 
   const lastConsultation = soapContext?.last_consultation ?? null;
-  const lastConsultationDateLabel = lastConsultation?.created_at ? `[${formatHistoricalDate(lastConsultation.created_at)}]` : null;
+  const displayedPreviousConsultation = editingConsultation ? null : lastConsultation;
+  const lastConsultationDateLabel = displayedPreviousConsultation?.created_at ? `[${formatHistoricalDate(displayedPreviousConsultation.created_at)}]` : null;
+  const isEditingHistoricalConsultation = Boolean(editingConsultation?.consultation_id);
   const visibleClinicalHistoryGroups = useMemo(
     () => buildClinicalHistoryVisibleGroups(clinicalHistory, dailyNoteClinicalHistoryVisibility),
     [clinicalHistory, dailyNoteClinicalHistoryVisibility]
@@ -1343,17 +1434,19 @@ function PatientDailyNoteTab({
 
   const refreshFormInstance = useCallback(() => setFormInstanceKey((current) => current + 1), []);
   const saveCurrentDraft = useCallback(() => {
-    if (!draftRestoredRef.current) return;
+    if (!draftRestoredRef.current || isEditingHistoricalConsultation) return;
     saveDraft(patient.id, {
       subjectiveForm: subjectiveFormRef.current,
       objectiveForm: objectiveFormRef.current,
       analysisForm: analysisFormRef.current,
       planForm: planFormRef.current,
       personalNotes: personalNotesRef.current,
+      sampleTaken,
+      selectedStudyTypeIds,
       selectedOfficeLabels,
       editingConsultationId: editingConsultation?.consultation_id ?? null,
     });
-  }, [editingConsultation, patient.id, selectedOfficeLabels]);
+  }, [editingConsultation, isEditingHistoricalConsultation, patient.id, sampleTaken, selectedOfficeLabels, selectedStudyTypeIds]);
 
   useEffect(() => {
     return () => {
@@ -1404,6 +1497,44 @@ function PatientDailyNoteTab({
   }, [initialPatientTagControl]);
 
   useEffect(() => {
+    let cancelled = false;
+    const officeId = Number(resolveCurrentOfficeId(patient.office_id) ?? 0);
+
+    if (officeId <= 0) {
+      setStudyTypes([]);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    studyDeliveryService.getStudyTypes(officeId)
+      .then((result) => {
+        if (!cancelled) {
+          setStudyTypes(result);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStudyTypes([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [patient.office_id]);
+
+  useEffect(() => {
+    if (!studyTypes.length) {
+      setSelectedStudyTypeIds((current) => (current.length ? [] : current));
+      return;
+    }
+
+    const allowedIds = new Set(studyTypes.map((studyType) => studyType.id));
+    setSelectedStudyTypeIds((current) => current.filter((id) => allowedIds.has(id)));
+  }, [studyTypes]);
+
+  useEffect(() => {
     if (tabLoading) {
       return;
     }
@@ -1446,10 +1577,18 @@ function PatientDailyNoteTab({
     };
   }, [patient.id, tabLoading]);
 
+  useEffect(() => {
+    draftRestoredRef.current = false;
+  }, [isEditingHistoricalConsultation, patient.id]);
+
   // Restore draft from localStorage on mount
   useEffect(() => {
     if (draftRestoredRef.current) return;
     draftRestoredRef.current = true;
+    if (isEditingHistoricalConsultation) {
+      clearDraft(patient.id);
+      return;
+    }
     const draft = loadDraft(patient.id);
     if (!draft) return;
     setSubjectiveForm(draft.subjectiveForm);
@@ -1457,6 +1596,8 @@ function PatientDailyNoteTab({
     setAnalysisForm(draft.analysisForm);
     setPlanForm(draft.planForm);
     setPersonalNotes(draft.personalNotes);
+    setSampleTaken(Boolean(draft.sampleTaken));
+    setSelectedStudyTypeIds(Array.isArray(draft.selectedStudyTypeIds) ? draft.selectedStudyTypeIds : []);
     setSelectedOfficeLabels(draft.selectedOfficeLabels);
     subjectiveFormRef.current = draft.subjectiveForm;
     objectiveFormRef.current = draft.objectiveForm;
@@ -1464,7 +1605,7 @@ function PatientDailyNoteTab({
     planFormRef.current = draft.planForm;
     personalNotesRef.current = draft.personalNotes;
     refreshFormInstance();
-  }, [patient.id, refreshFormInstance]);
+  }, [isEditingHistoricalConsultation, patient.id, refreshFormInstance]);
 
   useEffect(() => {
     const handlePageHide = () => {
@@ -1533,6 +1674,7 @@ function PatientDailyNoteTab({
     setPersonalNotes(editRequestNote.private_comments ?? '');
     setSelectedOfficeLabels(editRequestNote.office_label_ids ?? []);
     setSampleTaken(false);
+    setSelectedStudyTypeIds([]);
     subjectiveFormRef.current = { illnessStartDate: normalizeDateInputValue(editRequestNote.ailingdate) || '', currentCondition: editRequestNote.subjective ?? '' };
     objectiveFormRef.current = {
       height: editRequestNote.height ?? '',
@@ -1559,6 +1701,10 @@ function PatientDailyNoteTab({
     }
     if (editingConsultation && !canEditConsultationHistory) {
       setDailyNoteError('Tu perfil no tiene permiso para editar consultas del historial.');
+      return;
+    }
+    if (!editingConsultation && sampleTaken && selectedStudyTypeIds.length === 0) {
+      setDailyNoteError('Selecciona al menos un tipo de estudio para registrar la toma de muestra.');
       return;
     }
     setSavingDailyNote(true);
@@ -1593,13 +1739,14 @@ function PatientDailyNoteTab({
         await consultationService.updateDailyNote(editingConsultation.consultation_id, payload);
       } else {
         await consultationService.createDailyNote(payload);
-        if (sampleTaken) {
+        if (sampleTaken && selectedStudyTypeIds.length > 0) {
           const officeId = Number(patient.office_id ?? localStorage.getItem('cached_office_id') ?? 0);
           if (officeId > 0) {
             await studyDeliveryService.createSampleStudyDelivery({
               office_id: officeId,
               patient_id: patient.id,
               processing_status: 'sample_collected',
+              study_type_ids: selectedStudyTypeIds,
             });
           }
         }
@@ -1613,7 +1760,7 @@ function PatientDailyNoteTab({
       setClinicalHistory(nextClinicalHistory);
       setSoapContext(nextSoapContext);
       setPatientTagControl(await patientService.getPatientTagControl(patient.id));
-      onRefreshAfterSave({ patient: nextPatient, soapNotes: nextSoapNotes });
+      onRefreshAfterSave({ patient: nextPatient, soapNotes: nextSoapNotes, targetTab: 'historical' });
       setEditingConsultation(null);
       clearDraft(patient.id);
       setDailyNoteMessage(editingConsultation?.consultation_id ? 'Consulta actualizada' : 'Nota diaria guardada');
@@ -1635,6 +1782,7 @@ function PatientDailyNoteTab({
       setPersonalNotes('');
       setSelectedOfficeLabels([]);
       setSampleTaken(false);
+      setSelectedStudyTypeIds([]);
       subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
       objectiveFormRef.current = {
         height: getSuggestedHeight(nextPatient.age, nextSoapContext.last_consultation?.height),
@@ -1682,6 +1830,7 @@ function PatientDailyNoteTab({
     setPersonalNotes('');
     setSelectedOfficeLabels([]);
     setSampleTaken(false);
+    setSelectedStudyTypeIds([]);
     subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
     objectiveFormRef.current = {
       height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
@@ -1792,6 +1941,39 @@ function PatientDailyNoteTab({
   const handleNotesChange = useCallback((next: string) => {
     personalNotesRef.current = next;
   }, []);
+  const handleSampleTakenChange = useCallback((checked: boolean) => {
+    setSampleTaken(checked);
+    if (!checked) {
+      setSelectedStudyTypeIds([]);
+    }
+  }, []);
+  const handleStudyTypeToggle = useCallback((studyTypeId: number) => {
+    setSelectedStudyTypeIds((current) => (
+      current.includes(studyTypeId)
+        ? current.filter((id) => id !== studyTypeId)
+        : [...current, studyTypeId]
+    ));
+  }, []);
+  const handleCreateStudyType = useCallback(async (name: string) => {
+    const officeId = Number(patient.office_id ?? localStorage.getItem('cached_office_id') ?? 0);
+    if (officeId <= 0) {
+      throw new Error('Consultorio no disponible.');
+    }
+
+    const created = await studyDeliveryService.createStudyType({
+      office_id: officeId,
+      name,
+      description: null,
+    });
+
+    setStudyTypes((current) => {
+      const next = [...current.filter((item) => item.id !== created.id), created];
+      return next.sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+    });
+    setSelectedStudyTypeIds((current) => (
+      current.includes(created.id) ? current : [...current, created.id]
+    ));
+  }, [patient.office_id]);
   const handleLabelsChange = useCallback((next: number[]) => setSelectedOfficeLabels(next), []);
   const handleCreateOfficeLabel = useCallback(async (label: string) => {
     const created = await patientService.createOfficeLabel(label);
@@ -1917,7 +2099,16 @@ function PatientDailyNoteTab({
 
   return (
     <>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, bgcolor: '#cbf7cb', p: 2, borderRadius: 2 }} onBlurCapture={saveCurrentDraft}>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          bgcolor: editingConsultation ? '#c4c1d5' : '#cbf7cb',
+          p: 2,
+          borderRadius: 2,
+        }}
+      >
         {editingConsultation && (
           <Alert severity="info" action={canCreateDailyNote ? <Button color="inherit" size="small" onClick={handleStartNewConsultation}>Nueva consulta</Button> : undefined}>
             Editando la consulta del {formatDisplayDate(editingConsultation.created_at)}
@@ -1989,7 +2180,7 @@ function PatientDailyNoteTab({
           formInstanceKey={formInstanceKey}
           onIllnessStartDateChange={handleIllnessStartDateChange}
           onCurrentConditionChange={handleCurrentConditionChange}
-          previousConsultation={lastConsultation}
+          previousConsultation={displayedPreviousConsultation}
           visibility={dailyNoteVisibility}
         />
         <ObjectiveSectionConfigured
@@ -1998,7 +2189,7 @@ function PatientDailyNoteTab({
           onPassiveFieldChange={handleObjectivePassiveFieldChange}
           onLastMenstruationDateChange={handleLastMenstruationDateChange}
           onPregnantChange={handlePregnantChange}
-          previousConsultation={lastConsultation}
+          previousConsultation={displayedPreviousConsultation}
           visibility={dailyNoteVisibility}
           showClinicalHistoryPanel={hasObjectiveClinicalHistoryFieldsEnabled}
         />
@@ -2009,7 +2200,7 @@ function PatientDailyNoteTab({
           onDiagnosticChange={handleDiagnosticChange}
           onAddDiagnostic={handleAddDiagnostic}
           onRemoveDiagnostic={handleRemoveDiagnostic}
-          previousConsultation={lastConsultation}
+          previousConsultation={displayedPreviousConsultation}
           visibility={dailyNoteVisibility}
         />
         <PlanSection
@@ -2023,7 +2214,7 @@ function PatientDailyNoteTab({
           onSearchMedicamentHistory={handleSearchMedicamentHistory}
           onOpenPrescription={handleOpenPrescription}
           onPrintPrescription={handlePrintPrescription}
-          previousConsultation={lastConsultation}
+          previousConsultation={displayedPreviousConsultation}
           visibility={dailyNoteVisibility}
         />
         <PersonalNotesSection
@@ -2031,20 +2222,24 @@ function PatientDailyNoteTab({
           formInstanceKey={formInstanceKey}
           onNotesChange={handleNotesChange}
           sampleTaken={sampleTaken}
-          onSampleTakenChange={setSampleTaken}
+          onSampleTakenChange={handleSampleTakenChange}
+          selectedStudyTypeIds={selectedStudyTypeIds}
+          onStudyTypeToggle={handleStudyTypeToggle}
+          studyTypes={studyTypes}
+          onCreateStudyType={handleCreateStudyType}
           selectedLabels={selectedOfficeLabels}
           onLabelsChange={handleLabelsChange}
           onCreateLabel={handleCreateOfficeLabel}
           officeLabels={officeLabels}
           patientTagControl={patientTagControl}
           editingConsultation={editingConsultation}
-          previousConsultation={lastConsultation}
+          previousConsultation={displayedPreviousConsultation}
           visibility={dailyNoteVisibility}
         />
 
 
         <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-          <Button variant="contained" color="primary" startIcon={savingDailyNote ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />} onClick={handleSaveDailyNote} disabled={savingDailyNote || (!editingConsultation && !canCreateDailyNote) || (Boolean(editingConsultation) && !canEditConsultationHistory)} sx={{ minWidth: 180 }}>
+          <Button variant="contained" color={editingConsultation ? 'warning' : 'primary'} startIcon={savingDailyNote ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />} onClick={handleSaveDailyNote} disabled={savingDailyNote || (!editingConsultation && !canCreateDailyNote) || (Boolean(editingConsultation) && !canEditConsultationHistory)} sx={{ minWidth: 180 }}>
             {savingDailyNote ? 'Guardando...' : editingConsultation ? 'Actualizar consulta' : 'Guardar'}
           </Button>
         </Box>

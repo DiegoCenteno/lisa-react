@@ -1,4 +1,4 @@
-import type { LaboratoryItem, PaginatedStudyDeliveries, PendingStudyDeliveryLink, StudyDeliveryItem } from '../types';
+import type { LaboratoryItem, PaginatedStudyDeliveries, PendingStudyDeliveryLink, StudyDeliveryItem, StudyTypeItem } from '../types';
 import apiClient from './client';
 
 interface ApiStudyDeliveryListResponse {
@@ -24,6 +24,16 @@ interface ApiLaboratoryListResponse {
 interface ApiLaboratoryResponse {
   status: string;
   data: LaboratoryItem;
+}
+
+interface ApiStudyTypeListResponse {
+  status: string;
+  data: StudyTypeItem[];
+}
+
+interface ApiStudyTypeResponse {
+  status: string;
+  data: StudyTypeItem;
 }
 
 interface ApiPendingStudyDeliveryListResponse {
@@ -84,6 +94,26 @@ export const studyDeliveryService = {
     return response.data.data;
   },
 
+  async getStudyTypes(officeId?: number): Promise<StudyTypeItem[]> {
+    const response = await apiClient.get<ApiStudyTypeListResponse>('/v2/study-types', {
+      params: {
+        office_id: officeId,
+      },
+    });
+
+    return response.data.data ?? [];
+  },
+
+  async createStudyType(data: { office_id: number; name: string; description?: string | null }): Promise<StudyTypeItem> {
+    const response = await apiClient.post<ApiStudyTypeResponse>('/v2/study-types', data);
+    return response.data.data;
+  },
+
+  async deactivateStudyType(id: number): Promise<StudyTypeItem> {
+    const response = await apiClient.delete<ApiStudyTypeResponse>(`/v2/study-types/${id}`);
+    return response.data.data;
+  },
+
   async getPendingStudyLinks(officeId: number, patientId: number): Promise<PendingStudyDeliveryLink[]> {
     const response = await apiClient.get<ApiPendingStudyDeliveryListResponse>('/v2/study-deliveries/pending-links', {
       params: {
@@ -133,9 +163,10 @@ export const studyDeliveryService = {
     patient_id: number;
     processing_status: 'sample_collected' | 'sent_to_lab';
     laboratory_id?: number | null;
-  }): Promise<StudyDeliveryItem> {
-    const response = await apiClient.post<ApiStudyDeliveryResponse>('/v2/study-deliveries/sample', data);
-    return response.data.data;
+    study_type_ids?: number[];
+  }): Promise<StudyDeliveryItem[]> {
+    const response = await apiClient.post<ApiStudyDeliveryBatchResponse>('/v2/study-deliveries/sample', data);
+    return response.data.data ?? [];
   },
 
   async updateStudyDelivery(id: number, data: {

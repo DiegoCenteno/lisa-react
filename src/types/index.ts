@@ -734,6 +734,8 @@ export interface StudyDeliveryItem {
   id: number;
   office_id: number;
   patient_id: number;
+  study_type_id?: number | null;
+  study_name?: string | null;
   created_at?: string | null;
   patient_name?: string | null;
   patient_phone?: string | null;
@@ -775,6 +777,13 @@ export interface LaboratoryItem {
   id: number;
   office_id: number;
   name: string;
+}
+
+export interface StudyTypeItem {
+  id: number;
+  office_id: number;
+  name: string;
+  description?: string | null;
 }
 
 export interface PendingStudyDeliveryLink {

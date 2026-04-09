@@ -461,9 +461,13 @@ export default function PatientDetailPage() {
           canEditConsultationHistory={canEditConsultationHistory}
           editRequestNote={dailyNoteEditRequest}
           onEditRequestHandled={() => setDailyNoteEditRequest(null)}
-          onRefreshAfterSave={({ patient: nextPatient, soapNotes: nextSoapNotes }) => {
+          onRefreshAfterSave={({ patient: nextPatient, soapNotes: nextSoapNotes, targetTab }) => {
             setPatient(nextPatient);
             setSoapNotes(nextSoapNotes);
+            if (targetTab === 'historical') {
+              setTab(7);
+              setSearchParams({ tab: 'historical' }, { replace: true });
+            }
           }}
         />
       </TabPanel>

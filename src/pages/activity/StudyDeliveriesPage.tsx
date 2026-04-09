@@ -293,13 +293,19 @@ export default function StudyDeliveriesPage() {
             }}
             onClick={() => navigate('/estudios/interpretar')}
           >
-            Interpretar estudios
+            Interpretación de estudios
           </Button>
           <Button
             variant="outlined"
             onClick={() => navigate('/estudios/laboratorios')}
           >
             Laboratorio
+          </Button>
+          <Button
+            variant="outlined"
+            onClick={() => navigate('/estudios/tipos')}
+          >
+            Tipos de estudio
           </Button>
           <Button
             variant="contained"
@@ -486,6 +492,7 @@ export default function StudyDeliveriesPage() {
                   <TableCell>Fecha de carga del estudio</TableCell>
                   <TableCell>Fecha envío</TableCell>
                   <TableCell>Paciente</TableCell>
+                  <TableCell>Estudio</TableCell>
                   <TableCell>Canal</TableCell>
                   <TableCell>Proceso</TableCell>
                   <TableCell>Laboratorio</TableCell>
@@ -512,6 +519,7 @@ export default function StudyDeliveriesPage() {
                         </Typography>
                       </Box>
                     </TableCell>
+                    <TableCell>{row.study_name || 'Sin tipo de estudio'}</TableCell>
                     <TableCell>{channelLabels[row.channel] ?? row.channel}</TableCell>
                     <TableCell>{processingStatusLabels[row.processing_status] ?? row.processing_status}</TableCell>
                     <TableCell>{row.laboratory_name || 'Sin laboratorio'}</TableCell>
@@ -539,7 +547,7 @@ export default function StudyDeliveriesPage() {
                 ))}
                 {!loading && rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} align="center">
+                    <TableCell colSpan={13} align="center">
                       Aún no hay envíos registrados con esos filtros.
                     </TableCell>
                   </TableRow>
@@ -612,6 +620,7 @@ export default function StudyDeliveriesPage() {
 
               <Box sx={{ display: 'grid', gap: 0.75 }}>
                 <Typography variant="body2"><strong>Canal:</strong> {channelLabels[selectedRow.channel] ?? selectedRow.channel}</Typography>
+                <Typography variant="body2"><strong>Tipo de estudio:</strong> {selectedRow.study_name || 'Sin tipo de estudio'}</Typography>
                 <Typography variant="body2"><strong>Estado:</strong> {statusLabels[selectedRow.status] ?? selectedRow.status}</Typography>
                 <Typography variant="body2"><strong>Fecha de envío:</strong> {formatDateTime(selectedRow.sent_at)}</Typography>
                 <Typography variant="body2"><strong>Resultado recibido:</strong> {formatDateTime(selectedRow.received_at)}</Typography>
