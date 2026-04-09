@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 import {
   Alert,
@@ -143,7 +143,7 @@ function StudyResultView({ study }: { study: PublicStudyResult }) {
         <Stack spacing={2.5}>
           <Box>
             <Typography variant="body1" sx={{ mb: 1 }}>
-              <strong>Médico:</strong> {study.medic_name}
+              <strong>MÃ©dico:</strong> {study.medic_name}
             </Typography>
             <Typography variant="body1">
               <strong>Paciente:</strong> {toPascalCaseName(study.patient_name)}
@@ -334,7 +334,7 @@ function AppointmentConfirmationView({
 }) {
   const statusAlert =
     appointment.status === 'cancelled'
-        ? { severity: 'error' as const, text: 'Tu cita ya está cancelada.' }
+        ? { severity: 'error' as const, text: 'Tu cita ya estÃ¡ cancelada.' }
         : null;
 
   return (
@@ -357,7 +357,7 @@ function AppointmentConfirmationView({
           <EventAvailableIcon sx={{ fontSize: 34 }} />
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              Confirmación de cita
+              ConfirmaciÃ³n de cita
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.88 }}>
               LisaMedic
@@ -398,7 +398,7 @@ function AppointmentConfirmationView({
               Datos del consultorio
             </Typography>
             <Typography variant="body1">
-                <strong>Médico:</strong> {toPascalCaseName(appointment.office.doctor_name)}
+                <strong>MÃ©dico:</strong> {toPascalCaseName(appointment.office.doctor_name)}
             </Typography>
             {appointment.office.specialty ? (
               <Typography variant="body1">
@@ -407,19 +407,19 @@ function AppointmentConfirmationView({
             ) : null}
             {appointment.office.address ? (
               <Typography variant="body1">
-                <strong>Dirección:</strong> {appointment.office.address}
+                <strong>DirecciÃ³n:</strong> {appointment.office.address}
               </Typography>
             ) : null}
             {appointment.office.phone ? (
               <Typography variant="body1">
-                <strong>Teléfono del consultorio:</strong> {appointment.office.phone}
+                <strong>TelÃ©fono del consultorio:</strong> {appointment.office.phone}
               </Typography>
             ) : null}
           </Box>
 
           {!appointment.history_form_completed ? (
             <Alert severity="info">
-              Si tu historia clínica aún está vacía, después de confirmar también podrás responder algunas preguntas básicas.
+              Si tu historia clÃ­nica aÃºn estÃ¡ vacÃ­a, despuÃ©s de confirmar tambiÃ©n podrÃ¡s responder algunas preguntas bÃ¡sicas.
             </Alert>
           ) : null}
 
@@ -486,7 +486,7 @@ function AppointmentConfirmationView({
               <Stack spacing={2.25}>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                    {appointment.history_form_title ?? 'Historia cl�nica b�sica'}
+                    {appointment.history_form_title ?? 'Historia clínica básica'}
                   </Typography>
                   {appointment.history_form_message ? (
                     <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
@@ -497,12 +497,12 @@ function AppointmentConfirmationView({
 
                 <Stack spacing={2}>
                   <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
-                    Las respuestas son opcionales y puedes contestar �nicamente las que t� desees.
+                    Las respuestas son opcionales y puedes contestar únicamente las que tú desees.
                   </Typography>
 
                   <TextField
                     select
-                      label="�Cu�l es tu tipo de sangre?"
+                      label="¿Cuál es tu tipo de sangre?"
                     value={historyFormState.tiposangre}
                     onChange={(event) => onHistoryFormChange('tiposangre', event.target.value)}
                     fullWidth
@@ -517,7 +517,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="�En d�nde naciste?"
+                      label="¿En dónde naciste?"
                     value={historyFormState.originaria}
                     onChange={(event) => onHistoryFormChange('originaria', event.target.value)}
                     fullWidth
@@ -531,7 +531,7 @@ function AppointmentConfirmationView({
                   </TextField>
 
                   <TextField
-                      label="�En d�nde vives?"
+                      label="¿En dónde vives?"
                     value={historyFormState.residente}
                     onChange={(event) => onHistoryFormChange('residente', event.target.value)}
                     fullWidth
@@ -583,7 +583,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="Â¿QuÃ© tan frecuente realizas ejercicio?"
+                      label="Ã‚Â¿QuÃƒÂ© tan frecuente realizas ejercicio?"
                     value={historyFormState.txtejercicio}
                     onChange={(event) => onHistoryFormChange('txtejercicio', event.target.value)}
                     fullWidth
@@ -597,7 +597,7 @@ function AppointmentConfirmationView({
                   </TextField>
 
                   <TextField
-                      label="¿Qué ocupación tienes?"
+                      label="Â¿QuÃ© ocupaciÃ³n tienes?"
                     value={historyFormState.ocupacion}
                     onChange={(event) => onHistoryFormChange('ocupacion', event.target.value)}
                     fullWidth
@@ -605,7 +605,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="¿Fumas o estás expuesto a alguien que fume?"
+                      label="Â¿Fumas o estÃ¡s expuesto a alguien que fume?"
                     value={historyFormState.txttabaquismo}
                     onChange={(event) => onHistoryFormChange('txttabaquismo', event.target.value)}
                     fullWidth
@@ -620,7 +620,7 @@ function AppointmentConfirmationView({
 
                   <TextField
                     select
-                      label="¿Has consumido o consumes drogas?"
+                      label="Â¿Has consumido o consumes drogas?"
                     value={historyFormState.txttoxicomanias}
                     onChange={(event) => onHistoryFormChange('txttoxicomanias', event.target.value)}
                     fullWidth
@@ -637,7 +637,7 @@ function AppointmentConfirmationView({
                   historyFormState.txttoxicomanias !== 'No, nunca' ? (
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                        ¿Qué drogas consumes o consumías?
+                        Â¿QuÃ© drogas consumes o consumÃ­as?
                       </Typography>
                       <Stack spacing={0.5}>
                         {appointment.history_form.drug_options.map((option) => (
@@ -662,7 +662,7 @@ function AppointmentConfirmationView({
                   ) : null}
 
                   <TextField
-                    label="¿Aproximadamente cuántas parejas sexuales has tenido?"
+                    label="Â¿Aproximadamente cuÃ¡ntas parejas sexuales has tenido?"
                     value={historyFormState.parejassexuales}
                     onChange={(event) => onHistoryFormChange('parejassexuales', event.target.value)}
                     fullWidth
@@ -670,7 +670,7 @@ function AppointmentConfirmationView({
 
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                      ¿Has tenido o tienes alguna de estas enfermedades?
+                      Â¿Has tenido o tienes alguna de estas enfermedades?
                     </Typography>
                     <Stack spacing={0.5}>
                       {appointment.history_form.disease_options.map((option) => (
@@ -696,7 +696,7 @@ function AppointmentConfirmationView({
                   {appointment.history_form.include_referral_question ? (
                     <TextField
                       select
-                      label="¿Cómo llegaste con tu médico?"
+                      label="Â¿CÃ³mo llegaste con tu mÃ©dico?"
                       value={historyFormState.encuesta}
                       onChange={(event) => onHistoryFormChange('encuesta', event.target.value)}
                       fullWidth
@@ -714,13 +714,13 @@ function AppointmentConfirmationView({
                 <Divider />
 
                 <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.8 }}>
-                  Las respuestas seleccionadas son de carácter meramente informativo para el médico y únicamente él puede
-                  consultarlas y modificarlas en el sistema. La información aquí expuesta no será compartida con ninguna
-                  persona ni empresa externa y se enviarán al médico para anexarlas al expediente clínico electrónico del
-                  paciente. Cada una de las preguntas son opcionales y puedes contestar únicamente las que tú desees.
-                  Recuerda que al compartir información de tu estado de salud pasado y actual con tu médico contribuirá
-                  en un mejor diagnóstico y un tratamiento más adecuado a tus necesidades. Al seleccionar el botón
-                  &quot;Guardar respuestas&quot; estarás aceptando compartir esta información con tu médico tratante.
+                  Las respuestas seleccionadas son de carÃ¡cter meramente informativo para el mÃ©dico y Ãºnicamente Ã©l puede
+                  consultarlas y modificarlas en el sistema. La informaciÃ³n aquÃ­ expuesta no serÃ¡ compartida con ninguna
+                  persona ni empresa externa y se enviarÃ¡n al mÃ©dico para anexarlas al expediente clÃ­nico electrÃ³nico del
+                  paciente. Cada una de las preguntas son opcionales y puedes contestar Ãºnicamente las que tÃº desees.
+                  Recuerda que al compartir informaciÃ³n de tu estado de salud pasado y actual con tu mÃ©dico contribuirÃ¡
+                  en un mejor diagnÃ³stico y un tratamiento mÃ¡s adecuado a tus necesidades. Al seleccionar el botÃ³n
+                  &quot;Guardar respuestas&quot; estarÃ¡s aceptando compartir esta informaciÃ³n con tu mÃ©dico tratante.
                 </Typography>
 
                 <FormControlLabel
@@ -732,7 +732,7 @@ function AppointmentConfirmationView({
                       }
                     />
                   }
-                  label="He leído y acepto el aviso de privacidad para compartir esta información con mi médico."
+                  label="He leÃ­do y acepto el aviso de privacidad para compartir esta informaciÃ³n con mi mÃ©dico."
                 />
 
                 <Button
@@ -810,11 +810,11 @@ export default function PublicStudyResultPage() {
           return;
         }
 
-        setError('Este tipo de enlace público todavía no está disponible.');
+        setError('Este tipo de enlace pÃºblico todavÃ­a no estÃ¡ disponible.');
       } catch (requestError) {
-        console.error('Error cargando enlace pÃºblico:', requestError);
+        console.error('Error cargando enlace pÃƒÂºblico:', requestError);
         if (!active) return;
-        setError('No se encontró información para este enlace.');
+        setError('No se encontrÃ³ informaciÃ³n para este enlace.');
       } finally {
         if (active) {
           setLoading(false);
@@ -852,7 +852,7 @@ export default function PublicStudyResultPage() {
         );
       }
     } catch (requestError) {
-      console.error('Error respondiendo cita pÃºblica:', requestError);
+      console.error('Error respondiendo cita pÃƒÂºblica:', requestError);
       setError('No se pudo actualizar el estatus de tu cita.');
     } finally {
       setActionLoading(false);
@@ -881,8 +881,8 @@ export default function PublicStudyResultPage() {
       setAppointment(response);
       setHistoryMessage('Gracias por contestar la encuesta.');
     } catch (requestError) {
-      console.error('Error guardando historia clÃ­nica pÃºblica:', requestError);
-      setError('No se pudieron guardar tus respuestas de historia clÃ­nica.');
+      console.error('Error guardando historia clÃƒÂ­nica pÃƒÂºblica:', requestError);
+      setError('No se pudieron guardar tus respuestas de historia clÃƒÂ­nica.');
     } finally {
       setHistoryLoading(false);
     }
@@ -902,7 +902,7 @@ export default function PublicStudyResultPage() {
       >
         <Stack spacing={2} alignItems="center">
           <CircularProgress />
-          <Typography color="text.secondary">Cargando enlace pÃºblico...</Typography>
+          <Typography color="text.secondary">Cargando enlace pÃƒÂºblico...</Typography>
         </Stack>
       </Box>
     );
@@ -959,4 +959,5 @@ export default function PublicStudyResultPage() {
     </Box>
   );
 }
+
 
