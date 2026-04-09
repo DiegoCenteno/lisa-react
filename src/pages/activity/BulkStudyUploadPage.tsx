@@ -196,8 +196,6 @@ export default function BulkStudyUploadPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [previewFileName, setPreviewFileName] = useState('');
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
-  const [detectedTextFileName, setDetectedTextFileName] = useState('');
-  const [detectedTextContent, setDetectedTextContent] = useState('');
 
   useEffect(() => {
     let cancelled = false;
