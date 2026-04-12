@@ -160,7 +160,7 @@ export default function ConsultationsPage() {
                         <Button
                           variant="contained"
                           size="small"
-                          onClick={() => navigate(`/pacientes/${consultation.patient_id}`)}
+                          onClick={() => navigate(`/pacientes/${consultation.patient_id}?tab=general`)}
                           sx={{
                             backgroundColor: '#394b63',
                             '&:hover': { backgroundColor: '#314157' },

@@ -63,7 +63,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!user) return false;
       if (user.role === 'medico') return true;
       const permissions = user.permissions ?? [];
-      return permissions.includes('*') || permissions.includes(permission);
+      if (permissions.includes('*') || permissions.includes(permission)) {
+        return true;
+      }
+
+      const segments = permission.split('.');
+      if (segments.length > 1) {
+        const scopeManagePermission = `${segments[0]}.manage`;
+        if (permissions.includes(scopeManagePermission)) {
+          return true;
+        }
+      }
+
+      return false;
     },
     [user]
   );

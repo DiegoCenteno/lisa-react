@@ -40,6 +40,7 @@ interface MenuItem {
   path: string;
   roles: UserRole[];
   permission?: string;
+  anyPermissions?: string[];
 }
 
 const menuItems: MenuItem[] = [
@@ -67,7 +68,11 @@ const menuItems: MenuItem[] = [
     icon: <ConsultationIcon />,
     path: '/consultas',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
-    permission: 'consultations.view',
+    anyPermissions: [
+      'consultations.view',
+      'consultations.history_edit',
+      'consultations.daily_note.create',
+    ],
   },
   {
     text: 'Estudios',
@@ -95,7 +100,14 @@ const menuItems: MenuItem[] = [
     icon: <SettingsIcon />,
     path: '/configuracion',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
-    permission: 'settings.profile.self',
+    anyPermissions: [
+      'settings.profile.self',
+      'settings.company',
+      'settings.agenda',
+      'settings.unavailable_days',
+      'settings.print',
+      'settings.labels',
+    ],
   },
 ];
 
@@ -108,7 +120,11 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
   const [isHovered, setIsHovered] = useState(false);
   const desktopDrawerWidth = isHovered ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
-  const filteredItems = menuItems.filter((item) => hasRole(item.roles) && (!item.permission || can(item.permission)));
+  const filteredItems = menuItems.filter((item) =>
+    hasRole(item.roles)
+    && (!item.permission || can(item.permission))
+    && (!item.anyPermissions || item.anyPermissions.some((permission) => can(permission)))
+  );
 
   const drawerContent = (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', overflowX: 'hidden' }}>

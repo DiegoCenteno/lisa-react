@@ -7,9 +7,10 @@ interface ProtectedRouteProps {
   children: React.ReactNode;
   roles?: UserRole[];
   permissions?: string[];
+  anyPermissions?: string[];
 }
 
-export default function ProtectedRoute({ children, roles, permissions }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, roles, permissions, anyPermissions }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, hasRole, can } = useAuth();
 
   if (isLoading) {
@@ -36,6 +37,10 @@ export default function ProtectedRoute({ children, roles, permissions }: Protect
   }
 
   if (permissions && permissions.some((permission) => !can(permission))) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  if (anyPermissions && !anyPermissions.some((permission) => can(permission))) {
     return <Navigate to="/dashboard" replace />;
   }
 

@@ -637,7 +637,7 @@ const ObjectiveSection = memo(function ObjectiveSection({
       <SoapSectionTitle initial="O" title="Objetivo" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulestatura') ? undefined : 'none' }}>
-          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} InputLabelProps={{ shrink: Boolean(form.height) }} />
+          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} InputLabelProps={{ shrink: true }} />
           <PreviousFieldHint text={previousConsultation?.height} showDate={false} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulpeso') ? undefined : 'none' }}>
@@ -1102,7 +1102,7 @@ const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
       <SoapSectionTitle initial="O" title="Objetivo" />
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulestatura') ? undefined : 'none' }}>
-          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} InputLabelProps={{ shrink: Boolean(form.height) }} />
+          <TextField key={`${formInstanceKey}-height`} fullWidth size="small" label="Estatura" defaultValue={form.height} onChange={(e) => onPassiveFieldChange('height', e.target.value)} InputLabelProps={{ shrink: true }} />
           <PreviousFieldHint text={previousConsultation?.height} showDate={false} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulpeso') ? undefined : 'none' }}>
@@ -1433,6 +1433,61 @@ function PatientDailyNoteTab({
   );
 
   const refreshFormInstance = useCallback(() => setFormInstanceKey((current) => current + 1), []);
+  const applyDraftToForm = useCallback((draft: DraftData | null) => {
+    if (!draft) {
+      setSubjectiveForm({ illnessStartDate: '', currentCondition: '' });
+      setObjectiveForm({
+        height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
+        weight: '',
+        ta: '',
+        temp: '',
+        fc: '',
+        os: '',
+        studies: '',
+        lastMenstruationDate: normalizeDateInputValue(clinicalHistory?.gynecological?.last_menstruation_date) || '',
+        pregnant: Boolean(clinicalHistory?.gynecological?.pregnant),
+      });
+      setAnalysisForm({ examination: '', diagnostics: [''] });
+      setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
+      setPersonalNotes('');
+      setSelectedOfficeLabels([]);
+      setSampleTaken(false);
+      setSelectedStudyTypeIds([]);
+      subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
+      objectiveFormRef.current = {
+        height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
+        weight: '',
+        ta: '',
+        temp: '',
+        fc: '',
+        os: '',
+        studies: '',
+        lastMenstruationDate: normalizeDateInputValue(clinicalHistory?.gynecological?.last_menstruation_date) || '',
+        pregnant: Boolean(clinicalHistory?.gynecological?.pregnant),
+      };
+      analysisFormRef.current = { examination: '', diagnostics: [''] };
+      planFormRef.current = { medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' };
+      personalNotesRef.current = '';
+      refreshFormInstance();
+      return;
+    }
+
+    setSubjectiveForm(draft.subjectiveForm);
+    setObjectiveForm(draft.objectiveForm);
+    setAnalysisForm(draft.analysisForm);
+    setPlanForm(draft.planForm);
+    setPersonalNotes(draft.personalNotes);
+    setSampleTaken(Boolean(draft.sampleTaken));
+    setSelectedStudyTypeIds(Array.isArray(draft.selectedStudyTypeIds) ? draft.selectedStudyTypeIds : []);
+    setSelectedOfficeLabels(Array.isArray(draft.selectedOfficeLabels) ? draft.selectedOfficeLabels : []);
+    subjectiveFormRef.current = draft.subjectiveForm;
+    objectiveFormRef.current = draft.objectiveForm;
+    analysisFormRef.current = draft.analysisForm;
+    planFormRef.current = draft.planForm;
+    personalNotesRef.current = draft.personalNotes;
+    refreshFormInstance();
+  }, [clinicalHistory?.gynecological?.last_menstruation_date, patient.age, refreshFormInstance, soapContext?.last_consultation?.height]);
+
   const saveCurrentDraft = useCallback(() => {
     if (!draftRestoredRef.current || isEditingHistoricalConsultation) return;
     saveDraft(patient.id, {
@@ -1586,26 +1641,12 @@ function PatientDailyNoteTab({
     if (draftRestoredRef.current) return;
     draftRestoredRef.current = true;
     if (isEditingHistoricalConsultation) {
-      clearDraft(patient.id);
       return;
     }
     const draft = loadDraft(patient.id);
     if (!draft) return;
-    setSubjectiveForm(draft.subjectiveForm);
-    setObjectiveForm(draft.objectiveForm);
-    setAnalysisForm(draft.analysisForm);
-    setPlanForm(draft.planForm);
-    setPersonalNotes(draft.personalNotes);
-    setSampleTaken(Boolean(draft.sampleTaken));
-    setSelectedStudyTypeIds(Array.isArray(draft.selectedStudyTypeIds) ? draft.selectedStudyTypeIds : []);
-    setSelectedOfficeLabels(draft.selectedOfficeLabels);
-    subjectiveFormRef.current = draft.subjectiveForm;
-    objectiveFormRef.current = draft.objectiveForm;
-    analysisFormRef.current = draft.analysisForm;
-    planFormRef.current = draft.planForm;
-    personalNotesRef.current = draft.personalNotes;
-    refreshFormInstance();
-  }, [isEditingHistoricalConsultation, patient.id, refreshFormInstance]);
+    applyDraftToForm(draft);
+  }, [applyDraftToForm, isEditingHistoricalConsultation, patient.id]);
 
   useEffect(() => {
     const handlePageHide = () => {
@@ -1617,6 +1658,31 @@ function PatientDailyNoteTab({
       window.removeEventListener('pagehide', handlePageHide);
     };
   }, [saveCurrentDraft]);
+
+  useEffect(() => {
+    if (!draftRestoredRef.current || isEditingHistoricalConsultation) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      saveCurrentDraft();
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    analysisForm,
+    isEditingHistoricalConsultation,
+    objectiveForm,
+    personalNotes,
+    planForm,
+    sampleTaken,
+    saveCurrentDraft,
+    selectedOfficeLabels,
+    selectedStudyTypeIds,
+    subjectiveForm,
+  ]);
 
   useEffect(() => {
     subjectiveFormRef.current = subjectiveForm;
@@ -1761,8 +1827,11 @@ function PatientDailyNoteTab({
       setSoapContext(nextSoapContext);
       setPatientTagControl(await patientService.getPatientTagControl(patient.id));
       onRefreshAfterSave({ patient: nextPatient, soapNotes: nextSoapNotes, targetTab: 'historical' });
+      const wasEditingHistoricalConsultation = Boolean(editingConsultation?.consultation_id);
       setEditingConsultation(null);
-      clearDraft(patient.id);
+      if (!wasEditingHistoricalConsultation) {
+        clearDraft(patient.id);
+      }
       setDailyNoteMessage(editingConsultation?.consultation_id ? 'Consulta actualizada' : 'Nota diaria guardada');
       // Reset form after successful save
       setSubjectiveForm({ illnessStartDate: '', currentCondition: '' });
@@ -1813,41 +1882,7 @@ function PatientDailyNoteTab({
       return;
     }
     setEditingConsultation(null);
-    setSubjectiveForm({ illnessStartDate: '', currentCondition: '' });
-    setObjectiveForm({
-      height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
-      weight: '',
-      ta: '',
-      temp: '',
-      fc: '',
-      os: '',
-      studies: '',
-      lastMenstruationDate: normalizeDateInputValue(clinicalHistory?.gynecological?.last_menstruation_date) || '',
-      pregnant: Boolean(clinicalHistory?.gynecological?.pregnant),
-    });
-    setAnalysisForm({ examination: '', diagnostics: [''] });
-    setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
-    setPersonalNotes('');
-    setSelectedOfficeLabels([]);
-    setSampleTaken(false);
-    setSelectedStudyTypeIds([]);
-    subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
-    objectiveFormRef.current = {
-      height: getSuggestedHeight(patient.age, soapContext?.last_consultation?.height),
-      weight: '',
-      ta: '',
-      temp: '',
-      fc: '',
-      os: '',
-      studies: '',
-      lastMenstruationDate: normalizeDateInputValue(clinicalHistory?.gynecological?.last_menstruation_date) || '',
-      pregnant: Boolean(clinicalHistory?.gynecological?.pregnant),
-    };
-    analysisFormRef.current = { examination: '', diagnostics: [''] };
-    planFormRef.current = { medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' };
-    personalNotesRef.current = '';
-    refreshFormInstance();
-    clearDraft(patient.id);
+    applyDraftToForm(loadDraft(patient.id));
   };
 
   const handleIllnessStartDateChange = useCallback((value: string) => {
@@ -1858,10 +1893,18 @@ function PatientDailyNoteTab({
     });
   }, []);
   const handleCurrentConditionChange = useCallback((value: string) => {
-    subjectiveFormRef.current = { ...subjectiveFormRef.current, currentCondition: value };
+    setSubjectiveForm((current) => {
+      const next = { ...current, currentCondition: value };
+      subjectiveFormRef.current = next;
+      return next;
+    });
   }, []);
   const handleObjectivePassiveFieldChange = useCallback((field: 'height' | 'weight' | 'ta' | 'temp' | 'fc' | 'os' | 'studies', value: string) => {
-    objectiveFormRef.current = { ...objectiveFormRef.current, [field]: value };
+    setObjectiveForm((current) => {
+      const next = { ...current, [field]: value };
+      objectiveFormRef.current = next;
+      return next;
+    });
   }, []);
   const handleLastMenstruationDateChange = useCallback((value: string) => {
     setObjectiveForm((current) => {
@@ -1878,12 +1921,20 @@ function PatientDailyNoteTab({
     });
   }, []);
   const handleExaminationChange = useCallback((value: string) => {
-    analysisFormRef.current = { ...analysisFormRef.current, examination: value };
+    setAnalysisForm((current) => {
+      const next = { ...current, examination: value };
+      analysisFormRef.current = next;
+      return next;
+    });
   }, []);
   const handleDiagnosticChange = useCallback((index: number, value: string) => {
-    const diagnostics = [...analysisFormRef.current.diagnostics];
-    diagnostics[index] = value;
-    analysisFormRef.current = { ...analysisFormRef.current, diagnostics };
+    setAnalysisForm((current) => {
+      const diagnostics = [...current.diagnostics];
+      diagnostics[index] = value;
+      const next = { ...current, diagnostics };
+      analysisFormRef.current = next;
+      return next;
+    });
   }, []);
   const handleAddDiagnostic = useCallback(() => {
     setAnalysisForm((current) => {
@@ -1902,18 +1953,10 @@ function PatientDailyNoteTab({
     });
   }, []);
   const handleMedicationChange = useCallback((index: number, field: 'medicament' | 'prescription', value: string) => {
-    if (field === 'prescription') {
-      const medications = [...planFormRef.current.medications];
-      const currentRow = medications[index] ?? { medicament: '', prescription: '' };
-      medications[index] = { ...currentRow, prescription: value };
-      planFormRef.current = { ...planFormRef.current, medications };
-      return;
-    }
-
     setPlanForm((current) => {
       const medications = [...current.medications];
       const currentRow = medications[index] ?? { medicament: '', prescription: '' };
-      medications[index] = { ...currentRow, medicament: value };
+      medications[index] = { ...currentRow, [field]: value };
       const next = { ...current, medications };
       planFormRef.current = next;
       return next;
@@ -1936,9 +1979,14 @@ function PatientDailyNoteTab({
     });
   }, []);
   const handleAdditionalInstructionsChange = useCallback((value: string) => {
-    planFormRef.current = { ...planFormRef.current, additionalInstructions: value };
+    setPlanForm((current) => {
+      const next = { ...current, additionalInstructions: value };
+      planFormRef.current = next;
+      return next;
+    });
   }, []);
   const handleNotesChange = useCallback((next: string) => {
+    setPersonalNotes(next);
     personalNotesRef.current = next;
   }, []);
   const handleSampleTakenChange = useCallback((checked: boolean) => {

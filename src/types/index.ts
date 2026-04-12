@@ -737,6 +737,8 @@ export interface StudyDeliveryItem {
   study_type_id?: number | null;
   study_name?: string | null;
   created_at?: string | null;
+  sample_collected_at?: string | null;
+  sent_to_lab_at?: string | null;
   patient_name?: string | null;
   patient_phone?: string | null;
   template_id?: number | null;

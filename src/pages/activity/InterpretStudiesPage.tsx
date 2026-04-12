@@ -203,12 +203,25 @@ export default function InterpretStudiesPage() {
     await loadPreviewByIndex(nextIndex);
   };
 
+  const handleOpenFirstPreview = async () => {
+    if (previewEntries.length === 0) {
+      return;
+    }
+
+    await loadPreviewByIndex(0);
+  };
+
   const handleNextPreview = async () => {
-    if (!hasNextPreview || previewIndex === null) {
+    if (previewIndex === null) {
       return;
     }
 
     persistPreviewTemplate();
+    if (!hasNextPreview) {
+      handleClosePreview();
+      return;
+    }
+
     await loadPreviewByIndex(previewIndex + 1);
   };
 
@@ -314,14 +327,23 @@ export default function InterpretStudiesPage() {
             </Typography>
           </Box>
         </Box>
-        <Button
-          variant="contained"
-          color="success"
-          onClick={() => setActionModalOpen(true)}
-          disabled={processingAction || selectableRows.length === 0}
-        >
-          Enviar
-        </Button>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, ml: 'auto' }}>
+          <Button
+            variant="outlined"
+            onClick={() => void handleOpenFirstPreview()}
+            disabled={loading || previewEntries.length === 0}
+          >
+            Interpretar estudios
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => setActionModalOpen(true)}
+            disabled={processingAction || selectableRows.length === 0}
+          >
+            Enviar
+          </Button>
+        </Box>
       </Box>
 
       <Card>
@@ -418,29 +440,48 @@ export default function InterpretStudiesPage() {
       </Card>
 
       <Dialog open={Boolean(previewFileUrl)} onClose={handleClosePreview} maxWidth="lg" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1 }}>
-          <Box component="span">{previewFileName || 'Vista previa PDF'}</Box>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pr: 1, pb: 1.25 }}>
+          <Typography variant="h6" sx={{ fontSize: '1.05rem', fontWeight: 700, lineHeight: 1.2 }}>
+            {previewFileName || 'Vista previa PDF'}
+          </Typography>
           <IconButton onClick={handleClosePreview} size="small">
             <CloseIcon fontSize="small" />
           </IconButton>
         </DialogTitle>
-        <DialogContent sx={{ p: 0, height: '80vh', display: 'grid', gridTemplateRows: 'auto 1fr auto' }}>
-          <Box sx={{ p: 2, display: 'grid', gap: 1.25, borderBottom: '1px solid', borderColor: 'divider' }}>
-            <FormControl size="small" fullWidth>
-              <InputLabel>Plantilla</InputLabel>
-              <Select
-                value={previewTemplateValue}
-                label="Plantilla"
-                onChange={(event) => setPreviewTemplateValue(event.target.value)}
-              >
-                <MenuItem value="">Seleccionar</MenuItem>
-                {previewTemplates.map((template) => (
-                  <MenuItem key={template.id} value={String(template.id)}>
-                    {template.code}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+        <DialogContent sx={{ p: 0, height: '86vh', display: 'grid', gridTemplateRows: 'auto 1fr' }}>
+          <Box sx={{ px: 2, pt: 0.75, pb: 1.25, display: 'grid', gap: 0.9, borderBottom: '1px solid', borderColor: 'divider' }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+              <FormControl size="small" fullWidth sx={{ flex: 1, minWidth: 0 }}>
+                <InputLabel>Plantilla</InputLabel>
+                <Select
+                  value={previewTemplateValue}
+                  label="Plantilla"
+                  onChange={(event) => setPreviewTemplateValue(event.target.value)}
+                >
+                  <MenuItem value="">Seleccionar</MenuItem>
+                  {previewTemplates.map((template) => (
+                    <MenuItem key={template.id} value={String(template.id)}>
+                      {template.code}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <Box sx={{ flexShrink: 0, pt: 0.5 }}>
+                <Button
+                variant="contained"
+                onClick={() => void handleNextPreview()}
+                sx={{
+                  minWidth: 120,
+                  backgroundColor: '#2e7d32',
+                    color: '#fff',
+                    '&:hover': { backgroundColor: '#1b5e20' },
+                    '&.Mui-disabled': { color: '#fff', opacity: 0.45 },
+                  }}
+                >
+                  Siguiente
+                </Button>
+              </Box>
+            </Box>
             {previewTemplateValue ? (
               <Typography variant="body2" color="text.secondary">
                 {previewTemplateDescription || 'Sin descripción.'}
@@ -455,11 +496,6 @@ export default function InterpretStudiesPage() {
               sx={{ width: '100%', height: '100%', border: 0 }}
             />
           ) : null}
-          <DialogActions sx={{ px: 2, py: 1.5, borderTop: '1px solid', borderColor: 'divider' }}>
-            <Button onClick={() => void handleNextPreview()} disabled={!hasNextPreview}>
-              Siguiente
-            </Button>
-          </DialogActions>
         </DialogContent>
       </Dialog>
 

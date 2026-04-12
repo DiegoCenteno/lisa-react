@@ -54,7 +54,7 @@ const FOLLOW_UP_BG = '#A8FBBD';
 const FOLLOW_UP_HOVER_BG = '#92f5ac';
 const FOLLOW_UP_TEXT = '#333333';
 
-type AppointmentAction = 'confirm' | 'cancel' | 'no_show';
+type AppointmentAction = 'confirm' | 'cancel' | 'no_show' | 'reactivate';
 
 const appointmentStatusLabels: Record<number, string> = {
   0: 'Pendiente de confirmar',
@@ -72,6 +72,25 @@ function toPascalCaseName(value?: string): string {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
+}
+
+function isPatientAppointmentAction(log: ActivityLogItem): boolean {
+  const message = String(log.message ?? '').trim().toLowerCase();
+  const source = String(log.meta?.source ?? '').trim().toLowerCase();
+
+  return source === 'public_wsapp'
+    || source === 'patient_whatsapp'
+    || source === 'public_reschedule_link'
+    || source === 'public_booking_link'
+    || message.includes('por paciente');
+}
+
+function getAgendaLogActorName(log: ActivityLogItem): string {
+  if (isPatientAppointmentAction(log)) {
+    return 'Paciente';
+  }
+
+  return log.user_name || 'Sistema';
 }
 
 function getEventColors(apt: Appointment): { bg: string; text: string } {
@@ -247,7 +266,8 @@ function renderEventContent(arg: EventContentArg) {
 export default function AgendaPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const isAssistant = user?.role === 'asistente';
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isShortViewport = useMediaQuery('(max-height:650px)');
@@ -472,6 +492,12 @@ export default function AgendaPage() {
     () => visibleAppointments.map(appointmentToEvent),
     [visibleAppointments]
   );
+  const calendarRenderKey = useMemo(
+    () => visibleAppointments
+      .map((appointment) => `${appointment.id}:${appointment.status}:${appointment.confirmed ? 1 : 0}:${appointment.confirmation_whatsapp_status ?? ''}`)
+      .join('|'),
+    [visibleAppointments],
+  );
 
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
@@ -488,6 +514,12 @@ export default function AgendaPage() {
   const isSelectedEventToday = selectedEvent
     ? dayjs(selectedEvent.event.start).isSame(dayjs(), 'day')
     : false;
+  const selectedEventDayDiff = selectedEvent
+    ? dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day')
+    : 0;
+  const isSelectedEventTomorrow = selectedEventDayDiff === 1;
+  const isSelectedEventPastTwoOrMoreDays = selectedEventDayDiff <= -2;
+  const isSelectedEventFutureTwoOrMoreDays = selectedEventDayDiff >= 2;
   const selectedEventStatus = Number(selectedEvent?.event.extendedProps.status ?? -1);
   const selectedEventIsConfirmed = Boolean(
     selectedEvent
@@ -495,9 +527,22 @@ export default function AgendaPage() {
     && selectedEventStatus !== 3
     && (selectedEvent.event.extendedProps.confirmed || selectedEventStatus === 1)
   );
+  const selectedEventIsCancelled = selectedEventStatus === 3;
   const canConfirmSelectedEvent = selectedEvent
-    ? !selectedEventIsConfirmed && dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day') < 3
+    ? (
+      !selectedEventIsConfirmed
+      && (
+        selectedEventIsCancelled
+          ? (isSelectedEventToday || isSelectedEventTomorrow)
+          : selectedEventDayDiff < 3
+      )
+    )
     : false;
+  const canReactivateSelectedEvent = Boolean(
+    selectedEvent
+    && selectedEventIsCancelled
+    && isSelectedEventFutureTwoOrMoreDays
+  );
   const selectedEventCanNotifyPatient = Boolean(
     String(selectedEvent?.event.extendedProps.phone ?? '').trim()
   );
@@ -735,11 +780,13 @@ export default function AgendaPage() {
       confirm: 1,
       no_show: 2,
       cancel: 3,
+      reactivate: 0,
     };
     const successMessageMap: Record<AppointmentAction, string> = {
       confirm: 'Cita confirmada correctamente',
       cancel: 'Cita cancelada correctamente',
       no_show: 'Cita marcada como no asistió',
+      reactivate: 'Cita reactivada correctamente',
     };
 
     setActionLoading(true);
@@ -845,6 +892,14 @@ export default function AgendaPage() {
     setSummaryOpen(false);
     navigate(`/pacientes/${patientId}?tab=history`);
   }, [navigate, selectedEvent, summaryData]);
+
+  const handleOpenPatientProfile = useCallback(() => {
+    const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
+    if (!patientId) return;
+
+    handleCloseSelectedEvent();
+    navigate(`/pacientes/${patientId}?tab=general`);
+  }, [handleCloseSelectedEvent, navigate, selectedEvent]);
 
   const handleOpenNewConsultationFromSummary = useCallback(() => {
     const patientId = Number(summaryData?.patient.id ?? selectedEvent?.event.extendedProps.patientId ?? 0);
@@ -1094,6 +1149,7 @@ export default function AgendaPage() {
           }}
         >
           <FullCalendar
+            key={calendarRenderKey}
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             initialView="listMonth"
@@ -1151,16 +1207,18 @@ export default function AgendaPage() {
         onClose={handleCloseSelectedEvent}
         maxWidth="xs"
         fullWidth
+        disableScrollLock
+        disableRestoreFocus
         sx={{
           '& .MuiDialog-container': {
             alignItems: 'flex-start',
-            pt: isShortViewport ? { xs: '10px', sm: '2px' } : { xs: '14px', sm: '6px' },
+            pt: isShortViewport ? { xs: '40px', sm: '2px' } : { xs: '40px', sm: '6px' },
           },
           '& .MuiDialog-paper': {
             width: isMobile ? 'calc(100vw - 8px)' : undefined,
             maxWidth: isMobile ? 'calc(100vw - 8px)' : 444,
             margin: isMobile
-              ? (isShortViewport ? '10px 4px 4px' : '14px 4px 4px')
+              ? '40px 4px 4px'
               : (isShortViewport ? '8px auto 24px' : '60px auto 32px'),
           },
         }}
@@ -1243,7 +1301,7 @@ export default function AgendaPage() {
                             {log.message || log.action}
                           </Typography>
                           <Typography sx={{ fontSize: '0.88rem', color: '#6b7785', mt: 0.25 }}>
-                            {log.user_name || 'Sistema'}{' '}
+                            {getAgendaLogActorName(log)}{' '}
                             {log.created_at ? `(${dayjs(log.created_at).format('dddd DD/MMM, HH:mm')} hrs)` : ''}
                           </Typography>
 
@@ -1310,7 +1368,7 @@ export default function AgendaPage() {
                     </Box>
                   )}
 
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 0.25 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', pt: 0.25 }}>
                     <Button
                       variant="text"
                       startIcon={<ArrowBackIcon />}
@@ -1325,22 +1383,6 @@ export default function AgendaPage() {
                       }}
                     >
                       Regresar
-                    </Button>
-                    <Button
-                      variant="text"
-                      onClick={() => {
-                        setShowAppointmentMore(false);
-                        setShowAppointmentDetails(true);
-                      }}
-                      sx={{
-                        minWidth: 'auto',
-                        p: 0,
-                        color: '#6f7680',
-                        textDecoration: 'underline',
-                        textTransform: 'none',
-                      }}
-                    >
-                      Datos de la cita
                     </Button>
                   </Box>
                 </Box>
@@ -1677,7 +1719,7 @@ export default function AgendaPage() {
 
               {!showAppointmentDetails && !showAppointmentMore && !pendingAction && (
                 <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.2 }}>
-                  {selectedEventIsConfirmed ? (
+                  {isSelectedEventPastTwoOrMoreDays ? null : selectedEventIsConfirmed ? (
                     <Typography sx={{ textAlign: 'center', color: '#2e7d32', fontWeight: 700, py: 0.9 }}>
                       Cita confirmada
                     </Typography>
@@ -1699,39 +1741,61 @@ export default function AgendaPage() {
                     >
                       CONFIRMAR CITA
                     </Button>
+                  ) : canReactivateSelectedEvent ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<CheckCircleIcon />}
+                      onClick={() => {
+                        setPendingAction('reactivate');
+                        setNotifyPatientAction(false);
+                      }}
+                      sx={{
+                        borderColor: '#50c65b',
+                        color: '#50c65b',
+                        py: 0.9,
+                        fontWeight: 500,
+                      }}
+                    >
+                      REACTIVAR CITA
+                    </Button>
                   ) : null}
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<CancelOutlinedIcon />}
-                    onClick={() => {
-                      setPendingAction('cancel');
-                      setNotifyPatientAction(cancelNotificationDefault);
-                    }}
-                    sx={{
-                      borderColor: '#ff4f42',
-                      color: '#ff4f42',
-                      py: 0.9,
-                      fontWeight: 500,
-                    }}
-                  >
-                    CANCELAR CITA
-                  </Button>
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    startIcon={<CalendarMonthIcon />}
-                    onClick={handleOpenReschedule}
-                    sx={{
-                      borderColor: '#50c65b',
-                      color: '#50c65b',
-                      py: 0.9,
-                      fontWeight: 500,
-                    }}
-                  >
-                    REPROGRAMAR CITA
-                  </Button>
-                  {isSelectedEventToday && (
+                  {!selectedEventIsCancelled && !isSelectedEventPastTwoOrMoreDays ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<CancelOutlinedIcon />}
+                      onClick={() => {
+                        setPendingAction('cancel');
+                        setNotifyPatientAction(cancelNotificationDefault);
+                      }}
+                      sx={{
+                        borderColor: '#ff4f42',
+                        color: '#ff4f42',
+                        py: 0.9,
+                        fontWeight: 500,
+                      }}
+                    >
+                      CANCELAR CITA
+                    </Button>
+                  ) : null}
+                  {!isSelectedEventPastTwoOrMoreDays ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      startIcon={<CalendarMonthIcon />}
+                      onClick={handleOpenReschedule}
+                      sx={{
+                        borderColor: '#50c65b',
+                        color: '#50c65b',
+                        py: 0.9,
+                        fontWeight: 500,
+                      }}
+                    >
+                      REPROGRAMAR CITA
+                    </Button>
+                  ) : null}
+                  {(isSelectedEventToday || isSelectedEventPastTwoOrMoreDays) && (
                     <Button
                       fullWidth
                       variant="outlined"
@@ -1747,7 +1811,7 @@ export default function AgendaPage() {
                       ASIGNAR NUEVA CITA
                     </Button>
                   )}
-                  {isSelectedEventToday && (
+                  {isSelectedEventToday && !isSelectedEventPastTwoOrMoreDays && (
                     <Button
                       fullWidth
                       variant="outlined"
@@ -1778,7 +1842,7 @@ export default function AgendaPage() {
                     sx={{
                       textAlign: 'center',
                       color:
-                        pendingAction === 'confirm'
+                        pendingAction === 'confirm' || pendingAction === 'reactivate'
                           ? '#50c65b'
                           : pendingAction === 'cancel'
                             ? '#ff4f42'
@@ -1788,6 +1852,8 @@ export default function AgendaPage() {
                   >
                     {pendingAction === 'confirm'
                       ? '¿El paciente asistirá a la cita?'
+                      : pendingAction === 'reactivate'
+                        ? '¿Deseas reactivar la cita?'
                       : pendingAction === 'cancel'
                         ? '¿Deseas cancelar la cita?'
                         : '¿Confirmas que el paciente no asistió?'}
@@ -1802,14 +1868,14 @@ export default function AgendaPage() {
                       py: 1,
                       fontWeight: 700,
                       backgroundColor:
-                        pendingAction === 'confirm'
+                        pendingAction === 'confirm' || pendingAction === 'reactivate'
                           ? '#4caf50'
                           : pendingAction === 'cancel'
                             ? '#ff4f42'
                             : '#ff9800',
                       '&:hover': {
                         backgroundColor:
-                          pendingAction === 'confirm'
+                          pendingAction === 'confirm' || pendingAction === 'reactivate'
                             ? '#43a047'
                             : pendingAction === 'cancel'
                               ? '#f44336'
@@ -1821,6 +1887,8 @@ export default function AgendaPage() {
                       <CircularProgress size={22} sx={{ color: '#fff' }} />
                     ) : pendingAction === 'confirm' ? (
                       'SI, CONFIRMAR'
+                    ) : pendingAction === 'reactivate' ? (
+                      'SI, REACTIVAR'
                     ) : pendingAction === 'cancel' ? (
                       'SI, CANCELAR'
                     ) : (
@@ -1857,6 +1925,24 @@ export default function AgendaPage() {
                 </Box>
               )}
 
+              {!showAppointmentDetails && !showAppointmentMore ? (
+                <Box sx={{ pt: 0.25, display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button
+                    variant="text"
+                    onClick={() => setShowAppointmentDetails(true)}
+                    sx={{
+                      minWidth: 'auto',
+                      p: 0,
+                      color: '#6f7680',
+                      textDecoration: 'underline',
+                      textTransform: 'none',
+                    }}
+                  >
+                    Datos de la cita
+                  </Button>
+                </Box>
+              ) : null}
+
               </Box>
               {!showAppointmentDetails && !showAppointmentMore && (
                 <Box
@@ -1883,7 +1969,19 @@ export default function AgendaPage() {
                   >
                     SALIR
                   </Button>
-                  {canViewPatientSummary ? (
+                  {isAssistant ? (
+                    <Button
+                      variant="contained"
+                      onClick={handleOpenPatientProfile}
+                      sx={{
+                        backgroundColor: '#5bc0eb',
+                        '&:hover': { backgroundColor: '#43b3e0' },
+                        minWidth: 110,
+                      }}
+                    >
+                      PERFIL
+                    </Button>
+                  ) : canViewPatientSummary ? (
                     <Button
                       variant="contained"
                       onClick={handleOpenSummary}
@@ -1902,7 +2000,7 @@ export default function AgendaPage() {
                 <Box
                   sx={{
                     display: 'flex',
-                    justifyContent: 'space-between',
+                    justifyContent: 'flex-start',
                     px: { xs: 1.5, sm: 3 },
                     py: 1.25,
                     borderTop: '1px solid #e5e9ef',
@@ -1911,32 +2009,18 @@ export default function AgendaPage() {
                     bottom: 0,
                     zIndex: 1,
                   }}
-                >
-                  <Button
-                    variant="contained"
-                    onClick={() => setShowAppointmentMore(false)}
+                  >
+                    <Button
+                      variant="contained"
+                      onClick={handleCloseSelectedEvent}
                     sx={{
                       backgroundColor: '#8c8c8c',
                       '&:hover': { backgroundColor: '#7c7c7c' },
                       minWidth: 92,
                     }}
-                  >
-                    Regresar
-                  </Button>
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      setShowAppointmentMore(false);
-                      setShowAppointmentDetails(true);
-                    }}
-                    sx={{
-                      backgroundColor: '#5bc0eb',
-                      '&:hover': { backgroundColor: '#43b3e0' },
-                      minWidth: 140,
-                    }}
-                  >
-                    Datos de la cita
-                  </Button>
+                    >
+                      Cerrar
+                    </Button>
                 </Box>
               )}
             </Box>

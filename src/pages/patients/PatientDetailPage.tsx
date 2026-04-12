@@ -58,7 +58,8 @@ export default function PatientDetailPage() {
   const ultraCompactPatientTabs = useMediaQuery(theme.breakpoints.down(800));
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const isAssistant = user?.role === 'asistente';
   const [searchParams, setSearchParams] = useSearchParams();
   const canCreateDailyNote = can('consultations.daily_note.create');
   const canEditConsultationHistory = can('consultations.history_edit');
@@ -80,6 +81,11 @@ export default function PatientDetailPage() {
   const [tabsOverflowing, setTabsOverflowing] = useState(false);
   const cameraMenuEnabled = Boolean(patient?.detail_menu?.camera_menu_enabled) && !iconOnlyPatientTabs;
   const cameraMenuTitle = (patient?.detail_menu?.camera_menu_title?.trim() || 'Camara');
+  const canAccessClinicalHistory = !isAssistant;
+  const canAccessConsultationHistory = !isAssistant;
+  const canAccessCamera = !isAssistant && Boolean(patient?.detail_menu?.camera_menu_enabled);
+  const canAccessReports = !isAssistant;
+  const canAccessDailyNote = !isAssistant;
   const dailyNoteButtonTitle = patient?.detail_menu?.daily_note_title_enabled
     ? (patient?.detail_menu?.daily_note_title?.trim() || 'Nota diaria')
     : 'Nota diaria';
@@ -102,21 +108,36 @@ export default function PatientDetailPage() {
       if (!patient && tabMap[requestedTab] === 4) {
         return;
       }
-      if (tabMap[requestedTab] === 4 && !patient?.detail_menu?.camera_menu_enabled) {
+      if (tabMap[requestedTab] === 1 && !canAccessClinicalHistory) {
+        setTab(0);
+        setSearchParams({ tab: 'general' }, { replace: true });
+        return;
+      }
+      if (tabMap[requestedTab] === 7 && !canAccessConsultationHistory) {
+        setTab(0);
+        setSearchParams({ tab: 'general' }, { replace: true });
+        return;
+      }
+      if (tabMap[requestedTab] === 4 && !canAccessCamera) {
+        setTab(0);
+        setSearchParams({ tab: 'general' }, { replace: true });
+        return;
+      }
+      if (tabMap[requestedTab] === 8 && !canAccessReports) {
         setTab(0);
         setSearchParams({ tab: 'general' }, { replace: true });
         return;
       }
       setTab(tabMap[requestedTab]);
     }
-  }, [searchParams, patient?.detail_menu?.camera_menu_enabled, setSearchParams]);
+  }, [searchParams, setSearchParams, patient, canAccessClinicalHistory, canAccessConsultationHistory, canAccessCamera, canAccessReports]);
 
   useEffect(() => {
-    if (tab === 4 && !patient?.detail_menu?.camera_menu_enabled) {
+    if ((tab === 1 && !canAccessClinicalHistory) || (tab === 7 && !canAccessConsultationHistory) || (tab === 4 && !canAccessCamera) || (tab === 8 && !canAccessReports)) {
       setTab(0);
       setSearchParams({ tab: 'general' }, { replace: true });
     }
-  }, [tab, patient?.detail_menu?.camera_menu_enabled, setSearchParams]);
+  }, [tab, setSearchParams, canAccessClinicalHistory, canAccessConsultationHistory, canAccessCamera, canAccessReports]);
 
   useEffect(() => {
     const evaluateTabsOverflow = () => {
@@ -138,6 +159,12 @@ export default function PatientDetailPage() {
   }, [cameraMenuEnabled, compactPatientTabs, veryCompactPatientTabs, iconOnlyPatientTabs, ultraCompactPatientTabs, dailyNoteButtonTitle]);
 
   const handleTabChange = (_event: React.SyntheticEvent, nextTab: number) => {
+    if ((nextTab === 1 && !canAccessClinicalHistory) || (nextTab === 7 && !canAccessConsultationHistory) || (nextTab === 4 && !canAccessCamera) || (nextTab === 8 && !canAccessReports) || (nextTab === 2 && !canAccessDailyNote)) {
+      setTab(0);
+      setSearchParams({ tab: 'general' }, { replace: true });
+      return;
+    }
+
     if (nextTab === 2) {
       setDailyNoteEditRequest(null);
       setSoapTabSessionKey((current) => current + 1);
@@ -164,6 +191,12 @@ export default function PatientDetailPage() {
   };
 
   const handleOpenDailyNoteTab = () => {
+    if (!canAccessDailyNote) {
+      setTab(0);
+      setSearchParams({ tab: 'general' }, { replace: true });
+      return;
+    }
+
     setDailyNoteEditRequest(null);
     setSoapTabSessionKey((current) => current + 1);
     setTab(2);
@@ -201,6 +234,10 @@ export default function PatientDetailPage() {
       return;
     }
 
+    if (user?.role === 'asistente') {
+      return;
+    }
+
     if (tab !== 0 && tab !== 1) {
       return;
     }
@@ -218,7 +255,7 @@ export default function PatientDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [patient?.id, patient?.detail_menu?.camera_menu_enabled, tab]);
+  }, [patient?.id, patient?.detail_menu?.camera_menu_enabled, tab, user?.role]);
 
   const formatPhoneNumber = (phone?: string) => {
     const digits = String(phone ?? '').replace(/\D/g, '');
@@ -391,21 +428,23 @@ export default function PatientDetailPage() {
             </Box>
           </Box>
         </Box>
-        <Button
-          variant="contained"
-          startIcon={<NoteIcon />}
-          onClick={handleOpenDailyNoteTab}
-          sx={{
-            alignSelf: { xs: 'stretch', sm: 'flex-start' },
-            ml: { xs: 0, sm: 'auto' },
-            backgroundColor: '#2e7d32',
-            '&:hover': {
-              backgroundColor: '#1b5e20',
-            },
-          }}
-        >
-          {dailyNoteButtonTitle}
-        </Button>
+        {canAccessDailyNote ? (
+          <Button
+            variant="contained"
+            startIcon={<NoteIcon />}
+            onClick={handleOpenDailyNoteTab}
+            sx={{
+              alignSelf: { xs: 'stretch', sm: 'flex-start' },
+              ml: { xs: 0, sm: 'auto' },
+              backgroundColor: '#2e7d32',
+              '&:hover': {
+                backgroundColor: '#1b5e20',
+              },
+            }}
+          >
+            {dailyNoteButtonTitle}
+          </Button>
+        ) : null}
       </Box>
 
       <Tabs
@@ -425,6 +464,16 @@ export default function PatientDetailPage() {
             minWidth: ultraCompactPatientTabs ? 44 : undefined,
             px: ultraCompactPatientTabs ? 0.5 : undefined,
           },
+          ...(isAssistant ? {
+            '& .MuiTabs-flexContainer > *:nth-of-type(2), & .MuiTabs-flexContainer > *:nth-of-type(3), & .MuiTabs-flexContainer > *:nth-of-type(4)': {
+              display: 'none',
+            },
+            ...(cameraMenuEnabled ? {
+              '& .MuiTabs-flexContainer > *:nth-of-type(6)': {
+                display: 'none',
+              },
+            } : {}),
+          } : {}),
         }}
       >
         <Tab value={0} icon={<PersonIcon />} label={compactPatientTabs ? '' : 'Perfil'} iconPosition="start" />
@@ -447,9 +496,11 @@ export default function PatientDetailPage() {
       </TabPanel>
 
       {/* Tab 1: Historia Cl\u00ednica */}
-      <TabPanel value={tab} index={1}>
-        <ClinicalHistoryTab patientId={patient.id} />
-      </TabPanel>
+      {canAccessClinicalHistory ? (
+        <TabPanel value={tab} index={1}>
+          <ClinicalHistoryTab patientId={patient.id} />
+        </TabPanel>
+      ) : null}
 
       {/* Tab 2: Nota Diaria (SOAP) */}
       <TabPanel value={tab} index={2}>
@@ -483,12 +534,14 @@ export default function PatientDetailPage() {
       </TabPanel>
 
       {/* Tab 8: Reportes */}
-      <TabPanel value={tab} index={8}>
-        <PatientReportsTab patientId={patient.id} />
-      </TabPanel>
+      {canAccessReports ? (
+        <TabPanel value={tab} index={8}>
+          <PatientReportsTab patientId={patient.id} />
+        </TabPanel>
+      ) : null}
 
       {/* Tab 4: Colposcop\u00eda */}
-      {patient.detail_menu?.camera_menu_enabled ? (
+      {canAccessCamera ? (
         <TabPanel value={tab} index={4}>
           <PatientColposcopyTab
             patientId={patient.id}
@@ -517,18 +570,20 @@ export default function PatientDetailPage() {
       </TabPanel>
 
       {/* Tab 7: Hist\u00f3rico */}
-      <TabPanel value={tab} index={7}>
-        <ConsultationHistoryTab
-          patient={patient}
-          soapNotes={soapNotes}
-          canEditConsultationHistory={canEditConsultationHistory}
-          onNavigateToBitacora={() => {
-            setTab(6);
-            setSearchParams({ tab: 'bitacora' }, { replace: true });
-          }}
-          onEditNote={handleDailyNoteEditRequest}
-        />
-      </TabPanel>
+      {canAccessConsultationHistory ? (
+        <TabPanel value={tab} index={7}>
+          <ConsultationHistoryTab
+            patient={patient}
+            soapNotes={soapNotes}
+            canEditConsultationHistory={canEditConsultationHistory}
+            onNavigateToBitacora={() => {
+              setTab(6);
+              setSearchParams({ tab: 'bitacora' }, { replace: true });
+            }}
+            onEditNote={handleDailyNoteEditRequest}
+          />
+        </TabPanel>
+      ) : null}
 
       <Snackbar
         open={Boolean(copyMessage)}

@@ -478,7 +478,7 @@ export default function PatientsPage() {
 
   const handleSelectPatient = (patient: Patient) => {
     if (canViewPatientDetail) {
-      navigate(`/pacientes/${patient.id}`);
+      navigate(`/pacientes/${patient.id}?tab=general`);
       return;
     }
 
@@ -548,7 +548,7 @@ export default function PatientsPage() {
       setCreatePatientOpen(false);
 
       if (user?.role === 'medico') {
-        navigate(`/pacientes/${createdPatient.id}?tab=history`);
+        navigate(`/pacientes/${createdPatient.id}?tab=general`);
       } else {
         setCopyMessage('Registro guardado');
       }

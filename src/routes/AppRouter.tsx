@@ -119,7 +119,14 @@ export default function AppRouter() {
           <Route
             path="/consultas"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['consultations.view']}>
+              <ProtectedRoute
+                roles={['medico', 'asistente']}
+                anyPermissions={[
+                  'consultations.view',
+                  'consultations.history_edit',
+                  'consultations.daily_note.create',
+                ]}
+              >
                 <ConsultationsPage />
               </ProtectedRoute>
             }
@@ -132,14 +139,24 @@ export default function AppRouter() {
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/configuracion"
-            element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['settings.profile.self']}>
-                <SettingsPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route
+              path="/configuracion"
+              element={
+                <ProtectedRoute
+                  roles={['medico', 'asistente']}
+                  anyPermissions={[
+                    'settings.profile.self',
+                    'settings.company',
+                    'settings.agenda',
+                    'settings.unavailable_days',
+                    'settings.print',
+                    'settings.labels',
+                  ]}
+                >
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
         </Route>
 
         {/* Default redirect */}
