@@ -122,7 +122,7 @@ const CLINICAL_HISTORY_GROUPS: FormFieldGroup[] = [
     fields: [
       { key: 'alergias', label: 'Alergias' },
       { key: 'hijosindromedown', label: 'Antecedentes hijos síndrome de down' },
-      { key: 'degenerativas', label: 'Enfermedades crónico degenerativas' },
+      { key: 'degenerativas', label: 'Enfermedades crónico-degenerativas' },
       { key: 'cirujias', label: 'Cirugías' },
       { key: 'transfusiones', label: 'Transfusiones' },
       { key: 'fracturas', label: 'Fracturas' },
@@ -1905,7 +1905,7 @@ function FormSettingsPanel({
                     >
                       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                         <Typography variant="body2" color="text.secondary">
-                          El select de género seguirá visible al agendar una cita, pero se precargará automáticamente con la opción elegida.
+                          El campo de seleccionar género seguirá visible al agendar una cita, pero se precargará automáticamente con la opción elegida.
                         </Typography>
                         <TextField
                           select

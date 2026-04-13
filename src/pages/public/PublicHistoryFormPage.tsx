@@ -207,7 +207,7 @@ export default function PublicHistoryFormPage() {
                   <TextField label="Alergias" fullWidth size="small" value={formData.allergies} onChange={(e) => updateField('allergies', e.target.value)} />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField label="Enfermedades crónico degenerativas" fullWidth size="small" value={formData.chronic_diseases} onChange={(e) => updateField('chronic_diseases', e.target.value)} />
+                  <TextField label="Enfermedades crónico-degenerativas" fullWidth size="small" value={formData.chronic_diseases} onChange={(e) => updateField('chronic_diseases', e.target.value)} />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Cirugías" fullWidth size="small" value={formData.surgeries} onChange={(e) => updateField('surgeries', e.target.value)} />

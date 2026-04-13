@@ -153,7 +153,7 @@ const DAILY_NOTE_CLINICAL_HISTORY_GROUPS = [
     fields: [
       { key: 'alergias', label: 'Alergias' },
       { key: 'hijosindromedown', label: 'Antecedentes hijos síndrome de down' },
-      { key: 'degenerativas', label: 'Enfermedades crónico degenerativas' },
+      { key: 'degenerativas', label: 'Enfermedades crónico-degenerativas' },
       { key: 'cirujias', label: 'Cirugías' },
       { key: 'transfusiones', label: 'Transfusiones' },
       { key: 'fracturas', label: 'Fracturas' },
