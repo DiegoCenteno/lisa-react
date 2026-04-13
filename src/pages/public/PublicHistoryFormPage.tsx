@@ -175,7 +175,7 @@ export default function PublicHistoryFormPage() {
       } else {
         await publicStudyService.savePublicHistoryForm(publicCode, historyFormState);
       }
-      setSuccessMessage('Gracias por contestar la encuesta.');
+      setSuccessMessage('Tus respuestas han sido confirmadas.');
       setSubmitted(true);
     } catch (err: any) {
       setError(err?.response?.data?.message ?? 'No fue posible guardar la historia clinica.');
@@ -265,11 +265,11 @@ export default function PublicHistoryFormPage() {
 
               {appointment.history_form_completed || submitted ? (
                 <Alert severity="success">
-                  Tu historia clinica ya fue respondida.
+                  Tus respuestas han sido confirmadas.
                 </Alert>
               ) : null}
 
-              {appointment.show_history_form && !appointment.history_form_completed ? (
+              {appointment.show_history_form && !appointment.history_form_completed && !submitted ? (
                 <Box
                   ref={historyFormRef}
                   sx={{
