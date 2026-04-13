@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import {
   Box,
   Card,
@@ -13,68 +14,196 @@ import {
   AccordionDetails,
   FormControlLabel,
   Checkbox,
+  CircularProgress,
 } from '@mui/material';
 import {
   ExpandMore as ExpandMoreIcon,
   LocalHospital as HospitalIcon,
 } from '@mui/icons-material';
+import publicStudyService from '../../api/publicStudyService';
+import type { PublicAppointmentConfirmation } from '../../types';
+
+type FormDataState = {
+  blood_type_rh: string;
+  genetic_defects: string;
+  family_preeclampsia: string;
+  diabetes: string;
+  cancer: string;
+  hypertension: string;
+  rheumatic_disease: string;
+  hereditary_others: string;
+  origin: string;
+  residence: string;
+  civil_status: string;
+  education: string;
+  occupation: string;
+  substance_use: string;
+  medications: string;
+  smoking: string;
+  alcohol: string;
+  personal_others: string;
+  allergies: string;
+  chronic_diseases: string;
+  surgeries: string;
+  transfusions: string;
+  fractures: string;
+  pathological_others: string;
+  has_gynecological: boolean;
+  menarche: string;
+  menstrual_cycles: string;
+  last_menstruation_date: string;
+  ivsa: string;
+  sexual_partners: string;
+  std: string;
+  cytology: string;
+  family_planning: string;
+  gestations: string;
+  deliveries: string;
+  cesareans: string;
+  abortions: string;
+  privacy_notice_accepted: boolean;
+};
+
+const initialFormData: FormDataState = {
+  blood_type_rh: '',
+  genetic_defects: '',
+  family_preeclampsia: '',
+  diabetes: '',
+  cancer: '',
+  hypertension: '',
+  rheumatic_disease: '',
+  hereditary_others: '',
+  origin: '',
+  residence: '',
+  civil_status: '',
+  education: '',
+  occupation: '',
+  substance_use: '',
+  medications: '',
+  smoking: '',
+  alcohol: '',
+  personal_others: '',
+  allergies: '',
+  chronic_diseases: '',
+  surgeries: '',
+  transfusions: '',
+  fractures: '',
+  pathological_others: '',
+  has_gynecological: false,
+  menarche: '',
+  menstrual_cycles: '',
+  last_menstruation_date: '',
+  ivsa: '',
+  sexual_partners: '',
+  std: '',
+  cytology: '',
+  family_planning: '',
+  gestations: '',
+  deliveries: '',
+  cesareans: '',
+  abortions: '',
+  privacy_notice_accepted: false,
+};
 
 export default function PublicHistoryFormPage() {
+  const params = useParams<{ token?: string; code?: string }>();
+  const publicCode = useMemo(() => params.code ?? params.token ?? '', [params.code, params.token]);
+
   const [submitted, setSubmitted] = useState(false);
   const [expandedPanel, setExpandedPanel] = useState<string | false>('hereditary');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [appointmentData, setAppointmentData] = useState<PublicAppointmentConfirmation | null>(null);
+  const [legacyMode, setLegacyMode] = useState(false);
+  const [formData, setFormData] = useState<FormDataState>(initialFormData);
 
-  const [formData, setFormData] = useState({
-    blood_type_rh: '',
-    genetic_defects: '',
-    family_preeclampsia: '',
-    diabetes: '',
-    cancer: '',
-    hypertension: '',
-    rheumatic_disease: '',
-    hereditary_others: '',
-    origin: '',
-    residence: '',
-    civil_status: '',
-    education: '',
-    occupation: '',
-    substance_use: '',
-    medications: '',
-    smoking: '',
-    alcohol: '',
-    personal_others: '',
-    allergies: '',
-    chronic_diseases: '',
-    surgeries: '',
-    transfusions: '',
-    fractures: '',
-    pathological_others: '',
-    has_gynecological: false,
-    menarche: '',
-    menstrual_cycles: '',
-    last_menstruation_date: '',
-    ivsa: '',
-    sexual_partners: '',
-    std: '',
-    cytology: '',
-    family_planning: '',
-    gestations: '',
-    deliveries: '',
-    cesareans: '',
-    abortions: '',
-  });
+  useEffect(() => {
+    let ignore = false;
 
-  const updateField = (field: string, value: string | boolean) => {
-    setFormData({ ...formData, [field]: value });
+    async function load() {
+      if (!publicCode) {
+        setError('Código público no encontrado.');
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError('');
+
+      try {
+        let data: PublicAppointmentConfirmation;
+        try {
+          data = await publicStudyService.resolvePublicHistoryCode(publicCode);
+          if (ignore) return;
+          setLegacyMode(false);
+        } catch {
+          const legacy = await publicStudyService.resolvePublicCode(publicCode);
+          if (legacy.type !== 'appointment_confirmation' || !legacy.appointment) {
+            throw new Error('Código público no encontrado.');
+          }
+          data = legacy.appointment;
+          if (ignore) return;
+          setLegacyMode(true);
+        }
+        if (ignore) return;
+        setAppointmentData(data);
+        if (data.history_form_completed) {
+          setSubmitted(true);
+        }
+      } catch (err: any) {
+        if (ignore) return;
+        setError(err?.response?.data?.message ?? 'No fue posible cargar la historia clínica.');
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+
+    return () => {
+      ignore = true;
+    };
+  }, [publicCode]);
+
+  const updateField = <K extends keyof FormDataState>(field: K, value: FormDataState[K]) => {
+    setFormData((current) => ({ ...current, [field]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    if (!publicCode) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      if (legacyMode) {
+        await publicStudyService.saveAppointmentHistoryForm(publicCode, formData);
+      } else {
+        await publicStudyService.savePublicHistoryForm(publicCode, formData);
+      }
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.message ?? 'No fue posible guardar la historia clínica.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAccordionChange = (panel: string) => (_: React.SyntheticEvent, isExpanded: boolean) => {
     setExpandedPanel(isExpanded ? panel : false);
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   if (submitted) {
     return (
@@ -88,14 +217,14 @@ export default function PublicHistoryFormPage() {
           p: 2,
         }}
       >
-        <Card sx={{ maxWidth: 500, width: '100%' }}>
+        <Card sx={{ maxWidth: 560, width: '100%' }}>
           <CardContent sx={{ p: 4, textAlign: 'center' }}>
             <HospitalIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
             <Typography variant="h5" sx={{ color: 'primary.main', mb: 2 }}>
-              ¡Información Enviada!
+              Información enviada
             </Typography>
             <Alert severity="success">
-              Tu historia clínica ha sido registrada exitosamente. El médico revisará tu información antes de la consulta.
+              Tu historia clínica ha sido registrada. El médico podrá revisarla antes de la consulta.
             </Alert>
           </CardContent>
         </Card>
@@ -115,17 +244,24 @@ export default function PublicHistoryFormPage() {
         <Box sx={{ textAlign: 'center', mb: 3, pt: 3 }}>
           <HospitalIcon sx={{ fontSize: 40, color: 'white', mb: 1 }} />
           <Typography variant="h5" sx={{ color: 'white', fontWeight: 700 }}>
-            Historia Clínica
+            Historia clínica
           </Typography>
-          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-            LisaMedic - Por favor complete la siguiente información antes de su consulta
+          <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)' }}>
+            {appointmentData?.history_form_message || 'Por favor completa la siguiente información antes de tu consulta.'}
           </Typography>
+          {appointmentData && (
+            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.88)', mt: 1 }}>
+              {appointmentData.patient.full_name} · {appointmentData.office.doctor_name} · {appointmentData.appointment.date_label} · {appointmentData.appointment.time_label}
+            </Typography>
+          )}
         </Box>
+
+        {error ? <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert> : null}
 
         <Box component="form" onSubmit={handleSubmit}>
           <Accordion expanded={expandedPanel === 'hereditary'} onChange={handleAccordionChange('hereditary')}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography sx={{ fontWeight: 600 }}>Antecedentes Heredofamiliares</Typography>
+              <Typography sx={{ fontWeight: 600 }}>Antecedentes heredofamiliares</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
@@ -139,7 +275,7 @@ export default function PublicHistoryFormPage() {
                   <TextField label="A. familiar de preeclampsia" fullWidth size="small" value={formData.family_preeclampsia} onChange={(e) => updateField('family_preeclampsia', e.target.value)} />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
-                  <TextField label="Diabetes mellitus" fullWidth size="small" value={formData.diabetes} onChange={(e) => updateField('diabetes', e.target.value)} />
+                  <TextField label="Diabetes" fullWidth size="small" value={formData.diabetes} onChange={(e) => updateField('diabetes', e.target.value)} />
                 </Grid>
                 <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField label="Cáncer" fullWidth size="small" value={formData.cancer} onChange={(e) => updateField('cancer', e.target.value)} />
@@ -159,7 +295,7 @@ export default function PublicHistoryFormPage() {
 
           <Accordion expanded={expandedPanel === 'personal_non_path'} onChange={handleAccordionChange('personal_non_path')}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography sx={{ fontWeight: 600 }}>Antecedentes Personales NO Patológicos</Typography>
+              <Typography sx={{ fontWeight: 600 }}>Antecedentes personales no patológicos</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
@@ -199,7 +335,7 @@ export default function PublicHistoryFormPage() {
 
           <Accordion expanded={expandedPanel === 'pathological'} onChange={handleAccordionChange('pathological')}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography sx={{ fontWeight: 600 }}>Antecedentes Personales Patológicos</Typography>
+              <Typography sx={{ fontWeight: 600 }}>Antecedentes personales patológicos</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
@@ -227,16 +363,11 @@ export default function PublicHistoryFormPage() {
 
           <Accordion expanded={expandedPanel === 'gynecological'} onChange={handleAccordionChange('gynecological')}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Typography sx={{ fontWeight: 600 }}>Antecedentes Ginecológicos</Typography>
+              <Typography sx={{ fontWeight: 600 }}>Antecedentes ginecológicos</Typography>
             </AccordionSummary>
             <AccordionDetails>
               <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={formData.has_gynecological}
-                    onChange={(e) => updateField('has_gynecological', e.target.checked)}
-                  />
-                }
+                control={<Checkbox checked={formData.has_gynecological} onChange={(e) => updateField('has_gynecological', e.target.checked)} />}
                 label="Aplica esta sección"
                 sx={{ mb: 2 }}
               />
@@ -283,9 +414,16 @@ export default function PublicHistoryFormPage() {
             </AccordionDetails>
           </Accordion>
 
-          <Box sx={{ mt: 3, textAlign: 'center' }}>
-            <Button type="submit" variant="contained" size="large" sx={{ px: 6 }}>
-              Enviar Información
+          <Box sx={{ mt: 3 }}>
+            <FormControlLabel
+              control={<Checkbox checked={formData.privacy_notice_accepted} onChange={(e) => updateField('privacy_notice_accepted', e.target.checked)} />}
+              label="Confirmo que deseo integrar esta información a mi expediente clínico."
+            />
+          </Box>
+
+          <Box sx={{ mt: 2, textAlign: 'center' }}>
+            <Button type="submit" variant="contained" size="large" sx={{ px: 6 }} disabled={saving}>
+              {saving ? 'Enviando...' : 'Enviar información'}
             </Button>
           </Box>
         </Box>

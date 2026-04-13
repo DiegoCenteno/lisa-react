@@ -492,13 +492,6 @@ export default function AgendaPage() {
     () => visibleAppointments.map(appointmentToEvent),
     [visibleAppointments]
   );
-  const calendarRenderKey = useMemo(
-    () => visibleAppointments
-      .map((appointment) => `${appointment.id}:${appointment.status}:${appointment.confirmed ? 1 : 0}:${appointment.confirmation_whatsapp_status ?? ''}`)
-      .join('|'),
-    [visibleAppointments],
-  );
-
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
     setPendingAction(null);
@@ -1149,7 +1142,6 @@ export default function AgendaPage() {
           }}
         >
           <FullCalendar
-            key={calendarRenderKey}
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
             initialView="listMonth"

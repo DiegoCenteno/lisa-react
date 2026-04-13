@@ -507,7 +507,7 @@ async function resolveOfficeId(): Promise<number> {
     return cachedOfficeId;
   }
 
-  const persistedOfficeId = localStorage.getItem('cached_office_id');
+  const persistedOfficeId = sessionStorage.getItem('cached_office_id');
   if (persistedOfficeId) {
     const parsedOfficeId = Number(persistedOfficeId);
     if (Number.isFinite(parsedOfficeId) && parsedOfficeId > 0) {
@@ -516,13 +516,15 @@ async function resolveOfficeId(): Promise<number> {
     }
   }
 
+  localStorage.removeItem('cached_office_id');
+
   const userRaw = localStorage.getItem('user');
   if (userRaw) {
     try {
       const user = JSON.parse(userRaw) as { consultorio_id?: number };
       if (user.consultorio_id) {
         cachedOfficeId = user.consultorio_id;
-        localStorage.setItem('cached_office_id', String(user.consultorio_id));
+        sessionStorage.setItem('cached_office_id', String(user.consultorio_id));
         return user.consultorio_id;
       }
     } catch {
@@ -538,7 +540,7 @@ async function resolveOfficeId(): Promise<number> {
 
       const officeId = offices[0].id;
       cachedOfficeId = officeId;
-      localStorage.setItem('cached_office_id', String(officeId));
+      sessionStorage.setItem('cached_office_id', String(officeId));
       return officeId;
     }).finally(() => {
       officeIdPromise = null;

@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
 import { authService } from '../api/authService';
+import { appointmentService } from '../api/appointmentService';
 import { AuthContext } from './authTypes';
 import { clearBrowserClientState } from '../utils/clientReset';
 
@@ -24,14 +25,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(getInitialUser);
   const [token, setToken] = useState<string | null>(getInitialToken);
 
+  useEffect(() => {
+    let active = true;
+
+    const ensureSessionOfficeId = async () => {
+      if (!user || !token) return;
+      if (sessionStorage.getItem('cached_office_id')) return;
+
+      localStorage.removeItem('cached_office_id');
+
+      try {
+        const offices = await appointmentService.getOffices();
+        if (!active) return;
+        if (offices.length > 0) {
+          sessionStorage.setItem('cached_office_id', String(offices[0].id));
+        }
+      } catch {
+        // Ignore office bootstrap failures here; services will fallback as needed.
+      }
+    };
+
+    void ensureSessionOfficeId();
+
+    return () => {
+      active = false;
+    };
+  }, [user, token]);
+
   const login = useCallback(async (email: string, password: string) => {
     const response = await authService.login(email, password);
     setUser(response.user);
     setToken(response.token);
     localStorage.setItem('token', response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
+    localStorage.removeItem('cached_office_id');
+    sessionStorage.removeItem('cached_office_id');
     if (response.refresh_token) {
       localStorage.setItem('refresh_token', response.refresh_token);
+    }
+
+    try {
+      const offices = await appointmentService.getOffices();
+      if (offices.length > 0) {
+        sessionStorage.setItem('cached_office_id', String(offices[0].id));
+      }
+    } catch {
+      sessionStorage.removeItem('cached_office_id');
     }
   }, []);
 
@@ -42,6 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('refresh_token');
+    localStorage.removeItem('cached_office_id');
+    sessionStorage.removeItem('cached_office_id');
   }, []);
 
   const hardResetClientAuth = useCallback(async () => {

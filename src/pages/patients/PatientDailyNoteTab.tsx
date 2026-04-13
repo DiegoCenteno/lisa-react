@@ -281,17 +281,20 @@ function buildPregnancySummary(lastMenstruationDate?: string | null): { fur: str
 
 function resolveCurrentOfficeId(patientOfficeId?: number | null): number | null {
   if (patientOfficeId && patientOfficeId > 0) {
-    localStorage.setItem('cached_office_id', String(patientOfficeId));
+    sessionStorage.setItem('cached_office_id', String(patientOfficeId));
+    localStorage.removeItem('cached_office_id');
     return patientOfficeId;
   }
 
-  const cachedOfficeId = localStorage.getItem('cached_office_id');
+  const cachedOfficeId = sessionStorage.getItem('cached_office_id');
   if (cachedOfficeId) {
     const parsed = Number(cachedOfficeId);
     if (Number.isFinite(parsed) && parsed > 0) {
       return parsed;
     }
   }
+
+  localStorage.removeItem('cached_office_id');
 
   const userRaw = localStorage.getItem('user');
   if (!userRaw) {
@@ -301,11 +304,11 @@ function resolveCurrentOfficeId(patientOfficeId?: number | null): number | null 
   try {
     const user = JSON.parse(userRaw) as { consultorio_id?: number; office_id?: number };
     if (user.consultorio_id && user.consultorio_id > 0) {
-      localStorage.setItem('cached_office_id', String(user.consultorio_id));
+      sessionStorage.setItem('cached_office_id', String(user.consultorio_id));
       return user.consultorio_id;
     }
     if (user.office_id && user.office_id > 0) {
-      localStorage.setItem('cached_office_id', String(user.office_id));
+      sessionStorage.setItem('cached_office_id', String(user.office_id));
       return user.office_id;
     }
     return null;
@@ -320,7 +323,7 @@ async function loadDailyNoteBootstrap(patientId: number, patientOfficeId?: numbe
     const availableOffices = await appointmentService.getOffices();
     officeId = availableOffices[0]?.id ?? null;
     if (officeId) {
-      localStorage.setItem('cached_office_id', String(officeId));
+      sessionStorage.setItem('cached_office_id', String(officeId));
     }
   }
 
@@ -1795,7 +1798,7 @@ function PatientDailyNoteTab({
       } else {
         await consultationService.createDailyNote(payload);
         if (selectedStudyTypeIds.length > 0) {
-          const officeId = Number(patient.office_id ?? localStorage.getItem('cached_office_id') ?? 0);
+          const officeId = Number(patient.office_id ?? sessionStorage.getItem('cached_office_id') ?? 0);
           if (officeId > 0) {
             await studyDeliveryService.createSampleStudyDelivery({
               office_id: officeId,
@@ -1985,7 +1988,7 @@ function PatientDailyNoteTab({
     ));
   }, []);
   const handleCreateStudyType = useCallback(async (name: string) => {
-    const officeId = Number(patient.office_id ?? localStorage.getItem('cached_office_id') ?? 0);
+    const officeId = Number(patient.office_id ?? sessionStorage.getItem('cached_office_id') ?? 0);
     if (officeId <= 0) {
       throw new Error('Consultorio no disponible.');
     }

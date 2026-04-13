@@ -55,6 +55,26 @@ const publicStudyService = {
     return response.data.data;
   },
 
+  async resolvePublicHistoryCode(code: string): Promise<PublicAppointmentPayload> {
+    const response = await publicApiClient.get<{ status: string; data: PublicAppLinkResponse }>(
+      `/v2/public/history-links/${code}`
+    );
+
+    return response.data.data.appointment as PublicAppointmentPayload;
+  },
+
+  async savePublicHistoryForm(
+    code: string,
+    payload: Record<string, unknown>
+  ): Promise<PublicAppointmentPayload> {
+    const response = await publicApiClient.post<{ status: string; data: PublicAppointmentPayload }>(
+      `/v2/public/history-links/${code}/history-form`,
+      payload
+    );
+
+    return response.data.data;
+  },
+
   async getStudyFileBlob(code: string): Promise<Blob> {
     const response = await publicApiClient.get<Blob>(`/v2/public/app-links/${code}/file`, {
       responseType: 'blob',
