@@ -55,54 +55,54 @@ const notificationOptions = [
     audience: 'patient',
     title: 'Nueva cita generada',
     description:
-      'Notificacion enviada al paciente con la informacion de la cita justo al momento en que se agenda.',
+      'Notificación enviada al paciente con la información de la cita justo al momento en que se agenda.',
   },
   {
     key: 'confirmacion_cita',
     audience: 'patient',
     title: 'Confirmacion de citas',
     description:
-      'Notificacion enviada al paciente un dia antes para confirmar, cancelar o reprogramar su cita.',
+      'Notificación enviada al paciente un dia antes para confirmar, cancelar o reprogramar su cita.',
   },
   {
     key: 'mis_citas_hoy',
     audience: 'doctor',
     title: 'Mis citas de hoy',
     description:
-      'Resumen diario enviado al medico con los horarios de la agenda del dia.',
+      'Resumen diario enviado al médico con los horarios de la agenda del dia.',
   },
   {
     key: 'alertas_citas_proximas',
     audience: 'doctor',
-    title: 'Alertas sobre cita de hoy o ma\u00F1ana',
+    title: 'Alertas sobre cita de hoy o mañana',
     description:
-      'Aviso al medico y asistentes cuando se agenda, reprograma o cancela una cita muy cercana.',
+      'Aviso al médico y asistentes cuando se agenda, reprograma o cancela una cita muy cercana.',
   },
   {
     key: 'formulario_historia_clinica',
     audience: 'patient',
-    title: 'Enviar formulario de historia clinica',
+    title: 'Enviar formulario de historia clínica',
     description:
-      'Permite enviar al paciente un formulario de preguntas previas sobre su historia clinica.',
+      'Permite enviar al paciente un formulario de preguntas previas sobre su historia clínica.',
   },
   {
     key: 'recordatorio_cita',
     audience: 'patient',
     title: 'Recordatorio 5 dias antes de la cita',
     description:
-      'Recordatorio preventivo al paciente cuando la cita se creo con mucha anticipacion.',
+      'Recordatorio preventivo al paciente cuando la cita se creó con mucha anticipación.',
   },
   {
     key: 'envio_resultados_estudio',
     audience: 'patient',
-    title: 'Envio de resultados de estudios',
+    title: 'Envió de resultados de estudios',
     description:
-      'Permite enviar al paciente el enlace publico para revisar y descargar su resultado.',
+      'Permite enviar al paciente el enlace público para revisar y descargar su resultado.',
   },
   {
     key: 'cancelacion_cita_paciente',
     audience: 'patient',
-    title: 'Cancelacion de cita al paciente',
+    title: 'Cancelación de cita al paciente',
     description:
       'Permite avisar al paciente cuando su cita fue cancelada desde el sistema o por respuesta en WhatsApp.',
   },
@@ -343,8 +343,8 @@ export default function NotificationsPage() {
               {option.audience === 'patient'
                 ? 'Paciente'
                 : option.key === 'mis_citas_hoy'
-                  ? 'Medico'
-                  : 'Medico / asistentes'}
+                  ? 'Médico'
+                  : 'Médico / asistentes'}
             </Box>
           </Stack>
           <Typography variant="body2" color="text.secondary">
@@ -393,8 +393,8 @@ export default function NotificationsPage() {
       setAssistantData(data);
       setMessage('Telefono adicional retirado de la lista de alertas cercanas.');
     } catch (requestError) {
-      console.error('Error eliminando telefono adicional:', requestError);
-      setError('No se pudo eliminar el telefono adicional.');
+      console.error('Error eliminando télefono adicional:', requestError);
+      setError('No se pudo eliminar el télefono adicional.');
     } finally {
       setLegacyRemovingId(null);
     }
@@ -411,8 +411,8 @@ export default function NotificationsPage() {
       setAssistantData(data);
       setMessage(enabled ? 'Telefono adicional habilitado para alertas cercanas.' : 'Telefono adicional conservado sin recibir alertas.');
     } catch (requestError) {
-      console.error('Error actualizando telefono adicional:', requestError);
-      setError('No se pudo actualizar el telefono adicional.');
+      console.error('Error actualizando télefono adicional:', requestError);
+      setError('No se pudo actualizar el télefono adicional.');
     } finally {
       setLegacySavingId(null);
     }
@@ -430,11 +430,11 @@ export default function NotificationsPage() {
       setNewLegacyPhone('');
       setMessage('Telefono adicional habilitado para alertas cercanas.');
     } catch (requestError) {
-      console.error('Error agregando telefono adicional:', requestError);
+      console.error('Error agregando télefono adicional:', requestError);
       const backendMessage = axios.isAxiosError(requestError)
         ? (requestError.response?.data as { message?: string } | undefined)?.message
         : undefined;
-      setError(backendMessage || 'No se pudo agregar el telefono adicional.');
+      setError(backendMessage || 'No se pudo agregar el télefono adicional.');
     } finally {
       setAddingLegacyPhone(false);
     }
@@ -521,7 +521,7 @@ export default function NotificationsPage() {
           WhatsApp
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Configura que mensajes puede enviar LISA por WhatsApp y consulta los creditos del mes.
+          Configura que mensajes puede enviar LISA por WhatsApp y consulta los créditos del mes.
         </Typography>
       </Box>
 
@@ -537,10 +537,10 @@ export default function NotificationsPage() {
         <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
           <Stack spacing={1.25}>
             <Typography variant="h6" sx={{ fontWeight: 700, color: 'success.dark' }}>
-              Como funciona este modulo de WhatsApp
+              Como funciona este módulo de WhatsApp
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Aqui decides que tipos de avisos puede enviar LISA por WhatsApp para tu operacion diaria.
+              Aqui decides que tipos de avisos puede enviar LISA por WhatsApp para tu operación diaria.
             </Typography>
           </Stack>
         </CardContent>
@@ -593,7 +593,7 @@ export default function NotificationsPage() {
 
             <Box>
               <Typography sx={{ mb: 1.1, fontWeight: 700, color: 'info.dark' }}>
-                Mensajes para medico y asistentes
+                Mensajes para médico y asistentes
               </Typography>
               <Stack spacing={1.1}>
                 {doctorOptions.map(renderOption)}
@@ -614,14 +614,14 @@ export default function NotificationsPage() {
               <Stack spacing={2}>
                 <Box>
                   <Typography sx={{ fontWeight: 700, color: 'info.dark' }}>
-                    Asistentes que reciben alertas de hoy o manana
+                    Asistentes que reciben alertas de hoy o mañana
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Estas alertas corresponden al template operativo interno. "Mis citas de hoy" sigue siendo un mensaje solo para el medico.
+                    Estas alertas corresponden al template operativo interno. "Mis citas de hoy" sigue siendo un mensaje solo para el médico.
                   </Typography>
                   {assistantData?.limits ? (
                     <Alert severity="warning" sx={{ mt: 1.5, borderRadius: 2 }}>
-                      Hay {enabledRecipientCount} telefonos habilitados para recibir esta alerta, incluyendo al medico. Cada telefono consume un mensaje de tus creditos totales cuando se envia la notificacion.
+                      Hay {enabledRecipientCount} teléfonos habilitados para recibir esta alerta, incluyendo al médico. Cada télefono consume un mensaje de tus créditos totales cuando se envía la notificación.
                     </Alert>
                   ) : null}
                 </Box>
@@ -662,7 +662,7 @@ export default function NotificationsPage() {
                     >
                       <Box>
                         <Typography sx={{ fontWeight: 600 }}>
-                          {assistantData?.doctor?.name || user?.name || 'Medico titular'}
+                          {assistantData?.doctor?.name || user?.name || 'Médico titular'}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
                           {assistantData?.doctor?.phone || 'Recibe alertas por configuracion principal'}
@@ -694,7 +694,7 @@ export default function NotificationsPage() {
                             {assistant.name || `Asistente #${assistant.assistant_id}`}
                           </Typography>
                           <Typography variant="body2" color="text.secondary">
-                            {assistant.phone || 'Sin telefono valido'}
+                            {assistant.phone || 'Sin télefono válido'}
                           </Typography>
                         </Box>
                         <Stack direction="row" spacing={1} alignItems="center">
@@ -707,7 +707,7 @@ export default function NotificationsPage() {
                                 onChange={(event) => void handleAssistantToggle(assistant.assistant_id, event.target.checked)}
                               />
                             }
-                            label={assistant.can_receive ? 'Recibe alertas' : 'Telefono no valido'}
+                            label={assistant.can_receive ? 'Recibe alertas' : 'Telefono no válido'}
                           />
                           <Button
                             color="error"
@@ -791,7 +791,7 @@ export default function NotificationsPage() {
                           value={newLegacyPhone}
                           disabled={maxOptionalRecipientsReached}
                           onChange={(event) => setNewLegacyPhone(event.target.value)}
-                          helperText={`Maximo ${assistantData?.limits.total_max ?? 5} registros opcionales en total entre asistentes y otros tel\u00E9fonos, aunque esten deshabilitados.`}
+                          helperText={`Máximo ${assistantData?.limits.total_max ?? 5} registros opcionales en total entre asistentes y otros tel\u00E9fonos, aunque esten deshabilitados.`}
                           sx={{ flex: 1 }}
                         />
                         <Button
@@ -843,7 +843,7 @@ export default function NotificationsPage() {
                 </Box>
               </Stack>
               <Typography variant="body2" color="text.secondary">
-                Administra las plantillas de resultados que aparecen en `Pacientes &gt; Mas opciones` y en la pagina publica del enlace enviado al paciente.
+                Administra las plantillas de resultados que aparecen en `Pacientes &gt; Mas opciones` y en la ppagina pública del enlace enviado al paciente.
               </Typography>
             </Box>
             {templatesExpanded ? <ExpandLessIcon color="action" /> : <ExpandMoreIcon color="action" />}
@@ -954,7 +954,7 @@ export default function NotificationsPage() {
             <Stack direction="row" spacing={1.5} alignItems="center">
               <SavingsIcon color="primary" />
               <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Creditos mensuales
+                Créditos mensuales
               </Typography>
               <Box
                 sx={{
@@ -975,7 +975,7 @@ export default function NotificationsPage() {
 
           <Collapse in={creditsExpanded}>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 2, mb: 2 }}>
-              Este resumen te ayuda a validar rapidamente el limite mensual contratado y el consumo acumulado por mes.
+              Este resumen te ayuda a validar rápidamente el límite mensual contratado y el consumo acumulado por mes.
             </Typography>
 
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 3 }}>
@@ -990,7 +990,7 @@ export default function NotificationsPage() {
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                Tu credito fijo mensual
+                Tu crédito fijo mensual
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 800, color: 'primary.main' }}>
                 {settings?.monthly_limit ?? 0}
@@ -1008,7 +1008,7 @@ export default function NotificationsPage() {
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                Creditos disponibles
+                Créditos disponibles
               </Typography>
               <Typography variant="h4" sx={{ fontWeight: 800, color: 'success.main' }}>
                 {settings?.available_credits ?? 0}

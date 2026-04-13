@@ -191,7 +191,6 @@ type DraftData = {
   analysisForm: AnalysisFormData;
   planForm: PlanFormData;
   personalNotes: string;
-  sampleTaken: boolean;
   selectedStudyTypeIds: number[];
   selectedOfficeLabels: number[];
   editingConsultationId: number | null;
@@ -954,23 +953,24 @@ const PlanSection = memo(function PlanSection({
                 options={medicamentOptions}
                 filterOptions={(options) => options}
                 inputValue={row.medicament}
-                onInputChange={(_event, value, reason) => {
-                  onMedicationChange(index, 'medicament', value);
-                  if (reason === 'input') {
-                    setActiveMedicationIndex(index);
-                    setMedicamentLookupQuery(value);
-                  } else if (reason === 'clear') {
-                    setMedicamentLookupQuery('');
-                    setMedicamentLookupResults([]);
-                    setActiveMedicationIndex(index);
-                  }
+                    onInputChange={(_event, value, reason) => {
+                      const nextValue = value.slice(0, 240);
+                      onMedicationChange(index, 'medicament', nextValue);
+                      if (reason === 'input') {
+                        setActiveMedicationIndex(index);
+                        setMedicamentLookupQuery(nextValue);
+                      } else if (reason === 'clear') {
+                        setMedicamentLookupQuery('');
+                        setMedicamentLookupResults([]);
+                        setActiveMedicationIndex(index);
+                      }
                 }}
-                onChange={(_event, value) => {
-                  const nextValue = typeof value === 'string' ? value : '';
-                  onMedicationChange(index, 'medicament', nextValue);
-                  setMedicamentLookupQuery(nextValue);
-                  setActiveMedicationIndex(null);
-                }}
+                    onChange={(_event, value) => {
+                      const nextValue = (typeof value === 'string' ? value : '').slice(0, 240);
+                      onMedicationChange(index, 'medicament', nextValue);
+                      setMedicamentLookupQuery(nextValue);
+                      setActiveMedicationIndex(null);
+                    }}
                 onClose={() => {
                   setActiveMedicationIndex(null);
                 }}
@@ -1000,6 +1000,7 @@ const PlanSection = memo(function PlanSection({
                       htmlInput: {
                         ...params.inputProps,
                         autoComplete: 'off',
+                        maxLength: 240,
                       },
                     }}
                   />
@@ -1017,12 +1018,17 @@ const PlanSection = memo(function PlanSection({
               size="small"
               label={`Prescripci\u00f3n`}
               defaultValue={row.prescription}
-              onChange={(e) => onMedicationChange(index, 'prescription', e.target.value)}
+              onChange={(e) => onMedicationChange(index, 'prescription', e.target.value.slice(0, 240))}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   onAddMedication();
                 }
+              }}
+              slotProps={{
+                htmlInput: {
+                  maxLength: 240,
+                },
               }}
               sx={{ mt: 1 }}
             />
@@ -1054,6 +1060,11 @@ const PlanSection = memo(function PlanSection({
             label="Indicaciones adicionales"
             defaultValue={form.additionalInstructions}
             onChange={(e) => onAdditionalInstructionsChange(e.target.value)}
+            slotProps={{
+              htmlInput: {
+                maxLength: 500,
+              },
+            }}
           />
         </Grid>
         <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulanalisis') ? undefined : 'none' }}>
@@ -1172,7 +1183,7 @@ const ObjectiveSectionConfigured = memo(function ObjectiveSectionConfigured({
 void ObjectiveSection;
 
 const PersonalNotesSection = memo(function PersonalNotesSection({
-  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility, sampleTaken, onSampleTakenChange, selectedStudyTypeIds, onStudyTypeToggle, studyTypes, onCreateStudyType, editingConsultation,
+  notes, formInstanceKey, onNotesChange, selectedLabels, onLabelsChange, onCreateLabel, officeLabels, patientTagControl, previousConsultation, visibility, selectedStudyTypeIds, onStudyTypeToggle, studyTypes, onCreateStudyType, editingConsultation,
 }: {
   notes: string;
   formInstanceKey: number;
@@ -1184,8 +1195,6 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
   patientTagControl: PatientTagControlData | null;
   previousConsultation: PatientSoapContext['last_consultation'];
   visibility: DailyNoteVisibilityMap;
-  sampleTaken: boolean;
-  onSampleTakenChange: (checked: boolean) => void;
   selectedStudyTypeIds: number[];
   onStudyTypeToggle: (studyTypeId: number) => void;
   studyTypes: StudyTypeItem[];
@@ -1237,40 +1246,27 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
 
   return (
     <Card><CardContent>
+      <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#245160', mb: 2 }}>
+        Seguimiento de pacientes y estudios realizados
+      </Typography>
       <Grid container spacing={2}>
         <Grid size={{ xs: 12 }} sx={{ display: isDailyNoteFieldVisible(visibility, 'consulanotaciones') ? undefined : 'none' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <LockIcon sx={{ color: '#ff0000', fontSize: 20 }} />
             <Typography variant="body2" sx={{ fontWeight: 600 }}>Anotaciones personales</Typography>
           </Box>
-          <Typography sx={{ fontSize: '0.8rem', color: '#5f6b76', mb: 1 }}>
-            Tus notas en este campo son privadas
-          </Typography>
           <TextField key={`${formInstanceKey}-personalNotes`} multiline minRows={3} fullWidth defaultValue={notes} onChange={(e) => onNotesChange(e.target.value)} />
           {String(previousConsultation?.notes ?? '').trim() ? (
             <PreviousFieldHint date={previousConsultation?.created_at} text={previousConsultation?.notes} />
           ) : null}
         </Grid>
         <Grid size={{ xs: 12 }}>
-          <FormControlLabel
-            control={(
-              <Checkbox
-                checked={sampleTaken}
-                disabled={Boolean(editingConsultation)}
-                onChange={(event) => onSampleTakenChange(event.target.checked)}
-              />
-            )}
-            label="Se tomó muestra"
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: -0.5 }}>
-            Marca esta opción cuando durante la consulta se tomó la muestra del estudio. Esto deja el registro listo para después relacionar el resultado cuando se cargue al sistema.
-          </Typography>
-          {sampleTaken ? (
-            <Box sx={{ display: 'grid', gap: 1, mt: 1.5 }}>
-              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                Tipos de estudio tomados
-              </Typography>
-              {studyTypes.length ? (
+          <Box sx={{ display: 'grid', gap: 1, mt: 0.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Tipos de estudio tomados
+            </Typography>
+            {studyTypes.length ? (
+              <>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1 }}>
                   {studyTypes.map((studyType) => (
                     <FormControlLabel
@@ -1286,47 +1282,50 @@ const PersonalNotesSection = memo(function PersonalNotesSection({
                     />
                   ))}
                 </Box>
-              ) : (
-                <Alert severity="warning" sx={{ mt: 0.5 }}>
-                  No hay tipos de estudio activos para este consultorio.
-                </Alert>
-              )}
-              <Typography variant="caption" color="text.secondary">
-                Selecciona una o varias muestras tomadas en esta consulta.
-              </Typography>
-              {!editingConsultation ? (
-                <Box
-                  sx={{
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
-                    gap: 1.5,
-                    alignItems: 'end',
-                    mt: 0.5,
-                  }}
+                <Typography variant="caption" color="text.secondary">
+                  Selecciona uno o varios tipos de estudio solo cuando durante la consulta realmente se haya tomado una muestra o solicitado una toma para enviar a análisis.
+                </Typography>
+              </>
+            ) : (
+              <Alert severity="info" sx={{ mt: 0.5 }}>
+                Configura tipos de estudio únicamente si este consultorio toma muestras o solicita estudios para enviarlos posteriormente a análisis, ya sea en un laboratorio clínico o en un centro radiológico. Registrar un tipo de estudio aquí permite dar seguimiento desde la toma de muestra hasta el envío e interpretación del resultado.
+              </Alert>
+            )}
+            {!editingConsultation ? (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
+                  gap: 1.5,
+                  alignItems: 'end',
+                  mt: 0.5,
+                }}
+              >
+                <TextField
+                  fullWidth
+                  size="small"
+                  label="Nuevo tipo de estudio"
+                  value={newStudyType}
+                  onChange={(event) => setNewStudyType(event.target.value)}
+                />
+                <Button
+                  variant="outlined"
+                  onClick={handleCreateStudyType}
+                  disabled={!newStudyType.trim() || creatingStudyType}
+                  sx={{ width: 'fit-content' }}
                 >
-                  <TextField
-                    fullWidth
-                    size="small"
-                    label="Nuevo tipo de estudio"
-                    value={newStudyType}
-                    onChange={(event) => setNewStudyType(event.target.value)}
-                  />
-                  <Button
-                    variant="outlined"
-                    onClick={handleCreateStudyType}
-                    disabled={!newStudyType.trim() || creatingStudyType}
-                    sx={{ width: 'fit-content' }}
-                  >
-                    {creatingStudyType ? 'Guardando...' : 'Agregar tipo'}
-                  </Button>
-                </Box>
-              ) : null}
-              {createStudyTypeError ? <Alert severity="error">{createStudyTypeError}</Alert> : null}
-            </Box>
-          ) : null}
+                  {creatingStudyType ? 'Guardando...' : 'Agregar tipo'}
+                </Button>
+              </Box>
+            ) : null}
+            {createStudyTypeError ? <Alert severity="error">{createStudyTypeError}</Alert> : null}
+          </Box>
         </Grid>
         <Grid size={{ xs: 12 }}>
           <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Etiquetas</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.25 }}>
+            Utiliza las etiquetas para dar seguimiento a pendientes o acciones relacionadas con el paciente. Ejemplo: Pendiente enviarle cotización de cirugía.
+          </Typography>
           {patientTagControl && patientTagControl.statuses.length === 0 ? <Alert severity="warning" sx={{ mb: 1.5 }}>{`A\u00fan no hay estados configurados para las etiquetas.`}</Alert> : null}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5 }}>
             {officeLabels.map((label) => (
@@ -1408,7 +1407,6 @@ function PatientDailyNoteTab({
   const [recentMedicamentHistory, setRecentMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
   const [prescriptionPreviewUrl, setPrescriptionPreviewUrl] = useState<string | null>(null);
   const [prescriptionPreviewName, setPrescriptionPreviewName] = useState('Receta PDF');
-  const [sampleTaken, setSampleTaken] = useState(false);
   const [studyTypes, setStudyTypes] = useState<StudyTypeItem[]>([]);
   const [selectedStudyTypeIds, setSelectedStudyTypeIds] = useState<number[]>([]);
   const draftRestoredRef = useRef(false);
@@ -1451,7 +1449,6 @@ function PatientDailyNoteTab({
       setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
       setPersonalNotes('');
       setSelectedOfficeLabels([]);
-      setSampleTaken(false);
       setSelectedStudyTypeIds([]);
       subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
       objectiveFormRef.current = {
@@ -1477,7 +1474,6 @@ function PatientDailyNoteTab({
     setAnalysisForm(draft.analysisForm);
     setPlanForm(draft.planForm);
     setPersonalNotes(draft.personalNotes);
-    setSampleTaken(Boolean(draft.sampleTaken));
     setSelectedStudyTypeIds(Array.isArray(draft.selectedStudyTypeIds) ? draft.selectedStudyTypeIds : []);
     setSelectedOfficeLabels(Array.isArray(draft.selectedOfficeLabels) ? draft.selectedOfficeLabels : []);
     subjectiveFormRef.current = draft.subjectiveForm;
@@ -1496,12 +1492,11 @@ function PatientDailyNoteTab({
       analysisForm: analysisFormRef.current,
       planForm: planFormRef.current,
       personalNotes: personalNotesRef.current,
-      sampleTaken,
       selectedStudyTypeIds,
       selectedOfficeLabels,
       editingConsultationId: editingConsultation?.consultation_id ?? null,
     });
-  }, [editingConsultation, isEditingHistoricalConsultation, patient.id, sampleTaken, selectedOfficeLabels, selectedStudyTypeIds]);
+  }, [editingConsultation, isEditingHistoricalConsultation, patient.id, selectedOfficeLabels, selectedStudyTypeIds]);
 
   useEffect(() => {
     return () => {
@@ -1677,7 +1672,6 @@ function PatientDailyNoteTab({
     objectiveForm,
     personalNotes,
     planForm,
-    sampleTaken,
     saveCurrentDraft,
     selectedOfficeLabels,
     selectedStudyTypeIds,
@@ -1739,7 +1733,6 @@ function PatientDailyNoteTab({
     setPlanForm({ medications: editRequestNote.medications?.length ? editRequestNote.medications : [{ medicament: '', prescription: '' }], additionalInstructions: editRequestNote.indicaciones ?? '' });
     setPersonalNotes(editRequestNote.private_comments ?? '');
     setSelectedOfficeLabels(editRequestNote.office_label_ids ?? []);
-    setSampleTaken(false);
     setSelectedStudyTypeIds([]);
     subjectiveFormRef.current = { illnessStartDate: normalizeDateInputValue(editRequestNote.ailingdate) || '', currentCondition: editRequestNote.subjective ?? '' };
     objectiveFormRef.current = {
@@ -1767,10 +1760,6 @@ function PatientDailyNoteTab({
     }
     if (editingConsultation && !canEditConsultationHistory) {
       setDailyNoteError('Tu perfil no tiene permiso para editar consultas del historial.');
-      return;
-    }
-    if (!editingConsultation && sampleTaken && selectedStudyTypeIds.length === 0) {
-      setDailyNoteError('Selecciona al menos un tipo de estudio para registrar la toma de muestra.');
       return;
     }
     setSavingDailyNote(true);
@@ -1805,7 +1794,7 @@ function PatientDailyNoteTab({
         await consultationService.updateDailyNote(editingConsultation.consultation_id, payload);
       } else {
         await consultationService.createDailyNote(payload);
-        if (sampleTaken && selectedStudyTypeIds.length > 0) {
+        if (selectedStudyTypeIds.length > 0) {
           const officeId = Number(patient.office_id ?? localStorage.getItem('cached_office_id') ?? 0);
           if (officeId > 0) {
             await studyDeliveryService.createSampleStudyDelivery({
@@ -1850,7 +1839,6 @@ function PatientDailyNoteTab({
       setPlanForm({ medications: [{ medicament: '', prescription: '' }], additionalInstructions: '' });
       setPersonalNotes('');
       setSelectedOfficeLabels([]);
-      setSampleTaken(false);
       setSelectedStudyTypeIds([]);
       subjectiveFormRef.current = { illnessStartDate: '', currentCondition: '' };
       objectiveFormRef.current = {
@@ -1980,7 +1968,7 @@ function PatientDailyNoteTab({
   }, []);
   const handleAdditionalInstructionsChange = useCallback((value: string) => {
     setPlanForm((current) => {
-      const next = { ...current, additionalInstructions: value };
+      const next = { ...current, additionalInstructions: value.slice(0, 500) };
       planFormRef.current = next;
       return next;
     });
@@ -1988,12 +1976,6 @@ function PatientDailyNoteTab({
   const handleNotesChange = useCallback((next: string) => {
     setPersonalNotes(next);
     personalNotesRef.current = next;
-  }, []);
-  const handleSampleTakenChange = useCallback((checked: boolean) => {
-    setSampleTaken(checked);
-    if (!checked) {
-      setSelectedStudyTypeIds([]);
-    }
   }, []);
   const handleStudyTypeToggle = useCallback((studyTypeId: number) => {
     setSelectedStudyTypeIds((current) => (
@@ -2269,8 +2251,6 @@ function PatientDailyNoteTab({
           notes={personalNotes}
           formInstanceKey={formInstanceKey}
           onNotesChange={handleNotesChange}
-          sampleTaken={sampleTaken}
-          onSampleTakenChange={handleSampleTakenChange}
           selectedStudyTypeIds={selectedStudyTypeIds}
           onStudyTypeToggle={handleStudyTypeToggle}
           studyTypes={studyTypes}

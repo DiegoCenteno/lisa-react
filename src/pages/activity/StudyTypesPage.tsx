@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   FormControl,
   InputLabel,
   MenuItem,
@@ -35,6 +36,7 @@ export default function StudyTypesPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deactivatingStudyTypeId, setDeactivatingStudyTypeId] = useState<number | null>(null);
+  const [reactivatingStudyTypeId, setReactivatingStudyTypeId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -64,7 +66,7 @@ export default function StudyTypesPage() {
     setLoading(true);
     setError(null);
 
-    studyDeliveryService.getStudyTypes(selectedOfficeId ? Number(selectedOfficeId) : undefined)
+    studyDeliveryService.getStudyTypes(selectedOfficeId ? Number(selectedOfficeId) : undefined, true)
       .then((result) => {
         if (cancelled) return;
         setStudyTypes(result);
@@ -127,7 +129,7 @@ export default function StudyTypesPage() {
   };
 
   const handleDeactivateStudyType = async (studyType: StudyTypeItem) => {
-    if (deactivatingStudyTypeId) {
+    if (deactivatingStudyTypeId || reactivatingStudyTypeId) {
       return;
     }
 
@@ -142,6 +144,25 @@ export default function StudyTypesPage() {
       setSaveError(message);
     } finally {
       setDeactivatingStudyTypeId(null);
+    }
+  };
+
+  const handleReactivateStudyType = async (studyType: StudyTypeItem) => {
+    if (deactivatingStudyTypeId || reactivatingStudyTypeId) {
+      return;
+    }
+
+    setReactivatingStudyTypeId(studyType.id);
+    setSaveError(null);
+
+    try {
+      const updated = await studyDeliveryService.reactivateStudyType(studyType.id);
+      setStudyTypes((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'No se pudo reactivar el tipo de estudio.';
+      setSaveError(message);
+    } finally {
+      setReactivatingStudyTypeId(null);
     }
   };
 
@@ -216,6 +237,7 @@ export default function StudyTypesPage() {
                   <TableCell>Tipo de estudio</TableCell>
                   <TableCell>Descripción</TableCell>
                   <TableCell>Consultorio</TableCell>
+                  <TableCell>Estatus</TableCell>
                   <TableCell align="right">Acción</TableCell>
                 </TableRow>
               </TableHead>
@@ -227,22 +249,40 @@ export default function StudyTypesPage() {
                       <TableCell>{studyType.name}</TableCell>
                       <TableCell>{studyType.description || '—'}</TableCell>
                       <TableCell>{office?.title || studyType.office_id}</TableCell>
-                      <TableCell align="right">
-                        <Button
+                      <TableCell>
+                        <Chip
                           size="small"
-                          color="error"
-                          onClick={() => handleDeactivateStudyType(studyType)}
-                          disabled={deactivatingStudyTypeId === studyType.id}
-                        >
-                          {deactivatingStudyTypeId === studyType.id ? 'Desactivando...' : 'Desactivar'}
-                        </Button>
+                          color={Number(studyType.status ?? 1) === 1 ? 'success' : 'default'}
+                          label={Number(studyType.status ?? 1) === 1 ? 'Activo' : 'Inactivo'}
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        {Number(studyType.status ?? 1) === 1 ? (
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeactivateStudyType(studyType)}
+                            disabled={deactivatingStudyTypeId === studyType.id}
+                          >
+                            {deactivatingStudyTypeId === studyType.id ? 'Desactivando...' : 'Desactivar'}
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            color="success"
+                            onClick={() => handleReactivateStudyType(studyType)}
+                            disabled={reactivatingStudyTypeId === studyType.id}
+                          >
+                            {reactivatingStudyTypeId === studyType.id ? 'Reactivando...' : 'Reactivar'}
+                          </Button>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
                 })}
                 {!loading && visibleStudyTypes.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} align="center">
+                    <TableCell colSpan={5} align="center">
                       No hay tipos de estudio registrados.
                     </TableCell>
                   </TableRow>

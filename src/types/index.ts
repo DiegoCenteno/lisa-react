@@ -786,6 +786,7 @@ export interface StudyTypeItem {
   office_id: number;
   name: string;
   description?: string | null;
+  status?: number | null;
 }
 
 export interface PendingStudyDeliveryLink {

@@ -94,10 +94,11 @@ export const studyDeliveryService = {
     return response.data.data;
   },
 
-  async getStudyTypes(officeId?: number): Promise<StudyTypeItem[]> {
+  async getStudyTypes(officeId?: number, includeInactive?: boolean): Promise<StudyTypeItem[]> {
     const response = await apiClient.get<ApiStudyTypeListResponse>('/v2/study-types', {
       params: {
         office_id: officeId,
+        include_inactive: includeInactive ? 1 : undefined,
       },
     });
 
@@ -111,6 +112,11 @@ export const studyDeliveryService = {
 
   async deactivateStudyType(id: number): Promise<StudyTypeItem> {
     const response = await apiClient.delete<ApiStudyTypeResponse>(`/v2/study-types/${id}`);
+    return response.data.data;
+  },
+
+  async reactivateStudyType(id: number): Promise<StudyTypeItem> {
+    const response = await apiClient.put<ApiStudyTypeResponse>(`/v2/study-types/${id}/reactivate`);
     return response.data.data;
   },
 

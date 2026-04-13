@@ -11,6 +11,8 @@ import {
   InputAdornment,
   IconButton,
   CircularProgress,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import {
   Visibility,
@@ -22,6 +24,8 @@ import { shouldRunClientReset } from '../../utils/clientReset';
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isAuthenticated, hardResetClientAuth } = useAuth();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -65,7 +69,7 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    navigate('/dashboard', { replace: true });
+    navigate(isMobile ? '/agenda' : '/dashboard', { replace: true });
     return null;
   }
 
@@ -76,7 +80,7 @@ export default function LoginPage() {
 
     try {
       await login(emailOrPhone, password);
-      navigate('/dashboard', { replace: true });
+      navigate(isMobile ? '/agenda' : '/dashboard', { replace: true });
     } catch {
       setError('Credenciales inválidas. Verifica tu email/teléfono y Contraseña.');
     } finally {
