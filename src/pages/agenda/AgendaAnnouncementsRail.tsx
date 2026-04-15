@@ -113,16 +113,10 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
 
       await Promise.all(missingFiles.map(async (file) => {
         try {
-          let blob: Blob;
-          try {
-            blob = await systemAnnouncementService.getFileThumbnailBlob(file.file_id);
-          } catch {
-            blob = await systemAnnouncementService.getFileBlob(file.file_id);
-          }
-
+          const blob = await systemAnnouncementService.getFileBlob(file.file_id);
           nextEntries[file.file_id] = window.URL.createObjectURL(blob);
         } catch (previewError) {
-          console.error(`Error cargando miniatura del archivo ${file.file_id}:`, previewError);
+          console.error(`Error cargando imagen del archivo ${file.file_id}:`, previewError);
         }
       }));
 
