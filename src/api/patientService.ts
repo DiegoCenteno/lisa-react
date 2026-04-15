@@ -6,9 +6,11 @@ import type {
   PatientSoapContext,
   MedicamentHistoryItem,
   OfficeLabelItem,
+  PatientTagSummary,
   PatientTagControlData,
   PatientResultTemplate,
   ActivityLogItem,
+  PatientTagStatusOption,
 } from '../types';
 import apiClient from './client';
 import { appointmentService } from './appointmentService';
@@ -16,6 +18,7 @@ import { createEmptyClinicalHistory, decodeClinicalHistory, encodeClinicalHistor
 
 type ApiPatientRecord = {
   id: number;
+  office_id?: number | null;
   name?: string;
   last_name?: string;
   full_name?: string;
@@ -40,6 +43,7 @@ type ApiPatientRecord = {
   };
   effective_consultations_count?: number;
   is_first_time?: boolean;
+  patient_tags?: PatientTagSummary[];
 };
 
 type ApiPatientsPayload =
@@ -99,6 +103,15 @@ interface ApiOfficeLabelsResponse {
   data: OfficeLabelItem[];
 }
 
+interface ApiOfficeLabelStatusesResponse {
+  status: string;
+  data: Array<{
+    id: number;
+    code: string;
+    identify: number | string;
+  }>;
+}
+
 interface ApiPatientFilesResponse {
   status: string;
   data: PatientFile[];
@@ -151,6 +164,7 @@ function normalizePatient(record: ApiPatientRecord): Patient {
 
   return {
     id: record.id,
+    office_id: record.office_id ?? null,
     name: record.name ?? derivedNames?.name ?? '',
     last_name: record.last_name ?? derivedNames?.lastName ?? '',
     phone: record.phone ?? record.full_phone ?? '',
@@ -170,7 +184,21 @@ function normalizePatient(record: ApiPatientRecord): Patient {
     },
     effective_consultations_count: record.effective_consultations_count ?? 0,
     is_first_time: record.is_first_time ?? (record.effective_consultations_count ?? 0) === 0,
+    patient_tags: Array.isArray(record.patient_tags) ? record.patient_tags : [],
   };
+}
+
+function getStatusColorClass(identify: number): string {
+  const colors: Record<number, string> = {
+    0: 'btn-primary',
+    1: 'btn-success',
+    2: 'btn-danger',
+    3: 'btn-warning',
+    4: 'btn-info',
+    5: 'btn-rose',
+  };
+
+  return colors[identify] ?? 'btn-default';
 }
 
 function extractPatients(payload: ApiPatientsPayload): ApiPatientRecord[] {
@@ -240,7 +268,7 @@ async function resolveOfficeIdWithOverride(officeIdOverride?: number | null): Pr
 }
 
 export const patientService = {
-  async getPatients(): Promise<Patient[]> {
+  async getPatients(options?: { labelIds?: number[]; labelStatusIds?: number[] }): Promise<Patient[]> {
     const officeId = await resolveOfficeId();
     const response = await apiClient.get<ApiPatientsResponse>('/v2/patients', {
       params: {
@@ -248,6 +276,8 @@ export const patientService = {
         per_page: 10000,
         order_by: 'users.name',
         order_dir: 'asc',
+        label_ids: options?.labelIds && options.labelIds.length > 0 ? options.labelIds : undefined,
+        label_status_ids: options?.labelStatusIds && options.labelStatusIds.length > 0 ? options.labelStatusIds : undefined,
       },
     });
 
@@ -398,12 +428,30 @@ export const patientService = {
     return response.data.data;
   },
 
-  async getOfficeLabels(): Promise<OfficeLabelItem[]> {
-    const officeId = await resolveOfficeId();
+  async getOfficeLabels(officeIdOverride?: number | null): Promise<OfficeLabelItem[]> {
+    const officeId = await resolveOfficeIdWithOverride(officeIdOverride);
     const response = await apiClient.get<ApiOfficeLabelsResponse>('/v2/datahelp/office-labels', {
       params: { office_id: officeId },
     });
     return response.data.data;
+  },
+
+  async getOfficeLabelStatuses(officeIdOverride?: number | null): Promise<PatientTagStatusOption[]> {
+    const officeId = await resolveOfficeIdWithOverride(officeIdOverride);
+    const response = await apiClient.get<ApiOfficeLabelStatusesResponse>('/v2/datahelp/office-label-statuses', {
+      params: { office_id: officeId },
+    });
+
+    return (response.data.data ?? []).map((item) => {
+      const identify = Number(item.identify) || 0;
+
+      return {
+        id: item.id,
+        code: item.code,
+        identify,
+        color_class: getStatusColorClass(identify),
+      };
+    });
   },
 
   async createOfficeLabel(code: string, identify?: string, officeIdOverride?: number | null): Promise<OfficeLabelItem> {

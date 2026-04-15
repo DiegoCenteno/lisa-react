@@ -11,7 +11,8 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, roles, permissions, anyPermissions }: ProtectedRouteProps) {
-  const { isAuthenticated, isLoading, hasRole, can } = useAuth();
+  const { isAuthenticated, isLoading, hasRole, can, user } = useAuth();
+  const fallbackPath = user?.role === 'system_admin' ? '/admin' : '/dashboard';
 
   if (isLoading) {
     return (
@@ -33,15 +34,15 @@ export default function ProtectedRoute({ children, roles, permissions, anyPermis
   }
 
   if (roles && !hasRole(roles)) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={fallbackPath} replace />;
   }
 
   if (permissions && permissions.some((permission) => !can(permission))) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={fallbackPath} replace />;
   }
 
   if (anyPermissions && !anyPermissions.some((permission) => can(permission))) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={fallbackPath} replace />;
   }
 
   return <>{children}</>;

@@ -122,6 +122,7 @@ export interface SettingsLabelStatusItem {
   created_at?: string;
   data?: {
     visible_days?: number | null;
+    is_default?: boolean;
   } | string | null;
 }
 
@@ -317,6 +318,7 @@ const settingsService = {
     identify: number;
     data?: {
       visible_days?: number | null;
+      is_default?: boolean;
     };
     status?: number;
   }): Promise<SettingsLabelStatusItem> {
@@ -336,6 +338,7 @@ const settingsService = {
       identify?: number;
       data?: {
         visible_days?: number | null;
+        is_default?: boolean;
       };
       status?: number;
     }

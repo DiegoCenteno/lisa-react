@@ -22,6 +22,8 @@ import {
   PictureAsPdf as StudiesIcon,
   Sms as WhatsAppIcon,
   Settings as SettingsIcon,
+  AdminPanelSettings as AdminPanelSettingsIcon,
+  Campaign as CampaignIcon,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
@@ -51,7 +53,7 @@ const menuItems: MenuItem[] = [
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
   },
   {
-    text: 'Agenda Médica',
+    text: 'Agenda M\u00E9dica',
     icon: <CalendarIcon />,
     path: '/agenda',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
@@ -82,7 +84,7 @@ const menuItems: MenuItem[] = [
     permission: 'patients.view',
   },
   {
-    text: 'Bitácora',
+    text: 'Bit\u00E1cora',
     icon: <HistoryIcon />,
     path: '/bitacora',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
@@ -96,7 +98,7 @@ const menuItems: MenuItem[] = [
     permission: 'notifications.manage',
   },
   {
-    text: 'Configuración',
+    text: 'Configuraci\u00F3n',
     icon: <SettingsIcon />,
     path: '/configuracion',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
@@ -111,16 +113,35 @@ const menuItems: MenuItem[] = [
   },
 ];
 
+const systemAdminMenuItems: MenuItem[] = [
+  {
+    text: 'Panel general',
+    icon: <AdminPanelSettingsIcon />,
+    path: '/admin',
+    roles: [UserRole.SYSTEM_ADMIN],
+    permission: 'system.dashboard.view',
+  },
+  {
+    text: 'Noticias',
+    icon: <CampaignIcon />,
+    path: '/admin/noticias',
+    roles: [UserRole.SYSTEM_ADMIN],
+    permission: 'system.announcements.manage',
+  },
+];
+
 export default function Sidebar({ open, onClose }: SidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { hasRole, can } = useAuth();
+  const { hasRole, can, user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [isHovered, setIsHovered] = useState(false);
   const desktopDrawerWidth = isHovered ? DRAWER_WIDTH : MINI_DRAWER_WIDTH;
 
-  const filteredItems = menuItems.filter((item) =>
+  const activeMenuItems = user?.role === UserRole.SYSTEM_ADMIN ? systemAdminMenuItems : menuItems;
+
+  const filteredItems = activeMenuItems.filter((item) =>
     hasRole(item.roles)
     && (!item.permission || can(item.permission))
     && (!item.anyPermissions || item.anyPermissions.some((permission) => can(permission)))
@@ -159,7 +180,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
             LisaMedic
           </Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-            Asistente Médico Digital
+            {user?.role === UserRole.SYSTEM_ADMIN ? 'Administraci\u00F3n general' : 'Asistente M\u00E9dico Digital'}
           </Typography>
         </Box>
       </Box>

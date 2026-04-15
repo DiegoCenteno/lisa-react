@@ -28,6 +28,7 @@ interface NavbarProps {
 const roleLabels: Record<string, string> = {
   medico: 'Médico',
   asistente: 'Asistente Médico',
+  system_admin: 'Administrador general',
   paciente: 'Paciente',
 };
 
@@ -53,7 +54,7 @@ export default function Navbar({ onMenuClick }: NavbarProps) {
 
   const handleProfile = () => {
     handleMenuClose();
-    navigate('/configuracion?tab=profile');
+    navigate(user?.role === 'system_admin' ? '/admin' : '/configuracion?tab=profile');
   };
 
   return (

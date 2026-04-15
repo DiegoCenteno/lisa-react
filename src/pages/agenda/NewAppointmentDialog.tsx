@@ -66,6 +66,12 @@ function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+function normalizeCopiedAvailabilityText(value: string): string {
+  return value
+    .replace(/\bMIéRCOLES\b/g, 'MIÉRCOLES')
+    .replace(/\bSáBADO\b/g, 'SÁBADO');
+}
+
 // Format duration total minutes to display string
 function formatDuration(totalMin: number): string {
   const h = Math.floor(totalMin / 60);
@@ -459,13 +465,15 @@ export default function NewAppointmentDialog({
 
   // â”€â”€ Copy available dates text â”€â”€
   const handleCopy = async () => {
+    const normalizedAvailableText = normalizeCopiedAvailabilityText(availableTxt);
+
     try {
-      await navigator.clipboard.writeText(availableTxt);
+      await navigator.clipboard.writeText(normalizedAvailableText);
       setCopyMessage('Horarios copiados');
     } catch {
       // Fallback: create a textarea and copy
       const textarea = document.createElement('textarea');
-      textarea.value = availableTxt;
+      textarea.value = normalizedAvailableText;
       document.body.appendChild(textarea);
       textarea.select();
       document.execCommand('copy');
@@ -473,6 +481,15 @@ export default function NewAppointmentDialog({
       setCopyMessage('Horarios copiados');
     }
   };
+
+  useEffect(() => {
+    const currentPatientPhone = selectedPatient ? selectedPatient.phone : newPatient.phone;
+    const patientCanBeNotified = Boolean(String(currentPatientPhone ?? '').trim());
+
+    if (!patientCanBeNotified && notifyPatient) {
+      setNotifyPatient(false);
+    }
+  }, [newPatient.phone, notifyPatient, selectedPatient]);
 
   // â”€â”€ Save appointment â”€â”€
   const handleSave = async () => {
@@ -1521,7 +1538,7 @@ export default function NewAppointmentDialog({
         <FormControlLabel
           control={
             <Checkbox
-              checked={notifyPatient}
+              checked={patientCanBeNotified && notifyPatient}
               disabled={!patientCanBeNotified}
               onChange={(e) => setNotifyPatient(e.target.checked)}
               sx={{ color: TEAL, '&.Mui-checked': { color: TEAL } }}

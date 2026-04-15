@@ -9,6 +9,7 @@ import {
   CardContent,
   Chip,
   Checkbox,
+  Collapse,
   Divider,
   Dialog,
   DialogActions,
@@ -43,7 +44,14 @@ import {
 } from '@mui/icons-material';
 import { patientService } from '../../api/patientService';
 import studyDeliveryService from '../../api/studyDeliveryService';
-import type { Patient, PatientFile, PatientTagControlData, PendingStudyDeliveryLink } from '../../types';
+import type {
+  OfficeLabelItem,
+  Patient,
+  PatientFile,
+  PatientTagControlData,
+  PatientTagStatusOption,
+  PendingStudyDeliveryLink,
+} from '../../types';
 import { formatDisplayDate } from '../../utils/date';
 import { useAuth } from '../../hooks/useAuth';
 import ClickableDateField from '../../components/ClickableDateField';
@@ -55,6 +63,33 @@ function formatPhone(phone?: string) {
   const digits = phone.replace(/\D/g, '');
   if (digits.length !== 10) return phone;
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+}
+
+function formatTagCreatedTitle(createdAt?: string | null) {
+  if (!createdAt) {
+    return 'Fecha de creación no disponible';
+  }
+
+  const date = new Date(createdAt.replace(' ', 'T'));
+  if (Number.isNaN(date.getTime())) {
+    return `Creada: ${createdAt}`;
+  }
+
+  return `Creada: ${date.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })}`;
+}
+
+function formatTagStatusTitle(statusDate?: string | null) {
+  if (!statusDate) {
+    return 'Fecha de cambio de estatus no disponible';
+  }
+
+  return `Cambio de estatus: ${statusDate}`;
 }
 
 function normalizeSearchText(value?: string) {
@@ -123,6 +158,12 @@ export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showTagFilters, setShowTagFilters] = useState(false);
+  const [selectedFilterTagIds, setSelectedFilterTagIds] = useState<number[]>([]);
+  const [selectedFilterStatusIds, setSelectedFilterStatusIds] = useState<number[]>([]);
+  const [officeLabels, setOfficeLabels] = useState<OfficeLabelItem[]>([]);
+  const [officeLabelStatuses, setOfficeLabelStatuses] = useState<PatientTagStatusOption[]>([]);
+  const [attachOfficeLabels, setAttachOfficeLabels] = useState<OfficeLabelItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -140,6 +181,7 @@ export default function PatientsPage() {
   const [sentResultLink, setSentResultLink] = useState<{ url: string } | null>(null);
   const [openTagIds, setOpenTagIds] = useState<number[]>([]);
   const [newOfficeLabelName, setNewOfficeLabelName] = useState('');
+  const [selectedOfficeLabelIdsToAttach, setSelectedOfficeLabelIdsToAttach] = useState<number[]>([]);
   const [savingOfficeLabel, setSavingOfficeLabel] = useState(false);
   const [showNewLabelInput, setShowNewLabelInput] = useState(false);
   const [attachSelectedFiles, setAttachSelectedFiles] = useState<File[]>([]);
@@ -199,13 +241,80 @@ export default function PatientsPage() {
       )
     );
 
+  const renderPatientTagSummary = (patient: Patient) => {
+    if ((patient.patient_tags ?? []).length === 0) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          Sin etiquetas activas
+        </Typography>
+      );
+    }
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        {(patient.patient_tags ?? []).map((tag) => (
+          <Box
+            key={tag.id}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 0.75,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Typography
+              variant="body2"
+              title={formatTagCreatedTitle(tag.created_at)}
+              sx={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.75 }}
+            >
+              <Box component="span" sx={{ color: '#ffcf48', fontSize: 18, lineHeight: 1 }}>
+                &#9873;
+              </Box>
+              {tag.label}
+            </Typography>
+            <Chip
+              label={tag.status_code}
+              size="small"
+              title={formatTagStatusTitle(tag.status_date)}
+              sx={{
+                fontWeight: 700,
+                color:
+                  labelStatusColorMap[tag.status_color_class]?.text ??
+                  labelStatusColorMap['btn-default'].text,
+                backgroundColor:
+                  labelStatusColorMap[tag.status_color_class]?.bg ??
+                  labelStatusColorMap['btn-default'].bg,
+              }}
+            />
+          </Box>
+        ))}
+      </Box>
+    );
+  };
+
+  const showPatientTagsColumn = selectedFilterTagIds.length > 0;
+  const assignedTagCodes = new Set((attachControl?.tags ?? []).map((tag) => tag.code.trim().toLowerCase()));
+  const availableOfficeLabelsToAttach = attachOfficeLabels.filter((label) => {
+    const code = (label.code ?? '').trim().toLowerCase();
+    return code !== '' && !assignedTagCodes.has(code);
+  });
+
   useEffect(() => {
     const loadPatients = async () => {
       setLoading(true);
       try {
-        const data = await patientService.getPatients();
+        const [data, labels, statuses] = await Promise.all([
+          patientService.getPatients({
+            labelIds: selectedFilterTagIds,
+            labelStatusIds: selectedFilterStatusIds,
+          }),
+          patientService.getOfficeLabels(),
+          patientService.getOfficeLabelStatuses(),
+        ]);
         setPatients(data);
         setFilteredPatients(data);
+        setOfficeLabels(labels.filter((item) => item.status == null || item.status === 1));
+        setOfficeLabelStatuses(statuses);
       } catch (err) {
         console.error('Error cargando pacientes:', err);
       } finally {
@@ -214,7 +323,7 @@ export default function PatientsPage() {
     };
 
     loadPatients();
-  }, []);
+  }, [selectedFilterTagIds, selectedFilterStatusIds]);
 
   useEffect(() => {
     if (searchQuery.trim() === '') {
@@ -364,6 +473,23 @@ export default function PatientsPage() {
     setPage(0);
   };
 
+  const handleToggleFilterTag = (tagId: number) => {
+    setSelectedFilterTagIds((current) =>
+      current.includes(tagId) ? current.filter((value) => value !== tagId) : [...current, tagId]
+    );
+  };
+
+  const handleToggleFilterStatus = (statusId: number) => {
+    setSelectedFilterStatusIds((current) =>
+      current.includes(statusId) ? current.filter((value) => value !== statusId) : [...current, statusId]
+    );
+  };
+
+  const clearTagFilters = () => {
+    setSelectedFilterTagIds([]);
+    setSelectedFilterStatusIds([]);
+  };
+
   const handleCopyPhone = async (
     event: React.MouseEvent<HTMLButtonElement>,
     phone?: string
@@ -406,17 +532,21 @@ export default function PatientsPage() {
     setShowTemplateForm(false);
     setNewTemplateTitle('');
     setNewTemplateDescription('');
+    setAttachOfficeLabels([]);
+    setSelectedOfficeLabelIdsToAttach([]);
     setOpenTagIds([]);
     setTagStatusSavingId(null);
     setFinalizeTag(null);
     setFinalizingTagId(null);
 
     try {
-      const [data, files] = await Promise.all([
+      const [data, files, labels] = await Promise.all([
         patientService.getPatientTagControl(patient.id, patient.office_id ?? null),
         patientService.getFiles(patient.id),
+        patientService.getOfficeLabels(patient.office_id ?? null),
       ]);
       setAttachControl(data);
+      setAttachOfficeLabels(labels.filter((item) => item.status == null || item.status === 1));
       setAttachFiles(
         [...files].sort(
           (a, b) => new Date(b.uploaded_at).getTime() - new Date(a.uploaded_at).getTime()
@@ -753,15 +883,71 @@ export default function PatientsPage() {
         officeLabelIds: [createdLabel.id],
         officeId: attachOfficeId,
       });
+      setAttachOfficeLabels((current) => {
+        const filtered = current.filter((item) => item.id !== createdLabel.id);
+        return [...filtered, { ...createdLabel, status: 1 }];
+      });
+      setOfficeLabels((current) => {
+        const filtered = current.filter((item) => item.id !== createdLabel.id);
+        return [...filtered, { ...createdLabel, status: 1 }];
+      });
       setAttachControl(refreshed);
       setNewOfficeLabelName('');
       setShowNewLabelInput(false);
-      setAttachMessage('Etiqueta creada y asignada correctamente.');
+      setAttachMessage('Etiqueta agregada y asignada correctamente.');
     } catch (error) {
       console.error('Error creando etiqueta:', error);
-      setAttachError('No se pudo crear la etiqueta.');
+      const backendMessage =
+        typeof error === 'object'
+        && error !== null
+        && 'response' in error
+        && typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === 'string'
+          ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+          : null;
+
+      setAttachError(backendMessage || 'No se pudo crear la etiqueta.');
     } finally {
       setSavingOfficeLabel(false);
+    }
+  };
+
+  const handleToggleOfficeLabelToAttach = (labelId: number) => {
+    setSelectedOfficeLabelIdsToAttach((current) =>
+      current.includes(labelId) ? current.filter((value) => value !== labelId) : [...current, labelId]
+    );
+  };
+
+  const handleAttachExistingOfficeLabels = async () => {
+    if (!attachPatientId || selectedOfficeLabelIdsToAttach.length === 0) {
+      return;
+    }
+
+    setAttachSaving(true);
+    setAttachError(null);
+    setAttachMessage(null);
+
+    try {
+      const refreshed = await patientService.updatePatientTagStatuses(attachPatientId, [], {
+        officeLabelIds: selectedOfficeLabelIdsToAttach,
+        officeId: attachOfficeId,
+      });
+
+      setAttachControl(refreshed);
+      setSelectedOfficeLabelIdsToAttach([]);
+      setAttachMessage('Etiquetas agregadas correctamente.');
+    } catch (error) {
+      console.error('Error agregando etiquetas existentes:', error);
+      const backendMessage =
+        typeof error === 'object'
+        && error !== null
+        && 'response' in error
+        && typeof (error as { response?: { data?: { message?: unknown } } }).response?.data?.message === 'string'
+          ? String((error as { response?: { data?: { message?: string } } }).response?.data?.message)
+          : null;
+
+      setAttachError(backendMessage || 'No se pudieron agregar las etiquetas seleccionadas.');
+    } finally {
+      setAttachSaving(false);
     }
   };
 
@@ -810,6 +996,265 @@ export default function PatientsPage() {
   const handleToggleTagStatuses = (tagId: number) => {
     setOpenTagIds((current) =>
       current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId]
+    );
+  };
+
+  const renderAttachTagsSection = () => {
+    if (!attachControl) return null;
+
+    return (
+      <>
+        <Divider sx={{ my: 3 }} />
+
+        <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
+          <Box component="span" sx={{ color: '#ffcf48', fontSize: 24, lineHeight: 1 }}>
+            &#9873;
+          </Box>
+          Etiquetas:
+        </Typography>
+        <Typography
+          variant="caption"
+          sx={{ display: 'block', color: 'text.secondary', mb: 1, fontSize: '0.82rem' }}
+        >
+          Selecciona un nuevo estado de la etiqueta
+        </Typography>
+
+        {attachControl.statuses.length === 0 ? (
+          <Alert
+            severity="warning"
+            sx={{
+              mb: 2,
+              alignItems: 'flex-start',
+              '& .MuiAlert-message': {
+                width: '100%',
+              },
+            }}
+          >
+            Aún no hay estados configurados para las etiquetas. Los estados te permiten indicar en qué etapa se
+            encuentra cada etiqueta, por ejemplo: pendiente, en proceso o concluido.
+          </Alert>
+        ) : null}
+
+        {attachError ? (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            {attachError}
+          </Alert>
+        ) : null}
+
+        {attachControl.tags.length === 0 ? (
+          <Typography color="text.secondary" sx={{ mb: 2 }}>
+            Este paciente no tiene etiquetas activas para editar.
+          </Typography>
+        ) : (
+          <Box sx={{ mb: 1 }}>
+            {attachControl.tags.map((tag, index) => (
+              <Box key={tag.id}>
+                {index > 0 && <Divider sx={{ my: 1.2 }} />}
+                {(() => {
+                  const isOpen = openTagIds.includes(tag.id);
+                  const availableStatuses = attachControl.statuses.filter(
+                    (status) => status.code !== tag.current_status.code
+                  );
+
+                  return (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                        <Typography
+                          variant="body1"
+                          sx={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.9 }}
+                        >
+                          <Box
+                            component="span"
+                            sx={{ color: '#ffcf48', fontSize: 20, lineHeight: 1 }}
+                          >
+                            &#9873;
+                          </Box>
+                          {tag.code}
+                        </Typography>
+                        {tag.created_at_label ? (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {tag.created_at_label}
+                          </Typography>
+                        ) : null}
+                        <Typography variant="body1" sx={{ color: 'text.secondary', ml: { md: 2 } }}>
+                          Estatus actual:
+                        </Typography>
+                        <Chip
+                          label={tag.current_status.code}
+                          size="small"
+                          onClick={() => handleToggleTagStatuses(tag.id)}
+                          clickable
+                          sx={{
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: isOpen ? '0 0 0 2px rgba(38,50,56,0.16)' : 'none',
+                            color:
+                              labelStatusColorMap[tag.current_status.color_class]?.text ??
+                              labelStatusColorMap['btn-default'].text,
+                            backgroundColor:
+                              labelStatusColorMap[tag.current_status.color_class]?.bg ??
+                              labelStatusColorMap['btn-default'].bg,
+                          }}
+                        />
+                        {tag.current_status.date ? (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {tag.current_status.date}
+                          </Typography>
+                        ) : null}
+                        <Button
+                          variant="text"
+                          color="error"
+                          sx={{ px: 0, minWidth: 'auto', ml: 'auto' }}
+                          onClick={() => setFinalizeTag({ id: tag.id, code: tag.code })}
+                          disabled={finalizingTagId === tag.id}
+                        >
+                          finalizar etiqueta
+                        </Button>
+                      </Box>
+
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 1,
+                        }}
+                      >
+                        {isOpen
+                          ? availableStatuses.map((status) => (
+                            <Button
+                              key={status.id}
+                              size="small"
+                              variant="contained"
+                              onClick={() => void handleSelectStatus(tag.id, status.id)}
+                              disabled={tagStatusSavingId === tag.id}
+                              sx={getStatusButtonSx(
+                                status.color_class,
+                                tag.current_status.code === status.code
+                              )}
+                            >
+                              {status.code}
+                            </Button>
+                          ))
+                          : null}
+                      </Box>
+                    </Box>
+                  );
+                })()}
+              </Box>
+            ))}
+          </Box>
+        )}
+
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 1.5 }}>
+          {!showNewLabelInput ? (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                onClick={() => setShowNewLabelInput(true)}
+                sx={{ color: 'primary.main', fontWeight: 600 }}
+              >
+                Nueva etiqueta
+              </Link>
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 1.5,
+                  flexDirection: 'column',
+                  width: { xs: '100%', md: 'auto' },
+                  maxWidth: { xs: '100%', md: 640 },
+                }}
+              >
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Etiquetas activas del consultorio
+                  </Typography>
+                  {availableOfficeLabelsToAttach.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No hay etiquetas activas disponibles para agregar a este paciente.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                      {availableOfficeLabelsToAttach.map((label) => (
+                        <Box
+                          key={label.id}
+                          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                        >
+                          <Checkbox
+                            size="small"
+                            checked={selectedOfficeLabelIdsToAttach.includes(label.id)}
+                            onChange={() => handleToggleOfficeLabelToAttach(label.id)}
+                            disabled={attachSaving || savingOfficeLabel}
+                          />
+                          <Typography variant="body2">
+                            {label.code ?? 'Sin nombre'}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  )}
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void handleAttachExistingOfficeLabels()}
+                      disabled={attachSaving || savingOfficeLabel || selectedOfficeLabelIdsToAttach.length === 0}
+                    >
+                      Agregar seleccionadas
+                    </Button>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Nueva etiqueta
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                    <TextField
+                      size="small"
+                      placeholder="Nueva etiqueta"
+                      value={newOfficeLabelName}
+                      onChange={(e) => setNewOfficeLabelName(e.target.value)}
+                      sx={{ flex: 1, minWidth: { xs: '100%', md: 460 } }}
+                      disabled={savingOfficeLabel}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void handleCreateOfficeLabel();
+                        }
+                      }}
+                    />
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      onClick={() => void handleCreateOfficeLabel()}
+                      disabled={savingOfficeLabel || !newOfficeLabelName.trim()}
+                    >
+                      {savingOfficeLabel ? 'Creando...' : 'Agregar'}
+                    </Button>
+                    <Button
+                      size="small"
+                      variant="text"
+                      color="inherit"
+                      onClick={() => {
+                        setShowNewLabelInput(false);
+                        setNewOfficeLabelName('');
+                        setSelectedOfficeLabelIdsToAttach([]);
+                      }}
+                      disabled={savingOfficeLabel || attachSaving}
+                    >
+                      Cancelar
+                    </Button>
+                  </Box>
+                </Box>
+              </Box>
+            </Box>
+          )}
+        </Box>
+      </>
     );
   };
 
@@ -1002,67 +1447,108 @@ export default function PatientsPage() {
                     <>
                 <Box
                   sx={{
-                    display: 'block',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
                     mb: 2,
                   }}
                 >
-                  <Box sx={{ minWidth: 280, mb: 2 }}>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                      Paciente:{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                        {attachControl.patient.full_name}
-                      </Box>
+                  <Box
+                    sx={{
+                      width: '100%',
+                      p: 2,
+                      borderRadius: 2.5,
+                      border: '1px solid #dbe8f1',
+                      backgroundColor: '#f9fcff',
+                    }}
+                  >
+                    <Typography variant="h6" sx={{ color: 'primary.main', fontWeight: 800, mb: 1.5 }}>
+                      {attachControl.patient.full_name}
                     </Typography>
-                    <Typography
-                      variant="body1"
-                      sx={{ color: 'text.secondary', mb: 0.5, display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}
+
+                    <Box
+                      sx={{
+                        display: 'grid',
+                        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))' },
+                        gap: 1.25,
+                      }}
                     >
-                      <Box component="span">
-                        {'Tel\u00e9fono:'}{' '}
-                        <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                          {attachControl.patient.phone || '-'}
+                      <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.2 }}>
+                          Teléfono
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
+                          <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                            {attachControl.patient.phone || '-'}
+                          </Typography>
+                          {attachControl.patient.phone ? (
+                            <IconButton
+                              size="small"
+                              sx={{ p: 0.35 }}
+                              onClick={(event) => handleCopyPhone(event, attachControl.patient.phone)}
+                            >
+                              <ContentCopyIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          ) : null}
                         </Box>
                       </Box>
-                      {attachControl.patient.phone ? (
-                        <IconButton
-                          size="small"
-                          sx={{ p: 0.4 }}
-                          onClick={(event) => handleCopyPhone(event, attachControl.patient.phone)}
-                        >
-                          <ContentCopyIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-                      ) : null}
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                      Edad:{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                        {attachControl.patient.age_text || '-'}
+
+                      <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.2 }}>
+                          Edad
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                          {attachControl.patient.age_text || '-'}
+                        </Typography>
                       </Box>
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                      {'\u00daltima consulta:'}{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                        {attachControl.patient.last_consultation_text || '-'}
+
+                      <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.2 }}>
+                          Última consulta
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                          {attachControl.patient.last_consultation_text || '-'}
+                        </Typography>
+                        {attachControl.patient.last_consultation_diff ? (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {attachControl.patient.last_consultation_diff}
+                          </Typography>
+                        ) : null}
                       </Box>
-                      {attachControl.patient.last_consultation_diff ? (
-                        <Box component="span" sx={{ ml: 0.75, color: 'text.secondary' }}>
-                          {attachControl.patient.last_consultation_diff}
-                        </Box>
-                      ) : null}
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                      Siguiente cita:{' '}
-                      <Box component="span" sx={{ color: 'primary.main', fontWeight: 700 }}>
-                        {attachControl.patient.next_appointment_text || '-'}
+
+                      <Box>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.2 }}>
+                          Siguiente cita
+                        </Typography>
+                        <Typography variant="body1" sx={{ color: 'primary.main', fontWeight: 700 }}>
+                          {attachControl.patient.next_appointment_text || '-'}
+                        </Typography>
+                        {attachControl.patient.next_appointment_diff ? (
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            {attachControl.patient.next_appointment_diff}
+                          </Typography>
+                        ) : null}
                       </Box>
-                      {attachControl.patient.next_appointment_diff ? (
-                        <Box component="span" sx={{ ml: 0.75, color: 'text.secondary' }}>
-                          {attachControl.patient.next_appointment_diff}
-                        </Box>
-                      ) : null}
-                    </Typography>
-                    <Typography variant="body1" sx={{ color: 'text.secondary', mb: 0.5 }}>
-                      {'\u00daltimo archivo/estudio almacenado:'}{' '}
+                    </Box>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      width: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 1,
+                      p: 2,
+                      borderRadius: 2.5,
+                      border: '1px solid #dbe8f1',
+                      backgroundColor: '#ffffff',
+                    }}
+                  >
+                    <Box sx={{ width: '100%' }}>
+                      <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.35 }}>
+                        Último archivo/estudio almacenado
+                      </Typography>
                       {attachControl.patient.last_file_name && attachFiles[0] ? (
                         <Link
                           component="button"
@@ -1076,27 +1562,28 @@ export default function PatientsPage() {
                             fontWeight: 700,
                             verticalAlign: 'baseline',
                             textAlign: 'left',
+                            fontSize: '1rem',
                           }}
                         >
                           {attachControl.patient.last_file_name}
                         </Link>
                       ) : (
-                        <Box component="span" sx={{ color: '#d32f2f', fontWeight: 700 }}>
+                        <Typography component="div" sx={{ color: '#d32f2f', fontWeight: 700, fontSize: '1rem' }}>
                           {attachControl.patient.last_file_name || '-'}
-                        </Box>
+                        </Typography>
                       )}
                       {attachControl.patient.last_file_text ? (
-                        <Box component="span" sx={{ ml: 0.75, color: 'text.secondary' }}>
+                        <Typography variant="body2" sx={{ mt: 0.4, color: 'text.secondary' }}>
                           {attachControl.patient.last_file_text}
                           {attachControl.patient.last_file_diff
                             ? ` - ${attachControl.patient.last_file_diff}`
                             : ''}
-                        </Box>
+                        </Typography>
                       ) : null}
-                    </Typography>
-                  </Box>
+                    </Box>
 
-                  <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1 }}>
+                    <Divider sx={{ width: '100%', my: 0.5 }} />
+
                     <input
                       ref={attachFileInputRef}
                       type="file"
@@ -1530,221 +2017,18 @@ export default function PatientsPage() {
                         ) : null}
                       </Box>
                     ) : null}
+                    {renderAttachTagsSection()}
+                    <Button
+                      variant="contained"
+                      color="success"
+                      sx={{ mt: 1, minWidth: 120 }}
+                      onClick={() => void handleSendStatuses()}
+                      disabled={attachSaving || totalSelectedForPatientResult === 0}
+                    >
+                      {attachSaving ? 'Guardando...' : 'Enviar'}
+                    </Button>
                   </Box>
                 </Box>
-
-                <Divider sx={{ my: 3 }} />
-
-                <Typography variant="h5" sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
-                  <Box component="span" sx={{ color: '#ffcf48', fontSize: 24, lineHeight: 1 }}>
-                    &#9873;
-                  </Box>
-                  Etiquetas:
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ display: 'block', color: 'text.secondary', mb: 1, fontSize: '0.82rem' }}
-                >
-                  Selecciona un nuevo estado de la etiqueta
-                </Typography>
-
-                {attachControl.statuses.length === 0 ? (
-                  <Alert
-                    severity="warning"
-                    sx={{
-                      mb: 2,
-                      alignItems: 'flex-start',
-                      '& .MuiAlert-message': {
-                        width: '100%',
-                      },
-                    }}
-                  >
-                    AÃºn no hay estados configurados para las etiquetas. Los estados te permiten indicar en quÃ© etapa se
-                    encuentra cada etiqueta, por ejemplo: pendiente, en proceso o concluido.
-                  </Alert>
-                ) : null}
-
-                {attachError ? (
-                  <Alert severity="error" sx={{ mb: 2 }}>
-                    {attachError}
-                  </Alert>
-                ) : null}
-
-                {attachControl.tags.length === 0 ? (
-                  <Typography color="text.secondary" sx={{ mb: 2 }}>
-                    Este paciente no tiene etiquetas activas para editar.
-                  </Typography>
-                ) : (
-                  <Box sx={{ mb: 1 }}>
-                    {attachControl.tags.map((tag, index) => (
-                      <Box key={tag.id}>
-                        {index > 0 && <Divider sx={{ my: 1.2 }} />}
-                        {(() => {
-                          const isOpen = openTagIds.includes(tag.id);
-                          const availableStatuses = attachControl.statuses.filter(
-                            (status) => status.code !== tag.current_status.code
-                          );
-
-                          return (
-                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                            <Typography
-                              variant="body1"
-                              sx={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.9 }}
-                            >
-                              <Box
-                                component="span"
-                                sx={{ color: '#ffcf48', fontSize: 20, lineHeight: 1 }}
-                              >
-                                &#9873;
-                              </Box>
-                              {tag.code}
-                            </Typography>
-                            {tag.created_at_label ? (
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {tag.created_at_label}
-                              </Typography>
-                            ) : null}
-                            <Typography variant="body1" sx={{ color: 'text.secondary', ml: { md: 2 } }}>
-                              Estatus actual:
-                            </Typography>
-                            <Chip
-                              label={tag.current_status.code}
-                              size="small"
-                              onClick={() => handleToggleTagStatuses(tag.id)}
-                              clickable
-                              sx={{
-                                fontWeight: 700,
-                                cursor: 'pointer',
-                                boxShadow: isOpen ? '0 0 0 2px rgba(38,50,56,0.16)' : 'none',
-                                color:
-                                  labelStatusColorMap[tag.current_status.color_class]?.text ??
-                                  labelStatusColorMap['btn-default'].text,
-                                backgroundColor:
-                                  labelStatusColorMap[tag.current_status.color_class]?.bg ??
-                                  labelStatusColorMap['btn-default'].bg,
-                              }}
-                            />
-                            {tag.current_status.date ? (
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {tag.current_status.date}
-                              </Typography>
-                            ) : null}
-                            <Button
-                              variant="text"
-                              color="error"
-                              sx={{ px: 0, minWidth: 'auto', ml: 'auto' }}
-                              onClick={() => setFinalizeTag({ id: tag.id, code: tag.code })}
-                              disabled={finalizingTagId === tag.id}
-                            >
-                              finalizar etiqueta
-                            </Button>
-                          </Box>
-
-                          <Box
-                            sx={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              gap: 1,
-                            }}
-                          >
-                            {isOpen
-                              ? availableStatuses.map((status) => (
-                              <Button
-                                key={status.id}
-                                size="small"
-                                variant="contained"
-                                onClick={() => void handleSelectStatus(tag.id, status.id)}
-                                disabled={tagStatusSavingId === tag.id}
-                                sx={getStatusButtonSx(
-                                  status.color_class,
-                                  tag.current_status.code === status.code
-                                )}
-                              >
-                                {status.code}
-                              </Button>
-                              ))
-                              : null}
-                          </Box>
-                        </Box>
-                          );
-                        })()}
-                      </Box>
-                    ))}
-                  </Box>
-                )}
-
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, mb: 1.5 }}>
-                  {!showNewLabelInput ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                      <Link
-                        component="button"
-                        type="button"
-                        underline="hover"
-                        onClick={() => setShowNewLabelInput(true)}
-                        sx={{ color: 'primary.main', fontWeight: 600 }}
-                      >
-                        Nueva etiqueta
-                      </Link>
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          gap: 1,
-                          flexWrap: 'wrap',
-                          width: { xs: '100%', md: 'auto' },
-                          maxWidth: { xs: '100%', md: 640 },
-                        }}
-                      >
-                        <TextField
-                          size="small"
-                          placeholder="Nueva etiqueta"
-                          value={newOfficeLabelName}
-                          onChange={(e) => setNewOfficeLabelName(e.target.value)}
-                          sx={{ flex: 1, minWidth: { xs: '100%', md: 460 } }}
-                          disabled={savingOfficeLabel}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                              event.preventDefault();
-                              void handleCreateOfficeLabel();
-                            }
-                          }}
-                        />
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          onClick={() => void handleCreateOfficeLabel()}
-                          disabled={savingOfficeLabel || !newOfficeLabelName.trim()}
-                        >
-                          {savingOfficeLabel ? 'Creando...' : 'Agregar'}
-                        </Button>
-                        <Button
-                          size="small"
-                          variant="text"
-                          color="inherit"
-                          onClick={() => {
-                            setShowNewLabelInput(false);
-                            setNewOfficeLabelName('');
-                          }}
-                          disabled={savingOfficeLabel}
-                        >
-                          Cancelar
-                        </Button>
-                      </Box>
-                    </Box>
-                  )}
-                </Box>
-                <Button
-                  variant="contained"
-                  color="success"
-                  sx={{ mt: 1, minWidth: 120 }}
-                  onClick={() => void handleSendStatuses()}
-                  disabled={attachSaving || totalSelectedForPatientResult === 0}
-                >
-                  {attachSaving ? 'Guardando...' : 'Enviar'}
-                </Button>
                     </>
                   );
                 })()}
@@ -1778,7 +2062,97 @@ export default function PatientsPage() {
             <Button variant="contained" onClick={handleOpenCreatePatient} sx={{ minWidth: { sm: 180 } }}>
               Nuevo paciente
             </Button>
+            <Button
+              variant={showTagFilters || selectedFilterTagIds.length > 0 || selectedFilterStatusIds.length > 0 ? 'outlined' : 'text'}
+              onClick={() => setShowTagFilters((current) => !current)}
+              sx={{ minWidth: { sm: 170 } }}
+            >
+              Filtros de etiquetas
+            </Button>
           </Box>
+          <Collapse in={showTagFilters}>
+            <Box
+              sx={{
+                mt: 2,
+                pt: 2,
+                borderTop: '1px solid',
+                borderColor: 'divider',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+              }}
+            >
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Etiquetas activas
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                  {officeLabels.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No hay etiquetas disponibles en este consultorio.
+                    </Typography>
+                  ) : (
+                    officeLabels.map((label) => (
+                      <Box
+                        key={label.id}
+                        sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                      >
+                        <Checkbox
+                          size="small"
+                          checked={selectedFilterTagIds.includes(label.id)}
+                          onChange={() => handleToggleFilterTag(label.id)}
+                        />
+                        <Typography variant="body2">
+                          {label.code ?? 'Sin nombre'}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              </Box>
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                  Estatus de etiqueta
+                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+                  {officeLabelStatuses.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No hay estatus configurados en este consultorio.
+                    </Typography>
+                  ) : (
+                    officeLabelStatuses.map((status) => {
+                      const active = selectedFilterStatusIds.includes(status.id);
+
+                      return (
+                        <Box
+                          key={status.id}
+                          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}
+                        >
+                          <Checkbox
+                            size="small"
+                            checked={active}
+                            onChange={() => handleToggleFilterStatus(status.id)}
+                          />
+                          <Chip
+                            label={status.code}
+                            size="small"
+                            sx={getStatusButtonSx(status.color_class, true)}
+                          />
+                        </Box>
+                      );
+                    })
+                  )}
+                </Box>
+              </Box>
+              {(selectedFilterTagIds.length > 0 || selectedFilterStatusIds.length > 0) && (
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <Button size="small" onClick={clearTagFilters}>
+                    Limpiar filtros
+                  </Button>
+                </Box>
+              )}
+            </Box>
+          </Collapse>
         </CardContent>
       </Card>
 
@@ -1828,6 +2202,11 @@ export default function PatientsPage() {
                           )}
                         </Box>
                         <Box component="span" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                          {showPatientTagsColumn && (
+                            <Box component="span" sx={{ width: '100%' }}>
+                              {renderPatientTagSummary(patient)}
+                            </Box>
+                          )}
                           <Button
                             size="small"
                             variant="outlined"
@@ -1879,6 +2258,7 @@ export default function PatientsPage() {
                     <TableCell>Paciente</TableCell>
                     <TableCell>{'Tel\u00e9fono'}</TableCell>
                     <TableCell>Fecha de Nacimiento</TableCell>
+                    {showPatientTagsColumn && <TableCell>Etiquetas / Estatus</TableCell>}
                     <TableCell align="center">Más opciones</TableCell>
                     <TableCell align="center">Seleccionar</TableCell>
                   </TableRow>
@@ -1916,6 +2296,11 @@ export default function PatientsPage() {
                           ? `${formatDisplayDate(patient.birth_date)}${patient.age ? ` (${patient.age} a\u00f1os)` : ''}`
                           : '-'}
                       </TableCell>
+                      {showPatientTagsColumn && (
+                        <TableCell>
+                          {renderPatientTagSummary(patient)}
+                        </TableCell>
+                      )}
                       <TableCell align="center">
                         <Button
                           size="small"
@@ -1939,7 +2324,7 @@ export default function PatientsPage() {
 
                   {paginatedPatients.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={5} sx={{ textAlign: 'center', py: 4 }}>
+                      <TableCell colSpan={showPatientTagsColumn ? 6 : 5} sx={{ textAlign: 'center', py: 4 }}>
                         <Typography color="text.secondary">
                           No se encontraron pacientes
                         </Typography>

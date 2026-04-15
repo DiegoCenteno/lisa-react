@@ -23,7 +23,7 @@ import { shouldRunClientReset } from '../../utils/clientReset';
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isAuthenticated, hardResetClientAuth } = useAuth();
+  const { login, isAuthenticated, hardResetClientAuth, user } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [emailOrPhone, setEmailOrPhone] = useState('');
@@ -53,6 +53,14 @@ export default function LoginPage() {
     };
   }, [hardResetClientAuth]);
 
+  const getLandingPath = () => {
+    if (user?.role === 'system_admin') {
+      return '/admin';
+    }
+
+    return isMobile ? '/agenda' : '/dashboard';
+  };
+
   if (preparing) {
     return (
       <Box
@@ -69,7 +77,7 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    navigate(isMobile ? '/agenda' : '/dashboard', { replace: true });
+    navigate(getLandingPath(), { replace: true });
     return null;
   }
 
@@ -80,7 +88,9 @@ export default function LoginPage() {
 
     try {
       await login(emailOrPhone, password);
-      navigate(isMobile ? '/agenda' : '/dashboard', { replace: true });
+      const savedUser = localStorage.getItem('user');
+      const parsedUser = savedUser ? JSON.parse(savedUser) as { role?: string } : null;
+      navigate(parsedUser?.role === 'system_admin' ? '/admin' : (isMobile ? '/agenda' : '/dashboard'), { replace: true });
     } catch {
       setError('Credenciales inválidas. Verifica tu email/teléfono y Contraseña.');
     } finally {

@@ -4,6 +4,7 @@ import apiClient from './client';
 const ROL_ID_MAP: Record<number, UserRole> = {
   1: 'medico',
   2: 'asistente',
+  3: 'system_admin',
 };
 
 interface PassportLoginResponse {

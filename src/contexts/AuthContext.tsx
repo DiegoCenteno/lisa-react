@@ -30,6 +30,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const ensureSessionOfficeId = async () => {
       if (!user || !token) return;
+      if (user.role === 'system_admin') return;
       if (sessionStorage.getItem('cached_office_id')) return;
 
       localStorage.removeItem('cached_office_id');
@@ -65,9 +66,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      const offices = await appointmentService.getOffices();
-      if (offices.length > 0) {
-        sessionStorage.setItem('cached_office_id', String(offices[0].id));
+      if (response.user.role !== 'system_admin') {
+        const offices = await appointmentService.getOffices();
+        if (offices.length > 0) {
+          sessionStorage.setItem('cached_office_id', String(offices[0].id));
+        }
       }
     } catch {
       sessionStorage.removeItem('cached_office_id');
@@ -103,6 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (permission: string) => {
       if (!user) return false;
       if (user.role === 'medico') return true;
+      if (user.role === 'system_admin') {
+        return permission.startsWith('system.');
+      }
       const permissions = user.permissions ?? [];
       if (permissions.includes('*') || permissions.includes(permission)) {
         return true;

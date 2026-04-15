@@ -44,6 +44,7 @@ import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultat
 import ActivityLogTimeline from '../../components/activity/ActivityLogTimeline';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
+import AgendaAnnouncementsRail from './AgendaAnnouncementsRail';
 import { useAuth } from '../../hooks/useAuth';
 import ClickableDateField from '../../components/ClickableDateField';
 
@@ -270,6 +271,7 @@ export default function AgendaPage() {
   const isAssistant = user?.role === 'asistente';
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
   const isShortViewport = useMediaQuery('(max-height:650px)');
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
@@ -300,6 +302,7 @@ export default function AgendaPage() {
   } | null>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
   const [showAppointmentMore, setShowAppointmentMore] = useState(false);
+  const [newsRailCollapsed, setNewsRailCollapsed] = useState(false);
   const [appointmentActivityLogs, setAppointmentActivityLogs] = useState<ActivityLogItem[]>([]);
   const [appointmentActivityLogsHasMore, setAppointmentActivityLogsHasMore] = useState(false);
   const [appointmentActivityLogsNextBefore, setAppointmentActivityLogsNextBefore] = useState<string | null>(null);
@@ -335,6 +338,11 @@ export default function AgendaPage() {
 
   const canViewPatientSummary = can('agenda.patient_summary');
   const doctorName = useMemo(() => {
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    if (selectedOffice?.doctor_name?.trim()) {
+      return selectedOffice.doctor_name.trim();
+    }
+
     try {
       const rawUser = localStorage.getItem('user');
       if (!rawUser) return 'Doctor';
@@ -343,7 +351,7 @@ export default function AgendaPage() {
     } catch {
       return 'Doctor';
     }
-  }, []);
+  }, [officeId, offices]);
 
   // Load office_id on mount
   useEffect(() => {
@@ -624,6 +632,11 @@ export default function AgendaPage() {
   }, []);
 
   const doctorSpecialty = useMemo(() => {
+    const selectedOffice = offices.find((office) => office.id === officeId);
+    if (selectedOffice?.doctor_specialty?.trim()) {
+      return selectedOffice.doctor_specialty.trim();
+    }
+
     try {
       const rawUser = localStorage.getItem('user');
       if (!rawUser) return 'Sin especialidad';
@@ -632,7 +645,7 @@ export default function AgendaPage() {
     } catch {
       return 'Sin especialidad';
     }
-  }, []);
+  }, [officeId, offices]);
 
   useEffect(() => {
     const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
@@ -929,268 +942,294 @@ export default function AgendaPage() {
     <Box>
       <Box
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          mb: 3,
-          flexWrap: 'wrap',
-          gap: 1,
+          display: { xs: 'block', lg: 'grid' },
+          gridTemplateColumns: {
+            lg: newsRailCollapsed ? 'minmax(0, 1fr) 36px' : 'minmax(0, 4fr) minmax(300px, 1fr)',
+          },
+          columnGap: { xs: 0, lg: 0 },
+          rowGap: 3,
+          alignItems: 'start',
         }}
       >
-        <Typography variant="h5">Agenda Médica</Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => setDialogOpen(true)}
-        >
-          Nueva Cita
-        </Button>
-      </Box>
-
-      <Box sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="text"
-            onClick={() => setShowPreviousAppointments((value) => !value)}
-            sx={{
-              p: 0,
-              minWidth: 'auto',
-              textTransform: 'none',
-              textDecoration: 'underline',
-              color: '#2d64c8',
-              fontWeight: 400,
-            }}
-          >
-            {showPreviousAppointments
-              ? 'Ocultar citas previas'
-              : isMobile
-                ? 'Citas previas'
-                : 'Mostrar citas previas'}
-          </Button>
-          <Box sx={{ flex: 1 }} />
-            <Button
-              variant="text"
-              onClick={() => {
-                setShowOfficeActivityLogs((value) => !value);
-              }}
-            sx={{
-              p: 0,
-              minWidth: 'auto',
-              textTransform: 'none',
-              textDecoration: 'underline',
-              color: '#2d64c8',
-              fontWeight: 400,
-            }}
-          >
-            {showOfficeActivityLogs ? 'Ocultar bitácora' : 'Bitácora'}
-          </Button>
-        </Box>
-        <Box sx={{ mt: 1.25, width: '100%', maxWidth: 640 }}>
-          <TextField
-            fullWidth
-            size="small"
-            label="Buscar pacientes agendados"
-            inputRef={patientSearchInputRef}
-            defaultValue=""
-            onChange={(event) => {
-              patientSearchDraftRef.current = event.target.value;
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                setAppliedPatientSearch(patientSearchDraftRef.current.trim());
-              }
-            }}
-          />
-          {appliedPatientSearch ? (
-            <Button
-              variant="text"
-              onClick={() => {
-                setAppliedPatientSearch('');
-                patientSearchDraftRef.current = '';
-                if (patientSearchInputRef.current) {
-                  patientSearchInputRef.current.value = '';
-                }
-                calendarRef.current?.getApi().today();
-              }}
-              sx={{
-                mt: 0.5,
-                p: 0,
-                minWidth: 'auto',
-                textTransform: 'none',
-                textDecoration: 'underline',
-                color: '#ef6c00',
-                fontWeight: 400,
-              }}
-            >
-              Restablecer búsqueda
-            </Button>
-          ) : null}
-        </Box>
-        {showOfficeActivityLogs ? (
+        <Box sx={{ minWidth: 0 }}>
           <Box
             sx={{
-              mt: 1.5,
-              p: 1.5,
-              borderRadius: 2,
-              backgroundColor: '#f8fbfd',
-              border: '1px solid #dde8ef',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              mb: 3,
+              flexWrap: 'wrap',
+              gap: 1,
+              pr: { xs: 0, lg: '20px' },
             }}
           >
-            <ActivityLogTimeline
-              emptyText="Aún no hay movimientos recientes en este consultorio."
-              showPatient
-              loadLogs={({ dayKey, before, limit }) =>
-                appointmentService.getGlobalActivityLogs({
-                  officeId,
-                  days: 30,
-                  before: before ?? `${dayKey}T23:59:59`,
-                  limit,
-                })
-              }
-            />
+            <Typography variant="h5">Agenda Médica</Typography>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setDialogOpen(true)}
+            >
+              Nueva Cita
+            </Button>
           </Box>
-        ) : null}
-      </Box>
 
-      <Box
-        sx={{
-          position: 'relative',
-          opacity: loading ? 0.5 : 1,
-          transition: 'opacity 0.3s',
-        }}
-      >
-        <Box
-          sx={{
-            '& .fc': {
-              fontFamily: 'Roboto, sans-serif',
-            },
-            '& .fc-toolbar-title': {
-              fontSize: { xs: '1rem', sm: '1.25rem' },
-              textTransform: 'capitalize',
-            },
-            '& .fc-button': {
-              textTransform: 'capitalize',
-            },
-            '& .fc-button-primary': {
-              backgroundColor: 'primary.main',
-              borderColor: 'primary.main',
-              '&:hover': {
-                backgroundColor: 'primary.dark',
-                borderColor: 'primary.dark',
-              },
-              '&:disabled': {
-                backgroundColor: 'primary.main',
-                borderColor: 'primary.main',
-              },
-            },
-            '& .fc-button-primary:not(:disabled).fc-button-active': {
-              backgroundColor: 'primary.dark',
-              borderColor: 'primary.dark',
-            },
-            '& .fc-event': {
-              cursor: 'pointer',
-              borderRadius: '4px',
-              fontSize: '0.8rem',
-              transition: 'filter 0.2s, background-color 0.2s, border-color 0.2s',
-            },
-            '& .fc-event:hover': {
-              filter: 'brightness(0.97)',
-            },
-            '& .appointment-event--first-time:hover': {
-              backgroundColor: `${FIRST_TIME_HOVER_BG} !important`,
-              borderColor: `${FIRST_TIME_HOVER_BG} !important`,
-              color: `${FIRST_TIME_TEXT} !important`,
-            },
-            '& .appointment-event--follow-up:hover': {
-              backgroundColor: `${FOLLOW_UP_HOVER_BG} !important`,
-              borderColor: `${FOLLOW_UP_HOVER_BG} !important`,
-              color: `${FOLLOW_UP_TEXT} !important`,
-            },
-            '& .appointment-event--past:hover': {
-               backgroundColor: 'rgb(189 189 189) !important',
-               borderColor: 'rgb(189 189 189) !important',
-               color: '#ffffff !important',
-            },
-            '& .fc-daygrid-event-dot': {
-              borderColor: 'inherit',
-            },
-            '& .fc-day-today': {
-              backgroundColor: 'rgba(0, 137, 123, 0.05) !important',
-            },
-            '& .fc-list-event:hover td': {
-              filter: 'brightness(0.96)',
-            },
-            '& .fc-list-event[data-row-type="first-time"]:hover td, & tr.fc-list-event[data-row-type="first-time"]:hover td': {
-              backgroundColor: `${FIRST_TIME_HOVER_BG} !important`,
-              color: `${FIRST_TIME_TEXT} !important`,
-              filter: 'none',
-            },
-            '& .fc-list-event[data-row-type="follow-up"]:hover td, & tr.fc-list-event[data-row-type="follow-up"]:hover td': {
-              backgroundColor: `${FOLLOW_UP_HOVER_BG} !important`,
-              color: `${FOLLOW_UP_TEXT} !important`,
-              filter: 'none',
-            },
-            '& .fc-list-event[data-row-type="past"]:hover td, & tr.fc-list-event[data-row-type="past"]:hover td': {
-               backgroundColor: 'rgb(189 189 189) !important',
-               color: '#ffffff !important',
-              filter: 'none',
-            },
-            '& .fc-list-event td': {
-              transition: 'filter 0.2s, background-color 0.2s, color 0.2s',
-            },
-          }}
-        >
-          <FullCalendar
-            ref={calendarRef}
-            plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
-            initialView="listMonth"
-            locale="es"
-            headerToolbar={isMobile ? {
-              left: 'prev,next',
-              center: 'title',
-              right: '',
-            } : {
-              left: 'prev,next today',
-              center: 'title',
-              right: 'listMonth,timeGridDay,timeGridWeek,dayGridMonth',
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              <Button
+                variant="text"
+                onClick={() => setShowPreviousAppointments((value) => !value)}
+                sx={{
+                  p: 0,
+                  minWidth: 'auto',
+                  textTransform: 'none',
+                  textDecoration: 'underline',
+                  color: '#2d64c8',
+                  fontWeight: 400,
+                }}
+              >
+                {showPreviousAppointments
+                  ? 'Ocultar citas previas'
+                  : isMobile
+                    ? 'Citas previas'
+                    : 'Mostrar citas previas'}
+              </Button>
+              <Box sx={{ flex: 1 }} />
+              <Button
+                  variant="text"
+                  onClick={() => {
+                    setShowOfficeActivityLogs((value) => !value);
+                  }}
+                sx={{
+                  p: 0,
+                  minWidth: 'auto',
+                  textTransform: 'none',
+                  textDecoration: 'underline',
+                  color: '#2d64c8',
+                  fontWeight: 400,
+                  pr: { xs: 0, lg: '20px' },
+                }}
+              >
+                {showOfficeActivityLogs ? 'Ocultar bitácora' : 'Bitácora'}
+              </Button>
+            </Box>
+            <Box sx={{ mt: 1.25, width: '100%', maxWidth: 640 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Buscar pacientes agendados"
+                inputRef={patientSearchInputRef}
+                defaultValue=""
+                onChange={(event) => {
+                  patientSearchDraftRef.current = event.target.value;
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    setAppliedPatientSearch(patientSearchDraftRef.current.trim());
+                  }
+                }}
+              />
+              {appliedPatientSearch ? (
+                <Button
+                  variant="text"
+                  onClick={() => {
+                    setAppliedPatientSearch('');
+                    patientSearchDraftRef.current = '';
+                    if (patientSearchInputRef.current) {
+                      patientSearchInputRef.current.value = '';
+                    }
+                    calendarRef.current?.getApi().today();
+                  }}
+                  sx={{
+                    mt: 0.5,
+                    p: 0,
+                    minWidth: 'auto',
+                    textTransform: 'none',
+                    textDecoration: 'underline',
+                    color: '#ef6c00',
+                    fontWeight: 400,
+                  }}
+                >
+                  Restablecer búsqueda
+                </Button>
+              ) : null}
+            </Box>
+            {showOfficeActivityLogs ? (
+              <Box
+                sx={{
+                  mt: 1.5,
+                  p: 1.5,
+                  borderRadius: 2,
+                  backgroundColor: '#f8fbfd',
+                  border: '1px solid #dde8ef',
+                }}
+              >
+                <ActivityLogTimeline
+                  emptyText="Aún no hay movimientos recientes en este consultorio."
+                  showPatient
+                  loadLogs={({ dayKey, before, limit }) =>
+                    appointmentService.getGlobalActivityLogs({
+                      officeId,
+                      days: 30,
+                      before: before ?? `${dayKey}T23:59:59`,
+                      limit,
+                    })
+                  }
+                />
+              </Box>
+            ) : null}
+          </Box>
+
+          <Box
+            sx={{
+              position: 'relative',
+              opacity: loading ? 0.5 : 1,
+              transition: 'opacity 0.3s',
             }}
-            buttonText={{
-              today: 'Hoy',
-              month: 'Mes',
-              week: 'Semana',
-              day: 'Día',
-              list: 'Lista',
-            }}
-            events={events}
-            eventContent={renderEventContent}
-            eventDidMount={handleEventDidMount}
-            selectable={false}
-            eventClick={handleEventClick}
-            editable={false}
-            height="auto"
-            slotMinTime="07:00:00"
-            slotMaxTime="21:00:00"
-            allDaySlot={false}
-            slotDuration="00:30:00"
-            slotLabelFormat={{
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }}
-            eventTimeFormat={{
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }}
-            datesSet={handleDatesSet}
-            nowIndicator={true}
-            dayMaxEvents={3}
-            moreLinkText={(n) => `+${n} más`}
-            noEventsText="No hay citas en este período"
-            firstDay={1}
-          />
+          >
+            <Box
+              sx={{
+                '& .fc': {
+                  fontFamily: 'Roboto, sans-serif',
+                },
+                '& .fc-toolbar-title': {
+                  fontSize: { xs: '1rem', sm: '1.25rem' },
+                  textTransform: 'capitalize',
+                },
+                '& .fc-toolbar-chunk:last-of-type': {
+                  pr: { xs: 0, lg: '20px' },
+                },
+                '& .fc-button': {
+                  textTransform: 'capitalize',
+                },
+                '& .fc-button-primary': {
+                  backgroundColor: 'primary.main',
+                  borderColor: 'primary.main',
+                  '&:hover': {
+                    backgroundColor: 'primary.dark',
+                    borderColor: 'primary.dark',
+                  },
+                  '&:disabled': {
+                    backgroundColor: 'primary.main',
+                    borderColor: 'primary.main',
+                  },
+                },
+                '& .fc-button-primary:not(:disabled).fc-button-active': {
+                  backgroundColor: 'primary.dark',
+                  borderColor: 'primary.dark',
+                },
+                '& .fc-event': {
+                  cursor: 'pointer',
+                  borderRadius: '4px',
+                  fontSize: '0.8rem',
+                  transition: 'filter 0.2s, background-color 0.2s, border-color 0.2s',
+                },
+                '& .fc-event:hover': {
+                  filter: 'brightness(0.97)',
+                },
+                '& .appointment-event--first-time:hover': {
+                  backgroundColor: `${FIRST_TIME_HOVER_BG} !important`,
+                  borderColor: `${FIRST_TIME_HOVER_BG} !important`,
+                  color: `${FIRST_TIME_TEXT} !important`,
+                },
+                '& .appointment-event--follow-up:hover': {
+                  backgroundColor: `${FOLLOW_UP_HOVER_BG} !important`,
+                  borderColor: `${FOLLOW_UP_HOVER_BG} !important`,
+                  color: `${FOLLOW_UP_TEXT} !important`,
+                },
+                '& .appointment-event--past:hover': {
+                   backgroundColor: 'rgb(189 189 189) !important',
+                   borderColor: 'rgb(189 189 189) !important',
+                   color: '#ffffff !important',
+                },
+                '& .fc-daygrid-event-dot': {
+                  borderColor: 'inherit',
+                },
+                '& .fc-day-today': {
+                  backgroundColor: 'rgba(0, 137, 123, 0.05) !important',
+                },
+                '& .fc-list-event:hover td': {
+                  filter: 'brightness(0.96)',
+                },
+                '& .fc-list-event[data-row-type="first-time"]:hover td, & tr.fc-list-event[data-row-type="first-time"]:hover td': {
+                  backgroundColor: `${FIRST_TIME_HOVER_BG} !important`,
+                  color: `${FIRST_TIME_TEXT} !important`,
+                  filter: 'none',
+                },
+                '& .fc-list-event[data-row-type="follow-up"]:hover td, & tr.fc-list-event[data-row-type="follow-up"]:hover td': {
+                  backgroundColor: `${FOLLOW_UP_HOVER_BG} !important`,
+                  color: `${FOLLOW_UP_TEXT} !important`,
+                  filter: 'none',
+                },
+                '& .fc-list-event[data-row-type="past"]:hover td, & tr.fc-list-event[data-row-type="past"]:hover td': {
+                   backgroundColor: 'rgb(189 189 189) !important',
+                   color: '#ffffff !important',
+                  filter: 'none',
+                },
+                '& .fc-list-event td': {
+                  transition: 'filter 0.2s, background-color 0.2s, color 0.2s',
+                },
+              }}
+            >
+              <FullCalendar
+                ref={calendarRef}
+                plugins={[dayGridPlugin, timeGridPlugin, listPlugin, interactionPlugin]}
+                initialView="listMonth"
+                locale="es"
+                headerToolbar={isMobile ? {
+                  left: 'prev,next',
+                  center: 'title',
+                  right: '',
+                } : {
+                  left: 'prev,next today',
+                  center: 'title',
+                  right: 'listMonth,timeGridDay,timeGridWeek,dayGridMonth',
+                }}
+                buttonText={{
+                  today: 'Hoy',
+                  month: 'Mes',
+                  week: 'Semana',
+                  day: 'Día',
+                  list: 'Lista',
+                }}
+                events={events}
+                eventContent={renderEventContent}
+                eventDidMount={handleEventDidMount}
+                selectable={false}
+                eventClick={handleEventClick}
+                editable={false}
+                height="auto"
+                slotMinTime="07:00:00"
+                slotMaxTime="21:00:00"
+                allDaySlot={false}
+                slotDuration="00:30:00"
+                slotLabelFormat={{
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                }}
+                eventTimeFormat={{
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                }}
+                datesSet={handleDatesSet}
+                nowIndicator={true}
+                dayMaxEvents={3}
+                moreLinkText={(n) => `+${n} más`}
+                noEventsText="No hay citas en este período"
+                firstDay={1}
+              />
+            </Box>
+          </Box>
         </Box>
+
+        {isDesktop ? (
+          <AgendaAnnouncementsRail
+            collapsed={newsRailCollapsed}
+            onToggle={() => setNewsRailCollapsed((current) => !current)}
+          />
+        ) : null}
       </Box>
 
       {/* Dialog: Detalle de cita */}

@@ -719,6 +719,8 @@ function LabelsPanel({
   const [editingStatusName, setEditingStatusName] = useState('');
   const [editingStatusColor, setEditingStatusColor] = useState<number>(0);
   const [editingStatusVisibleDays, setEditingStatusVisibleDays] = useState<number | 'always'>('always');
+  const [primaryStatusDialogMessage, setPrimaryStatusDialogMessage] = useState<string | null>(null);
+  const [finiteStatusWarningMessage, setFiniteStatusWarningMessage] = useState<string | null>(null);
 
   const createLabel = async () => {
     const trimmedName = newLabelName.trim();
@@ -842,19 +844,66 @@ function LabelsPanel({
     }
   };
 
-  const resolveStatusVisibleDays = (statusItem: SettingsLabelStatusItem): number | 'always' => {
+  const resolveStatusMeta = (statusItem: SettingsLabelStatusItem): { visible_days?: number | null; is_default?: boolean } => {
     const rawData = statusItem.data;
     const parsed = typeof rawData === 'string'
       ? (() => {
           try {
-            return JSON.parse(rawData) as { visible_days?: number | null };
+            return JSON.parse(rawData) as { visible_days?: number | null; is_default?: boolean };
           } catch {
             return null;
           }
         })()
       : rawData;
 
-    const visibleDays = parsed?.visible_days;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  };
+
+  const isPrimaryStatus = (statusItem: SettingsLabelStatusItem): boolean => Boolean(resolveStatusMeta(statusItem).is_default);
+
+  const persistPrimaryStatus = async (statusItem: SettingsLabelStatusItem, nextPrimary: boolean) => {
+    setSavingStatus(true);
+    setLocalError(null);
+    try {
+      const updated = await settingsService.updateOfficeLabelStatus(statusItem.id, {
+        office_id: selectedOfficeId,
+        data: {
+          visible_days: resolveStatusVisibleDays(statusItem) === 'always' ? null : resolveStatusVisibleDays(statusItem),
+          is_default: nextPrimary,
+        },
+      });
+
+      if (nextPrimary) {
+        setStatuses((current) => current.map((item) => {
+          if (item.id === updated.id) {
+            return updated;
+          }
+
+          const itemMeta = resolveStatusMeta(item);
+          return {
+            ...item,
+            data: {
+              ...itemMeta,
+              is_default: false,
+            },
+          };
+        }));
+        setPrimaryStatusDialogMessage(
+          'Has definido un estado inicial para las etiquetas. A partir de ahora, cada nueva etiqueta que asignes a un paciente comenzará con este estado dentro de su seguimiento.'
+        );
+      } else {
+        setStatuses((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        onSuccess('Se eliminó el estado inicial de las etiquetas. Las nuevas etiquetas volverán a crearse con estatus indefinido.');
+      }
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : 'No fue posible actualizar el estado primario.');
+    } finally {
+      setSavingStatus(false);
+    }
+  };
+
+  const resolveStatusVisibleDays = (statusItem: SettingsLabelStatusItem): number | 'always' => {
+    const visibleDays = resolveStatusMeta(statusItem).visible_days;
     return typeof visibleDays === 'number' ? visibleDays : 'always';
   };
 
@@ -866,6 +915,7 @@ function LabelsPanel({
     return value === 1 ? '1 día' : `${value} días`;
   };
   const hasFiniteStatuses = statuses.some((statusItem) => resolveStatusVisibleDays(statusItem) !== 'always');
+  const canStatusBePrimary = (statusItem: SettingsLabelStatusItem): boolean => resolveStatusVisibleDays(statusItem) === 'always';
 
   return (
     <Grid container spacing={3}>
@@ -1036,7 +1086,7 @@ function LabelsPanel({
                 Define aquí los estados que podrá tomar cada etiqueta durante el seguimiento del paciente. Si un estado se configura con días activos, la etiqueta seguirá visible hasta esa fecha límite; si se deja como <strong>Siempre activa</strong>, continuará mostrándose sin vencimiento.
               </Alert>
               <Alert severity={hasFiniteStatuses ? 'success' : 'warning'} sx={{ mb: 3 }}>
-                Se recomienda dejar al menos un estado final con días definidos para que algunas etiquetas dejen de mostrarse de forma automática. Como buena práctica, procura tener solo 1 o máximo 2 estados finales con vigencia definida.
+                Se recomienda dejar al menos un estado final con días definidos para que algunas etiquetas dejen de mostrarse de forma automática. Como buena práctica, procura tener solo 1 estado final con vigencia definida.
               </Alert>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
                 <TextField
@@ -1082,6 +1132,7 @@ function LabelsPanel({
                   variant="contained"
                   disabled={savingStatus || !newStatusName.trim()}
                   onClick={() => {
+                    const showFiniteStatusWarning = newStatusVisibleDays !== 'always';
                     setSavingStatus(true);
                     setLocalError(null);
                     void settingsService.createOfficeLabelStatus({
@@ -1090,6 +1141,7 @@ function LabelsPanel({
                       identify: newStatusColor,
                       data: {
                         visible_days: newStatusVisibleDays === 'always' ? null : newStatusVisibleDays,
+                        is_default: false,
                       },
                       status: 1,
                     }).then((created) => {
@@ -1098,6 +1150,11 @@ function LabelsPanel({
                       setNewStatusColor(0);
                       setNewStatusVisibleDays('always');
                       onSuccess('Estado creado correctamente.');
+                      if (showFiniteStatusWarning) {
+                        setFiniteStatusWarningMessage(
+                          'Has creado un estado con vigencia definida en días. Como buena práctica, se recomienda mantener solo un estado con límite de días activo para evitar ambigüedad en el cierre del seguimiento.'
+                        );
+                      }
                     }).catch((err) => {
                       setLocalError(err instanceof Error ? err.message : 'No fue posible crear el estado.');
                     }).finally(() => {
@@ -1172,6 +1229,7 @@ function LabelsPanel({
                                   identify: editingStatusColor,
                                   data: {
                                     visible_days: editingStatusVisibleDays === 'always' ? null : editingStatusVisibleDays,
+                                    is_default: isPrimaryStatus(statusItem),
                                   },
                                   status: isActive ? undefined : 1,
                                 }).then((updated) => {
@@ -1205,6 +1263,17 @@ function LabelsPanel({
                         ) : (
                           <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, alignItems: { xs: 'flex-start', md: 'center' }, flexDirection: { xs: 'column', md: 'row' } }}>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+                              {canStatusBePrimary(statusItem) ? (
+                                <Checkbox
+                                  checked={isPrimaryStatus(statusItem)}
+                                  disabled={savingStatus || !isActive}
+                                  onChange={() => { void persistPrimaryStatus(statusItem, !isPrimaryStatus(statusItem)); }}
+                                  inputProps={{ 'aria-label': 'Estado primario de etiqueta' }}
+                                  sx={{ p: 0.25 }}
+                                />
+                              ) : (
+                                <Box sx={{ width: 26, height: 26, flexShrink: 0 }} />
+                              )}
                               <Box
                                 sx={{
                                   px: 1.2,
@@ -1269,6 +1338,48 @@ function LabelsPanel({
           </Grid>
         </>
       )}
+      <Dialog
+        open={Boolean(primaryStatusDialogMessage)}
+        onClose={() => setPrimaryStatusDialogMessage(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Estado inicial definido</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {primaryStatusDialogMessage}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            onClick={() => setPrimaryStatusDialogMessage(null)}
+          >
+            Entendido
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={Boolean(finiteStatusWarningMessage)}
+        onClose={() => setFiniteStatusWarningMessage(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Estado con vigencia definida</DialogTitle>
+        <DialogContent>
+          <Typography>
+            {finiteStatusWarningMessage}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            variant="contained"
+            onClick={() => setFiniteStatusWarningMessage(null)}
+          >
+            Entendido
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   );
 }
@@ -3150,7 +3261,7 @@ function AssistantsPanel({ offices }: { offices: Office[] }) {
           }}>Eliminar</Button>
         </DialogActions>
       </Dialog>
-      <Snackbar open={Boolean(successMessage)} autoHideDuration={2500} onClose={() => setSuccessMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+      <Snackbar open={Boolean(successMessage)} autoHideDuration={6000} onClose={() => setSuccessMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity="success" variant="filled" onClose={() => setSuccessMessage(null)} sx={{ width: '100%' }}>{successMessage}</Alert>
       </Snackbar>
     </>
@@ -3845,7 +3956,7 @@ export default function SettingsPage() {
           <CircularProgress />
         </Box>
       ) : resolvedPanel}
-      <Snackbar open={Boolean(successMessage)} autoHideDuration={2500} onClose={() => setSuccessMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+      <Snackbar open={Boolean(successMessage)} autoHideDuration={6000} onClose={() => setSuccessMessage(null)} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
         <Alert severity="success" variant="filled" onClose={() => setSuccessMessage(null)} sx={{ width: '100%' }}>{successMessage}</Alert>
       </Snackbar>
     </Box>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Box, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
@@ -10,6 +10,8 @@ export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const location = useLocation();
+  const isAgendaRoute = location.pathname === '/agenda';
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }}>
@@ -27,7 +29,17 @@ export default function MainLayout() {
         }}
       >
         <Toolbar />
-        <Box sx={{ p: { xs: 2, md: 3 } }}>
+        <Box
+          sx={{
+            pt: { xs: 2, md: 3 },
+            pb: { xs: 2, md: 3 },
+            pl: { xs: 2, md: 3 },
+            pr: {
+              xs: 2,
+              md: isAgendaRoute ? 0 : 3,
+            },
+          }}
+        >
           <Outlet />
         </Box>
       </Box>

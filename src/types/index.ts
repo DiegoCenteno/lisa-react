@@ -1,6 +1,7 @@
 export const UserRole = {
   MEDICO: 'medico',
   ASISTENTE: 'asistente',
+  SYSTEM_ADMIN: 'system_admin',
   PACIENTE: 'paciente',
 } as const;
 
@@ -50,6 +51,17 @@ export interface Patient {
   is_first_time?: boolean;
   created_at?: string;
   updated_at?: string;
+  patient_tags?: PatientTagSummary[];
+}
+
+export interface PatientTagSummary {
+  id: number;
+  label: string;
+  status_code: string;
+  status_color_class: string;
+  status_date?: string | null;
+  visible_until?: string | null;
+  created_at?: string | null;
 }
 
 export interface Appointment {
@@ -92,6 +104,8 @@ export interface Office {
   address?: string;
   suburb?: string;
   phone?: string;
+  doctor_name?: string;
+  doctor_specialty?: string;
   logo_url?: string | null;
   firsttime?: number | null;
   recurrent?: number | null;

@@ -21,6 +21,19 @@ import PublicAssistantRegisterPage from '../pages/public/PublicAssistantRegister
 import PublicDoctorRegisterPage from '../pages/public/PublicDoctorRegisterPage';
 import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
 import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
+import SystemAdminHomePage from '../pages/admin/SystemAdminHomePage';
+import SystemAnnouncementsPage from '../pages/admin/SystemAnnouncementsPage';
+import { useAuth } from '../hooks/useAuth';
+
+function HomeRedirect() {
+  const { user } = useAuth();
+
+  if (user?.role === 'system_admin') {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
+}
 
 export default function AppRouter() {
   const routerBase = window.location.pathname.startsWith('/app') ? '/app' : '/';
@@ -49,7 +62,30 @@ export default function AppRouter() {
             </ProtectedRoute>
           }
         >
-          <Route path="/dashboard" element={<DashboardPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute roles={['medico', 'asistente']}>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute roles={['system_admin']} permissions={['system.dashboard.view']}>
+                <SystemAdminHomePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/noticias"
+            element={
+              <ProtectedRoute roles={['system_admin']} permissions={['system.announcements.manage']}>
+                <SystemAnnouncementsPage />
+              </ProtectedRoute>
+            }
+          />
           <Route path="/agenda" element={<AgendaPage />} />
           <Route
             path="/bitacora"
@@ -161,8 +197,22 @@ export default function AppRouter() {
         </Route>
 
         {/* Default redirect */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+         <Route
+           path="/"
+           element={
+             <ProtectedRoute>
+               <HomeRedirect />
+             </ProtectedRoute>
+           }
+         />
+         <Route
+           path="*"
+           element={
+             <ProtectedRoute>
+               <HomeRedirect />
+             </ProtectedRoute>
+           }
+         />
       </Routes>
     </BrowserRouter>
   );

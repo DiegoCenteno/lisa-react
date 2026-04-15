@@ -555,7 +555,12 @@ export default function PatientDetailPage() {
 
       {/* Tab 5: Etiquetas */}
       <TabPanel value={tab} index={5}>
-        <PatientTagsTab patientId={patient.id} patientTagControl={patientTagControl} />
+        <PatientTagsTab
+          patientId={patient.id}
+          patientTagControl={patientTagControl}
+          officeId={patient.office_id ?? null}
+          onChange={setPatientTagControl}
+        />
       </TabPanel>
 
       {/* Tab 6: Bit\u00e1cora */}
