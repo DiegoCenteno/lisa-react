@@ -154,11 +154,13 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
   }, [items]);
 
   useEffect(() => {
-    if (!autoCollapsedRef.current && !loading && !collapsed && items.length === 0 && !error) {
+    const hasVisibleAnnouncements = items.some((item) => isAnnouncementNew(item));
+
+    if (!autoCollapsedRef.current && !loading && !collapsed && !error && !hasVisibleAnnouncements) {
       autoCollapsedRef.current = true;
       onToggle();
     }
-  }, [collapsed, error, items.length, loading, onToggle]);
+  }, [collapsed, error, items, loading, onToggle]);
 
   useEffect(() => () => {
     Object.values(previewUrlsRef.current).forEach((url) => window.URL.revokeObjectURL(url));
