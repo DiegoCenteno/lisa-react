@@ -32,6 +32,28 @@ export interface SystemAnnouncementItem {
   files: SystemAnnouncementFileItem[];
 }
 
+export interface SystemAnnouncementReaderItem {
+  user_id: number;
+  name: string;
+  email: string;
+  office_titles: string;
+  read_at?: string | null;
+}
+
+export interface SystemAnnouncementReadersItem {
+  id: number;
+  title: string;
+  summary: string;
+  body: string;
+  status: SystemAnnouncementStatus;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+  read_count: number;
+  readers: SystemAnnouncementReaderItem[];
+}
+
 export interface SystemAnnouncementPayload {
   title: string;
   summary?: string;
@@ -54,6 +76,11 @@ const systemAnnouncementService = {
 
   async listSidebar(): Promise<SystemAnnouncementItem[]> {
     const response = await apiClient.get<{ status: string; data: SystemAnnouncementItem[] }>('/v2/system/announcements/sidebar');
+    return response.data.data ?? [];
+  },
+
+  async listReaders(): Promise<SystemAnnouncementReadersItem[]> {
+    const response = await apiClient.get<{ status: string; data: SystemAnnouncementReadersItem[] }>('/v2/system/announcements/readers');
     return response.data.data ?? [];
   },
 

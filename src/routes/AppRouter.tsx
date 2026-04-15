@@ -23,6 +23,7 @@ import PublicHistoryFormPage from '../pages/public/PublicHistoryFormPage';
 import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 import SystemAdminHomePage from '../pages/admin/SystemAdminHomePage';
 import SystemAnnouncementsPage from '../pages/admin/SystemAnnouncementsPage';
+import SystemAnnouncementReadersPage from '../pages/admin/SystemAnnouncementReadersPage';
 import { useAuth } from '../hooks/useAuth';
 
 function HomeRedirect() {
@@ -83,6 +84,14 @@ export default function AppRouter() {
             element={
               <ProtectedRoute roles={['system_admin']} permissions={['system.announcements.manage']}>
                 <SystemAnnouncementsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/bitacora"
+            element={
+              <ProtectedRoute roles={['system_admin']} permissions={['system.activity_logs.view']}>
+                <SystemAnnouncementReadersPage />
               </ProtectedRoute>
             }
           />

@@ -128,6 +128,13 @@ const systemAdminMenuItems: MenuItem[] = [
     roles: [UserRole.SYSTEM_ADMIN],
     permission: 'system.announcements.manage',
   },
+  {
+    text: 'Bitacora',
+    icon: <HistoryIcon />,
+    path: '/admin/bitacora',
+    roles: [UserRole.SYSTEM_ADMIN],
+    permission: 'system.activity_logs.view',
+  },
 ];
 
 export default function Sidebar({ open, onClose }: SidebarProps) {
