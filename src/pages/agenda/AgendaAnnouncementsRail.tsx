@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import {
   Alert,
   Box,
@@ -95,11 +95,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
       active = false;
     };
   }, []);
-
-  const unreadCount = useMemo(
-    () => items.filter((item) => !item.read_at).length,
-    [items],
-  );
 
   useEffect(() => {
     const imageFiles = items

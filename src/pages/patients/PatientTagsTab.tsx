@@ -274,7 +274,7 @@ function PatientTagsTabInner({ patientId, patientTagControl, officeId, onChange 
   );
   const availableOfficeLabels = officeLabels.filter((label) => {
     const code = label.code?.trim().toLowerCase();
-    return Boolean(code) && !activeTagCodes.has(code);
+    return typeof code === 'string' && code.length > 0 && !activeTagCodes.has(code);
   });
 
   const handleToggleTagStatuses = (tagId: number) => {

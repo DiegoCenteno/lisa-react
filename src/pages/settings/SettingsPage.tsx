@@ -865,10 +865,11 @@ function LabelsPanel({
     setSavingStatus(true);
     setLocalError(null);
     try {
+      const resolvedVisibleDays = resolveStatusVisibleDays(statusItem);
       const updated = await settingsService.updateOfficeLabelStatus(statusItem.id, {
         office_id: selectedOfficeId,
         data: {
-          visible_days: resolveStatusVisibleDays(statusItem) === 'always' ? null : resolveStatusVisibleDays(statusItem),
+          visible_days: resolvedVisibleDays === 'always' ? null : resolvedVisibleDays,
           is_default: nextPrimary,
         },
       });
