@@ -27,6 +27,19 @@ type AgendaAnnouncementsRailProps = {
   onToggle: () => void;
 };
 
+function isAnnouncementNew(item: SystemAnnouncementItem): boolean {
+  if (!item.read_at) {
+    return true;
+  }
+
+  const firstReadAt = new Date(item.read_at).getTime();
+  if (Number.isNaN(firstReadAt)) {
+    return true;
+  }
+
+  return Date.now() - firstReadAt <= 24 * 60 * 60 * 1000;
+}
+
 function isImageMimeType(mimeType?: string | null): boolean {
   return String(mimeType ?? '').toLowerCase().startsWith('image/');
 }
@@ -58,6 +71,7 @@ function getBackendErrorMessage(error: unknown): string {
 
 export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaAnnouncementsRailProps) {
   const previewUrlsRef = useRef<Record<number, string>>({});
+  const autoCollapsedRef = useRef(false);
   const [items, setItems] = useState<SystemAnnouncementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -138,6 +152,13 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
       cancelled = true;
     };
   }, [items]);
+
+  useEffect(() => {
+    if (!autoCollapsedRef.current && !loading && !collapsed && items.length === 0 && !error) {
+      autoCollapsedRef.current = true;
+      onToggle();
+    }
+  }, [collapsed, error, items.length, loading, onToggle]);
 
   useEffect(() => () => {
     Object.values(previewUrlsRef.current).forEach((url) => window.URL.revokeObjectURL(url));
@@ -323,7 +344,7 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
             <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1.5}>
               <Box>
                 <Typography sx={{ fontSize: '1.45rem', fontWeight: 800, lineHeight: 1.05 }}>
-                  Nuevas funcionalidades
+                  Actualizaciones recientes
                 </Typography>
                 <Typography sx={{ mt: 0.8, fontSize: '0.92rem', opacity: 0.92 }}>
                   Conoce cambios recientes y herramientas nuevas del sistema.
@@ -361,7 +382,7 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
                             <Typography sx={{ fontWeight: 800, fontSize: '1rem', color: '#1d2d35', lineHeight: 1.2 }}>
                               {item.title}
                             </Typography>
-                            {!item.read_at ? (
+                            {isAnnouncementNew(item) ? (
                               <Chip
                                 label="Nueva"
                                 size="small"

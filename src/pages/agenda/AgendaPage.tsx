@@ -942,10 +942,10 @@ export default function AgendaPage() {
     <Box>
       <Box
         sx={{
-          display: { xs: 'block', lg: 'grid' },
-          gridTemplateColumns: {
-            lg: newsRailCollapsed ? 'minmax(0, 1fr) 36px' : 'minmax(0, 4fr) minmax(300px, 1fr)',
-          },
+      display: { xs: 'block', lg: 'grid' },
+      gridTemplateColumns: {
+        lg: newsRailCollapsed ? 'minmax(0, 1fr) 36px' : 'minmax(0, 7fr) minmax(340px, 3fr)',
+      },
           columnGap: { xs: 0, lg: 0 },
           rowGap: 3,
           alignItems: 'start',
