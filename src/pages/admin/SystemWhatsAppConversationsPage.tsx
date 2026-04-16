@@ -255,7 +255,7 @@ export default function SystemWhatsAppConversationsPage() {
                 fullWidth
                 label="Estado"
                 value={conversationStatus}
-                onChange={(event) => setConversationStatus(event.target.value)}
+                onChange={(event) => setConversationStatus(event.target.value as SystemWhatsAppConversationStatus | '')}
               >
                 <MenuItem value="">Todos los estados</MenuItem>
                 <MenuItem value="pending_system">Pendiente del sistema</MenuItem>
