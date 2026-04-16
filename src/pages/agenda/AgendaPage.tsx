@@ -81,6 +81,8 @@ function isPatientAppointmentAction(log: ActivityLogItem): boolean {
 
   return source === 'public_wsapp'
     || source === 'patient_whatsapp'
+    || source === 'appointment_scheduling3'
+    || source === 'five_day_reminder'
     || source === 'public_reschedule_link'
     || source === 'public_booking_link'
     || message.includes('por paciente');
@@ -304,9 +306,8 @@ export default function AgendaPage() {
   const [showAppointmentMore, setShowAppointmentMore] = useState(false);
   const [newsRailCollapsed, setNewsRailCollapsed] = useState(false);
   const [appointmentActivityLogs, setAppointmentActivityLogs] = useState<ActivityLogItem[]>([]);
-  const [appointmentActivityLogsHasMore, setAppointmentActivityLogsHasMore] = useState(false);
-  const [appointmentActivityLogsNextBefore, setAppointmentActivityLogsNextBefore] = useState<string | null>(null);
-  const [appointmentActivityLogsLoadingMore, setAppointmentActivityLogsLoadingMore] = useState(false);
+  const [appointmentActivityLogsScope, setAppointmentActivityLogsScope] = useState<'appointment' | 'patient'>('appointment');
+  const [appointmentActivityLogsExpanded, setAppointmentActivityLogsExpanded] = useState(false);
   const [activityLogsLoading, setActivityLogsLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -416,9 +417,8 @@ export default function AgendaPage() {
     setShowAppointmentDetails(false);
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
-    setAppointmentActivityLogsHasMore(false);
-    setAppointmentActivityLogsNextBefore(null);
-    setAppointmentActivityLogsLoadingMore(false);
+    setAppointmentActivityLogsScope('appointment');
+    setAppointmentActivityLogsExpanded(false);
     setActivityLogsLoading(false);
     setSummaryOpen(false);
     setSummaryLoading(false);
@@ -507,9 +507,8 @@ export default function AgendaPage() {
     setShowAppointmentDetails(false);
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
-    setAppointmentActivityLogsHasMore(false);
-    setAppointmentActivityLogsNextBefore(null);
-    setAppointmentActivityLogsLoadingMore(false);
+    setAppointmentActivityLogsScope('appointment');
+    setAppointmentActivityLogsExpanded(false);
   };
 
   const isSelectedEventToday = selectedEvent
@@ -823,51 +822,47 @@ export default function AgendaPage() {
     setShowAppointmentMore(true);
     setShowAppointmentDetails(false);
     setActivityLogsLoading(true);
+    setAppointmentActivityLogsExpanded(false);
 
     try {
-      const logs = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id), { days: 7 });
-      setAppointmentActivityLogs(logs.logs);
-      setAppointmentActivityLogsHasMore(logs.hasMore);
-      setAppointmentActivityLogsNextBefore(logs.nextBefore);
+      const appointmentLogs = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id), {
+        days: 7,
+        limit: 10,
+      });
+
+      if (appointmentLogs.logs.length > 0) {
+        setAppointmentActivityLogs(appointmentLogs.logs);
+        setAppointmentActivityLogsScope('appointment');
+        return;
+      }
+
+      const patientId = Number(selectedEvent.event.extendedProps.patientId ?? 0);
+      if (!patientId) {
+        setAppointmentActivityLogs([]);
+        setAppointmentActivityLogsScope('appointment');
+        return;
+      }
+
+      const patientLogs = await patientService.getPatientActivityLogs(patientId, {
+        days: 30,
+        limit: 10,
+      });
+
+      setAppointmentActivityLogs(patientLogs.logs);
+      setAppointmentActivityLogsScope('patient');
     } catch (error) {
       console.error('Error cargando historial de movimientos de la cita:', error);
       setAppointmentActivityLogs([]);
-      setAppointmentActivityLogsHasMore(false);
-      setAppointmentActivityLogsNextBefore(null);
+      setAppointmentActivityLogsScope('appointment');
     } finally {
       setActivityLogsLoading(false);
     }
   }, [selectedEvent]);
 
-  const handleLoadMoreAppointmentActivityLogs = useCallback(async () => {
-    if (!selectedEvent || !appointmentActivityLogsNextBefore || appointmentActivityLogsLoadingMore) {
-      return;
-    }
-
-    setAppointmentActivityLogsLoadingMore(true);
-
-    try {
-      const data = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id), {
-        days: 7,
-        before: appointmentActivityLogsNextBefore,
-      });
-      setAppointmentActivityLogs((current) => [...current, ...data.logs]);
-      setAppointmentActivityLogsHasMore(data.hasMore);
-      setAppointmentActivityLogsNextBefore(data.nextBefore);
-    } catch (error) {
-      console.error('Error cargando mas movimientos de la cita:', error);
-    } finally {
-      setAppointmentActivityLogsLoadingMore(false);
-    }
-  }, [appointmentActivityLogsLoadingMore, appointmentActivityLogsNextBefore, selectedEvent]);
-
-  const handleOpenPatientLogbook = useCallback(() => {
-    const patientId = selectedEvent?.event.extendedProps.patientId;
-    if (!patientId) return;
-
-    handleCloseSelectedEvent();
-    navigate(`/pacientes/${Number(patientId)}?tab=bitacora`);
-  }, [handleCloseSelectedEvent, navigate, selectedEvent]);
+  const visibleAppointmentActivityLogs = useMemo(
+    () => (appointmentActivityLogsExpanded ? appointmentActivityLogs : appointmentActivityLogs.slice(0, 3)),
+    [appointmentActivityLogs, appointmentActivityLogsExpanded]
+  );
 
   const handleOpenSummary = useCallback(async () => {
     if (!canViewPatientSummary) return;
@@ -1320,7 +1315,13 @@ export default function AgendaPage() {
                     </Typography>
                   ) : (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                      {appointmentActivityLogs.slice(0, 10).map((log) => (
+                      {appointmentActivityLogsScope === 'patient' ? (
+                        <Alert severity="info" sx={{ py: 0 }}>
+                          Esta cita no tiene movimientos propios recientes. Se muestran los últimos movimientos del paciente para dar contexto.
+                        </Alert>
+                      ) : null}
+
+                      {visibleAppointmentActivityLogs.map((log) => (
                         <Box
                           key={log.id}
                           sx={{
@@ -1363,43 +1364,10 @@ export default function AgendaPage() {
                         </Box>
                       ))}
 
-                      {appointmentActivityLogs.length > 10 ? (
-                        <Button
-                          variant="text"
-                          onClick={handleOpenPatientLogbook}
-                          sx={{
-                            alignSelf: 'flex-start',
-                            minWidth: 'auto',
-                            p: 0,
-                            color: '#6f7680',
-                            textDecoration: 'underline',
-                            textTransform: 'none',
-                          }}
-                        >
-                          Ver bitácora completa del paciente
-                        </Button>
-                      ) : null}
-                      {appointmentActivityLogsHasMore ? (
-                        <Button
-                          variant="text"
-                          onClick={handleLoadMoreAppointmentActivityLogs}
-                          disabled={appointmentActivityLogsLoadingMore}
-                          sx={{
-                            alignSelf: 'flex-start',
-                            minWidth: 'auto',
-                            p: 0,
-                            color: '#2d64c8',
-                            textDecoration: 'underline',
-                            textTransform: 'none',
-                          }}
-                        >
-                          {appointmentActivityLogsLoadingMore ? 'Cargando...' : 'Mostrar más registros'}
-                        </Button>
-                      ) : null}
                     </Box>
                   )}
 
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', pt: 0.25 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', pt: 0.25, gap: 2 }}>
                     <Button
                       variant="text"
                       startIcon={<ArrowBackIcon />}
@@ -1415,6 +1383,22 @@ export default function AgendaPage() {
                     >
                       Regresar
                     </Button>
+                    {appointmentActivityLogs.length > 3 && !appointmentActivityLogsExpanded ? (
+                      <Button
+                        variant="text"
+                        onClick={() => setAppointmentActivityLogsExpanded(true)}
+                        sx={{
+                          minWidth: 'auto',
+                          p: 0,
+                          color: '#2d64c8',
+                          textDecoration: 'underline',
+                          textTransform: 'none',
+                          marginLeft: 'auto',
+                        }}
+                      >
+                        Ver más
+                      </Button>
+                    ) : null}
                   </Box>
                 </Box>
               ) : showAppointmentDetails ? (

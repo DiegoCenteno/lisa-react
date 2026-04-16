@@ -24,6 +24,7 @@ import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 import SystemAdminHomePage from '../pages/admin/SystemAdminHomePage';
 import SystemAnnouncementsPage from '../pages/admin/SystemAnnouncementsPage';
 import SystemAnnouncementReadersPage from '../pages/admin/SystemAnnouncementReadersPage';
+import SystemWhatsAppConversationsPage from '../pages/admin/SystemWhatsAppConversationsPage';
 import { useAuth } from '../hooks/useAuth';
 
 function HomeRedirect() {
@@ -92,6 +93,14 @@ export default function AppRouter() {
             element={
               <ProtectedRoute roles={['system_admin']} permissions={['system.activity_logs.view']}>
                 <SystemAnnouncementReadersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/conversaciones-whatsapp"
+            element={
+              <ProtectedRoute roles={['system_admin']} permissions={['system.activity_logs.view']}>
+                <SystemWhatsAppConversationsPage />
               </ProtectedRoute>
             }
           />

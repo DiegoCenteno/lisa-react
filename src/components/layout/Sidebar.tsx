@@ -135,6 +135,13 @@ const systemAdminMenuItems: MenuItem[] = [
     roles: [UserRole.SYSTEM_ADMIN],
     permission: 'system.activity_logs.view',
   },
+  {
+    text: 'Conversaciones WA',
+    icon: <WhatsAppIcon />,
+    path: '/admin/conversaciones-whatsapp',
+    roles: [UserRole.SYSTEM_ADMIN],
+    permission: 'system.activity_logs.view',
+  },
 ];
 
 export default function Sidebar({ open, onClose }: SidebarProps) {

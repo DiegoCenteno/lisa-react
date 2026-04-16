@@ -334,7 +334,7 @@ function AppointmentConfirmationView({
 }) {
   const statusAlert =
     appointment.status === 'cancelled'
-        ? { severity: 'error' as const, text: 'Tu cita ya estÃ¡ cancelada.' }
+        ? { severity: 'error' as const, text: 'Tu cita ya está cancelada.' }
         : null;
 
   return (
@@ -357,7 +357,7 @@ function AppointmentConfirmationView({
           <EventAvailableIcon sx={{ fontSize: 34 }} />
           <Box>
             <Typography variant="h5" sx={{ fontWeight: 800 }}>
-              ConfirmaciÃ³n de cita
+              Confirmación de cita
             </Typography>
             <Typography variant="body2" sx={{ opacity: 0.88 }}>
               LisaMedic
@@ -810,11 +810,11 @@ export default function PublicStudyResultPage() {
           return;
         }
 
-        setError('Este tipo de enlace pÃºblico todavÃ­a no estÃ¡ disponible.');
+        setError('Este tipo de enlace público todavía no está disponible.');
       } catch (requestError) {
-        console.error('Error cargando enlace pÃƒÂºblico:', requestError);
+        console.error('Error cargando enlace público:', requestError);
         if (!active) return;
-        setError('No se encontrÃ³ informaciÃ³n para este enlace.');
+        setError('No se encontró información para este enlace.');
       } finally {
         if (active) {
           setLoading(false);
@@ -852,7 +852,7 @@ export default function PublicStudyResultPage() {
         );
       }
     } catch (requestError) {
-      console.error('Error respondiendo cita pÃƒÂºblica:', requestError);
+      console.error('Error respondiendo cita pública:', requestError);
       setError('No se pudo actualizar el estatus de tu cita.');
     } finally {
       setActionLoading(false);
@@ -881,8 +881,8 @@ export default function PublicStudyResultPage() {
       setAppointment(response);
       setHistoryMessage('Gracias por contestar la encuesta.');
     } catch (requestError) {
-      console.error('Error guardando historia clÃƒÂ­nica pÃƒÂºblica:', requestError);
-      setError('No se pudieron guardar tus respuestas de historia clÃƒÂ­nica.');
+      console.error('Error guardando historia clínica pública:', requestError);
+      setError('No se pudieron guardar tus respuestas de historia clínica.');
     } finally {
       setHistoryLoading(false);
     }
@@ -902,7 +902,7 @@ export default function PublicStudyResultPage() {
       >
         <Stack spacing={2} alignItems="center">
           <CircularProgress />
-          <Typography color="text.secondary">Cargando enlace pÃƒÂºblico...</Typography>
+          <Typography color="text.secondary">Cargando enlace público...</Typography>
         </Stack>
       </Box>
     );
