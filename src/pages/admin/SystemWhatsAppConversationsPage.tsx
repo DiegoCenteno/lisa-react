@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import systemWhatsAppConversationService, {
   type SystemWhatsAppConversationResponse,
+  type SystemWhatsAppConversationStatus,
   type SystemWhatsAppConversationThread,
 } from '../../api/systemWhatsAppConversationService';
 
@@ -102,7 +103,7 @@ export default function SystemWhatsAppConversationsPage() {
   const [dateTo, setDateTo] = useState(toDateInputValue(new Date()));
   const [officeId, setOfficeId] = useState<string>('');
   const [doctorUserId, setDoctorUserId] = useState<string>('');
-  const [conversationStatus, setConversationStatus] = useState<string>('');
+  const [conversationStatus, setConversationStatus] = useState<SystemWhatsAppConversationStatus | ''>('');
   const [search, setSearch] = useState('');
 
   const loadItems = async () => {

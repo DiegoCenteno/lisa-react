@@ -1,5 +1,11 @@
 import apiClient from './client';
 
+export type SystemWhatsAppConversationStatus =
+  | 'pending_system'
+  | 'pending_patient'
+  | 'needs_review'
+  | 'delivery_error';
+
 export interface SystemWhatsAppOfficeOption {
   office_id?: number | null;
   title: string;
@@ -40,7 +46,7 @@ export interface SystemWhatsAppConversationThread {
   last_message_at?: string | null;
   message_count: number;
   last_direction?: 'inbound' | 'outbound' | null;
-  conversation_status: 'pending_system' | 'pending_patient' | 'needs_review' | 'delivery_error';
+  conversation_status: SystemWhatsAppConversationStatus;
   conversation_status_label: string;
   messages: SystemWhatsAppConversationMessage[];
 }
@@ -50,7 +56,7 @@ export interface SystemWhatsAppConversationFilters {
   date_to: string;
   office_id?: number | 'undefined' | null;
   doctor_user_id?: number | null;
-  conversation_status?: 'pending_system' | 'pending_patient' | 'needs_review' | 'delivery_error' | '';
+  conversation_status?: SystemWhatsAppConversationStatus | '';
   search: string;
 }
 
@@ -66,7 +72,7 @@ export interface SystemWhatsAppConversationQuery {
   date_to?: string;
   office_id?: number | 'undefined' | null;
   doctor_user_id?: number | null;
-  conversation_status?: 'pending_system' | 'pending_patient' | 'needs_review' | 'delivery_error' | '';
+  conversation_status?: SystemWhatsAppConversationStatus | '';
   search?: string;
 }
 
