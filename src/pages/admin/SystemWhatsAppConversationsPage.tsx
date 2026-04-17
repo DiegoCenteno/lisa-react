@@ -13,6 +13,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
 import systemWhatsAppConversationService, {
   type SystemWhatsAppConversationResponse,
   type SystemWhatsAppConversationStatus,
@@ -379,6 +380,10 @@ export default function SystemWhatsAppConversationsPage() {
                             <Stack spacing={1.25}>
                               {thread.messages.map((message) => {
                                 const isInbound = message.direction === 'inbound';
+                                const isSuccessfulOutbound = !isInbound
+                                  && message.provider_status === 'sent'
+                                  && !message.provider_error_code
+                                  && !message.provider_error_message;
 
                                 return (
                                   <Box
@@ -434,6 +439,17 @@ export default function SystemWhatsAppConversationsPage() {
                                           {message.provider_error_code ? `Codigo ${message.provider_error_code}. ` : ''}
                                           {message.provider_error_message || 'Error no especificado.'}
                                         </Alert>
+                                      ) : isSuccessfulOutbound ? (
+                                        <Box
+                                          sx={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: 0.75,
+                                            color: 'info.main',
+                                          }}
+                                        >
+                                          <DoneAllIcon sx={{ fontSize: 18 }} />
+                                        </Box>
                                       ) : null}
                                     </Stack>
                                   </Box>

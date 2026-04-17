@@ -1,4 +1,10 @@
 import axios from 'axios';
+import type { InternalAxiosRequestConfig } from 'axios';
+import { clearStoredAuthState, isExtendedSessionEnabled, refreshAccessToken } from './authSession';
+
+interface RetriableRequestConfig extends InternalAxiosRequestConfig {
+  _retry?: boolean;
+}
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_URL || 'http://localhost:8000/api',
@@ -16,16 +22,68 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
+let refreshPromise: Promise<string> | null = null;
+
+function shouldSkipRefresh(config?: InternalAxiosRequestConfig): boolean {
+  const url = config?.url ?? '';
+  return (
+    url.includes('/login') ||
+    url.includes('/loginApp') ||
+    url.includes('/refresh-token') ||
+    url.includes('/sign-out')
+  );
+}
+
+async function getRefreshedAccessToken(): Promise<string> {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) {
+    throw new Error('Missing refresh token');
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = refreshAccessToken(refreshToken).finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+}
+
+function redirectToLogin(): void {
+  if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+}
+
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('cached_office_id');
-      sessionStorage.removeItem('cached_office_id');
-      window.location.href = '/login';
+  async (error) => {
+    const originalRequest = error.config as RetriableRequestConfig | undefined;
+
+    if (
+      error.response?.status === 401 &&
+      isExtendedSessionEnabled() &&
+      originalRequest &&
+      !shouldSkipRefresh(originalRequest) &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true;
+
+      try {
+        const accessToken = await getRefreshedAccessToken();
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return apiClient(originalRequest);
+      } catch {
+        clearStoredAuthState();
+        redirectToLogin();
+      }
     }
+
+    if (error.response?.status === 401) {
+      clearStoredAuthState();
+      redirectToLogin();
+    }
+
     return Promise.reject(error);
   }
 );

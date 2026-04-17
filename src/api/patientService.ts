@@ -57,6 +57,19 @@ interface ApiPatientsResponse {
   data: ApiPatientsPayload;
 }
 
+interface ApiPatientsPaginatedPayload {
+  data?: ApiPatientRecord[];
+  current_page?: number;
+  per_page?: number;
+  total?: number;
+  last_page?: number;
+}
+
+interface ApiPaginatedPatientsResponse {
+  status: string;
+  data: ApiPatientsPaginatedPayload;
+}
+
 interface ApiPatientSoapContextResponse {
   status: string;
   data: PatientSoapContext;
@@ -144,6 +157,14 @@ export interface ActivityLogWindow {
   logs: ActivityLogItem[];
   hasMore: boolean;
   nextBefore: string | null;
+}
+
+export interface PaginatedPatientsResult {
+  data: Patient[];
+  total: number;
+  page: number;
+  perPage: number;
+  lastPage: number;
 }
 
 function splitFullName(fullName?: string): { name: string; lastName: string } {
@@ -268,20 +289,38 @@ async function resolveOfficeIdWithOverride(officeIdOverride?: number | null): Pr
 }
 
 export const patientService = {
-  async getPatients(options?: { labelIds?: number[]; labelStatusIds?: number[] }): Promise<Patient[]> {
+  async getPatients(options?: {
+    labelIds?: number[];
+    labelStatusIds?: number[];
+    search?: string;
+    page?: number;
+    perPage?: number;
+    view?: 'list' | 'tagged';
+  }): Promise<PaginatedPatientsResult> {
     const officeId = await resolveOfficeId();
-    const response = await apiClient.get<ApiPatientsResponse>('/v2/patients', {
+    const response = await apiClient.get<ApiPaginatedPatientsResponse>('/v2/patients', {
       params: {
         office_id: officeId,
-        per_page: 10000,
+        search: options?.search?.trim() ? options.search.trim() : undefined,
+        page: options?.page ?? 1,
+        per_page: options?.perPage ?? 10,
         order_by: 'users.name',
         order_dir: 'asc',
+        view: options?.view ?? 'list',
         label_ids: options?.labelIds && options.labelIds.length > 0 ? options.labelIds : undefined,
         label_status_ids: options?.labelStatusIds && options.labelStatusIds.length > 0 ? options.labelStatusIds : undefined,
       },
     });
 
-    return extractPatients(response.data.data).map(normalizePatient);
+    const payload = response.data.data ?? {};
+
+    return {
+      data: extractPatients(payload).map(normalizePatient),
+      total: payload.total ?? 0,
+      page: payload.current_page ?? 1,
+      perPage: payload.per_page ?? (options?.perPage ?? 10),
+      lastPage: payload.last_page ?? 1,
+    };
   },
 
   async getPatient(id: number): Promise<Patient> {
@@ -690,17 +729,12 @@ export const patientService = {
   },
 
   async searchPatients(query: string): Promise<Patient[]> {
-    const officeId = await resolveOfficeId();
-    const response = await apiClient.get<ApiPatientsResponse>('/v2/patients', {
-      params: {
-        office_id: officeId,
-        search: query,
-        per_page: 1000,
-        order_by: 'users.name',
-        order_dir: 'asc',
-      },
+    const response = await this.getPatients({
+      search: query,
+      page: 1,
+      perPage: 10,
     });
 
-    return extractPatients(response.data.data).map(normalizePatient);
+    return response.data;
   },
 };

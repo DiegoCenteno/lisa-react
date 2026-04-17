@@ -228,7 +228,7 @@ export default function BulkStudyUploadPage() {
     let cancelled = false;
     setLoadingPatients(true);
 
-    appointmentService.getPatients(Number(selectedOfficeId))
+    appointmentService.getPatients(Number(selectedOfficeId), { perPage: 10000 })
       .then((result) => {
         if (cancelled) return;
         setPatients(result);

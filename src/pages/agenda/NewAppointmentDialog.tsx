@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback, useMemo, useDeferredValue, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -99,6 +99,11 @@ function to24Hour(hour12: number, period: 'am' | 'pm'): number {
   return hour12 === 12 ? 12 : hour12 + 12;
 }
 
+function canNotifyPatientByPhone(phone?: string | null): boolean {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  return digits.length === 10;
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -183,6 +188,9 @@ export default function NewAppointmentDialog({
   const [selectedExistingPatient, setSelectedExistingPatient] = useState<PatientSearchResult | null>(null);
   const phoneSearchRef = useRef<string>('');
   const nameSearchRef = useRef<string>('');
+  const patientRequestIdRef = useRef(0);
+  const patientSearchDebounceRef = useRef<number | null>(null);
+  const [debouncedPatientSearch, setDebouncedPatientSearch] = useState('');
 
   // Manual appointment mode (list-based)
   const [showManualForm, setShowManualForm] = useState(false);
@@ -219,6 +227,7 @@ export default function NewAppointmentDialog({
       setSelectedConsultationReasonKey('');
       setPatients([]);
       setPatientSearch('');
+      setDebouncedPatientSearch('');
       setSelectedPatient(initialPatient);
       setShowNewPatientForm(false);
         setNewPatient({
@@ -254,6 +263,22 @@ export default function NewAppointmentDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialGenderDefault, initialNotifyPatient, open]);
+
+  useEffect(() => {
+    if (patientSearchDebounceRef.current !== null) {
+      window.clearTimeout(patientSearchDebounceRef.current);
+    }
+
+    patientSearchDebounceRef.current = window.setTimeout(() => {
+      setDebouncedPatientSearch(patientSearch.trim());
+    }, 300);
+
+    return () => {
+      if (patientSearchDebounceRef.current !== null) {
+        window.clearTimeout(patientSearchDebounceRef.current);
+      }
+    };
+  }, [patientSearch]);
 
   // Phone duplicate detection: search when 10 digits
   useEffect(() => {
@@ -366,16 +391,41 @@ export default function NewAppointmentDialog({
   // â”€â”€ Load patients â”€â”€
   const loadPatients = useCallback(async () => {
     if (!officeId) return;
+    const requestId = ++patientRequestIdRef.current;
     setPatientsLoading(true);
     try {
-      const data = await appointmentService.getPatients(officeId);
+      const data = await appointmentService.getPatients(officeId, {
+        search: debouncedPatientSearch,
+        page: 1,
+        perPage: 10,
+      });
+
+      if (requestId !== patientRequestIdRef.current) {
+        return;
+      }
+
       setPatients(data);
     } catch (err) {
+      if (requestId !== patientRequestIdRef.current) {
+        return;
+      }
+
       console.error('Error loading patients:', err);
+      setPatients([]);
     } finally {
-      setPatientsLoading(false);
+      if (requestId === patientRequestIdRef.current) {
+        setPatientsLoading(false);
+      }
     }
-  }, [officeId]);
+  }, [debouncedPatientSearch, officeId]);
+
+  useEffect(() => {
+    if (!open || mode === 'reschedule' || showNewPatientForm) {
+      return;
+    }
+
+    void loadPatients();
+  }, [loadPatients, mode, open, showNewPatientForm]);
 
   // â”€â”€ Handle date click â†’ expand/collapse slots â”€â”€
   const handleDateClick = (date: string) => {
@@ -397,7 +447,6 @@ export default function NewAppointmentDialog({
       return;
     }
     setStep('patient');
-    loadPatients();
   };
 
   // â”€â”€ Handle patient selection â†’ go to summary step â”€â”€
@@ -482,20 +531,11 @@ export default function NewAppointmentDialog({
     }
   };
 
-  useEffect(() => {
-    const currentPatientPhone = selectedPatient ? selectedPatient.phone : newPatient.phone;
-    const patientCanBeNotified = Boolean(String(currentPatientPhone ?? '').trim());
-
-    if (!patientCanBeNotified && notifyPatient) {
-      setNotifyPatient(false);
-    }
-  }, [newPatient.phone, notifyPatient, selectedPatient]);
-
   // â”€â”€ Save appointment â”€â”€
   const handleSave = async () => {
     if (!selectedSlot) return;
     const currentPatientPhone = selectedPatient ? selectedPatient.phone : newPatient.phone;
-    const patientCanBeNotified = Boolean(String(currentPatientPhone ?? '').trim());
+    const patientCanBeNotified = canNotifyPatientByPhone(currentPatientPhone);
     setSaving(true);
     setSaveError('');
     try {
@@ -616,19 +656,6 @@ export default function NewAppointmentDialog({
     };
   }, [mode, officeId, open, selectedPatient?.id, step]);
 
-  // â”€â”€ Filtered patients (client-side search with deferred value for instant typing) â”€â”€
-  const deferredSearch = useDeferredValue(patientSearch);
-  const filteredPatients = useMemo(() => {
-    if (!deferredSearch.trim()) return patients.slice(0, 10);
-    const q = deferredSearch.toLowerCase();
-    return patients.filter(
-      (p) =>
-        (p.full_name ?? '').toLowerCase().includes(q) ||
-        (p.phone ?? '').includes(q) ||
-        (p.full_phone ?? '').includes(q)
-    );
-  }, [patients, deferredSearch]);
-
   // â”€â”€ Dates to display â”€â”€
   const datesToShow = showAllDates ? availableDates : availableDates.slice(0, 6);
 
@@ -688,8 +715,7 @@ export default function NewAppointmentDialog({
       return;
     }
     setStep('patient');
-    loadPatients();
-  }, [selectedDay, selectedHour, selectedMinute, loadPatients, mode]);
+  }, [selectedDay, selectedHour, selectedMinute, mode]);
 
   const updateManualSlotDuration = useCallback((totalMinutes: number) => {
     if (!selectedSlot) return;
@@ -1361,6 +1387,10 @@ export default function NewAppointmentDialog({
             sx={{ mb: 2, flexShrink: 0 }}
           />
 
+          <Typography sx={{ color: '#666', fontSize: '0.78rem', mb: 1, mt: -1, flexShrink: 0 }}>
+            Mostrando hasta 10 coincidencias.
+          </Typography>
+
           <Box sx={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
             {patientsLoading ? (
               <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
@@ -1368,12 +1398,12 @@ export default function NewAppointmentDialog({
               </Box>
             ) : (
               <Box sx={{ borderTop: '2px solid', borderColor: TEAL }}>
-                {filteredPatients.length === 0 ? (
+                {patients.length === 0 ? (
                   <Typography sx={{ textAlign: 'center', py: 3, color: '#999' }}>
                     No se encontraron pacientes
                   </Typography>
                 ) : (
-                  filteredPatients.map((patient) => (
+                  patients.map((patient) => (
                     <Box
                       key={patient.id}
                       onClick={() => handlePatientSelect(patient)}
@@ -1416,7 +1446,7 @@ export default function NewAppointmentDialog({
     const patientPhone = selectedPatient
       ? selectedPatient.phone
       : newPatient.phone;
-    const patientCanBeNotified = Boolean(String(patientPhone ?? '').trim());
+    const patientCanBeNotified = canNotifyPatientByPhone(patientPhone);
     const slotSummary = selectedSlot ? formatAppointmentSummaryDateTime(selectedSlot.datestart) : '';
     const [slotDatePart, slotTimePart] = slotSummary ? slotSummary.split('|') : ['', ''];
     const slotDuration = showManualForm
@@ -1550,7 +1580,7 @@ export default function NewAppointmentDialog({
 
         {!patientCanBeNotified ? (
           <Typography sx={{ color: 'error.main', fontSize: '0.8rem', mt: -2 }}>
-            No se puede notificar al paciente ya que no tiene teléfono registrado
+            No se puede notificar al paciente ya que no tiene un teléfono válido registrado
           </Typography>
         ) : null}
 

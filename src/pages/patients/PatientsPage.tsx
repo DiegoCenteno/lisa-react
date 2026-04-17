@@ -92,37 +92,6 @@ function formatTagStatusTitle(statusDate?: string | null) {
   return `Cambio de estatus: ${statusDate}`;
 }
 
-function normalizeSearchText(value?: string) {
-  return (value ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim();
-}
-
-function matchesPatientSearch(patient: Patient, query: string) {
-  const normalizedQuery = normalizeSearchText(query);
-  if (!normalizedQuery) return true;
-
-  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
-  const searchableValues = [
-    patient.name,
-    patient.last_name,
-    patient.full_name,
-    patient.phone,
-    formatPhone(patient.phone),
-  ];
-
-  const words = searchableValues
-    .filter(Boolean)
-    .flatMap((value) => normalizeSearchText(value).split(/\s+/).filter(Boolean));
-  const combinedText = normalizeSearchText(searchableValues.filter(Boolean).join(' '));
-
-  return tokens.every(
-    (token) => combinedText.includes(token) || words.some((word) => word.includes(token))
-  );
-}
-
 const labelStatusColorMap: Record<string, { bg: string; border: string; text: string }> = {
   'btn-primary': { bg: '#1e88e5', border: '#1976d2', text: '#ffffff' },
   'btn-success': { bg: '#4caf50', border: '#43a047', text: '#ffffff' },
@@ -156,8 +125,8 @@ export default function PatientsPage() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [patients, setPatients] = useState<Patient[]>([]);
-  const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [showTagFilters, setShowTagFilters] = useState(false);
   const [selectedFilterTagIds, setSelectedFilterTagIds] = useState<number[]>([]);
   const [selectedFilterStatusIds, setSelectedFilterStatusIds] = useState<number[]>([]);
@@ -227,10 +196,13 @@ export default function PatientsPage() {
   const [previewFileType, setPreviewFileType] = useState('');
   const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchDebounceRef = useRef<number | null>(null);
   const attachFileInputRef = useRef<HTMLInputElement | null>(null);
   const attachSectionRef = useRef<HTMLDivElement | null>(null);
   const canViewPatientDetail = can('patients.detail.view');
   const canQuickEditPatient = can('patients.quick_edit');
+  const isSearchMode = debouncedSearchQuery.trim().length > 0;
 
   const sortPatientsByName = (items: Patient[]) =>
     [...items].sort((left, right) =>
@@ -300,41 +272,77 @@ export default function PatientsPage() {
   });
 
   useEffect(() => {
-    const loadPatients = async () => {
-      setLoading(true);
+    return () => {
+      if (searchDebounceRef.current !== null) {
+        window.clearTimeout(searchDebounceRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadFilters = async () => {
       try {
-        const [data, labels, statuses] = await Promise.all([
-          patientService.getPatients({
-            labelIds: selectedFilterTagIds,
-            labelStatusIds: selectedFilterStatusIds,
-          }),
+        const [labels, statuses] = await Promise.all([
           patientService.getOfficeLabels(),
           patientService.getOfficeLabelStatuses(),
         ]);
-        setPatients(data);
-        setFilteredPatients(data);
         setOfficeLabels(labels.filter((item) => item.status == null || item.status === 1));
         setOfficeLabelStatuses(statuses);
       } catch (err) {
-        console.error('Error cargando pacientes:', err);
-      } finally {
-        setLoading(false);
+        console.error('Error cargando filtros de pacientes:', err);
       }
     };
 
-    loadPatients();
-  }, [selectedFilterTagIds, selectedFilterStatusIds]);
+    void loadFilters();
+  }, []);
 
   useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredPatients(patients);
-    } else {
-      setFilteredPatients(
-        patients.filter((patient) => matchesPatientSearch(patient, searchQuery))
-      );
-    }
     setPage(0);
-  }, [searchQuery, patients]);
+  }, [debouncedSearchQuery, selectedFilterTagIds, selectedFilterStatusIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPatients = async () => {
+      setLoading(true);
+      try {
+        const response = await patientService.getPatients({
+          labelIds: selectedFilterTagIds,
+          labelStatusIds: selectedFilterStatusIds,
+          search: debouncedSearchQuery,
+          page: isSearchMode ? 1 : page + 1,
+          perPage: isSearchMode ? 10 : rowsPerPage,
+          view:
+            selectedFilterTagIds.length > 0 || selectedFilterStatusIds.length > 0
+              ? 'tagged'
+              : 'list',
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setPatients(response.data);
+        setTotalPatients(isSearchMode ? response.data.length : response.total);
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Error cargando pacientes:', err);
+          setPatients([]);
+          setTotalPatients(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadPatients();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedSearchQuery, isSearchMode, page, rowsPerPage, selectedFilterTagIds, selectedFilterStatusIds]);
 
   useEffect(() => {
     if (attachSelectedFiles.length !== 1) {
@@ -457,20 +465,35 @@ export default function PatientsPage() {
     };
   }, [attachLoading, attachPatientId]);
 
-  const paginatedPatients = filteredPatients.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+  const paginatedPatients = patients;
 
   const handleChangePage = (_event: unknown, newPage: number) => {
+    if (isSearchMode) {
+      return;
+    }
     setPage(newPage);
   };
 
   const handleChangeRowsPerPage = (
     event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
+    if (isSearchMode) {
+      return;
+    }
     setRowsPerPage(parseInt(event.target.value, 10));
     setPage(0);
+  };
+
+  const handleSearchInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextValue = event.target.value.trim();
+
+    if (searchDebounceRef.current !== null) {
+      window.clearTimeout(searchDebounceRef.current);
+    }
+
+    searchDebounceRef.current = window.setTimeout(() => {
+      setDebouncedSearchQuery(nextValue);
+    }, 300);
   };
 
   const handleToggleFilterTag = (tagId: number) => {
@@ -2044,10 +2067,11 @@ export default function PatientsPage() {
         <CardContent sx={{ py: 2 }}>
           <Box sx={{ display: 'flex', gap: 1.5, flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' } }}>
             <TextField
+              inputRef={searchInputRef}
               fullWidth
               placeholder={'Buscar por nombre o tel\u00e9fono...'}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              defaultValue=""
+              onChange={handleSearchInputChange}
               slotProps={{
                 input: {
                   startAdornment: (
@@ -2059,6 +2083,11 @@ export default function PatientsPage() {
               }}
               size="small"
             />
+            {isSearchMode && (
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: { sm: 220 } }}>
+                Mostrando hasta 10 coincidencias.
+              </Typography>
+            )}
             <Button variant="contained" onClick={handleOpenCreatePatient} sx={{ minWidth: { sm: 180 } }}>
               Nuevo paciente
             </Button>
@@ -2237,17 +2266,19 @@ export default function PatientsPage() {
               )}
             </List>
 
-            <TablePagination
-              component="div"
-              count={filteredPatients.length}
-              page={page}
-              onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              labelRowsPerPage="Filas por pagina"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-            />
+            {!isSearchMode && (
+              <TablePagination
+                component="div"
+                count={totalPatients}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage="Filas por pagina"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
+            )}
           </>
         ) : (
           <>
@@ -2335,17 +2366,19 @@ export default function PatientsPage() {
               </Table>
             </TableContainer>
 
-            <TablePagination
-              component="div"
-              count={filteredPatients.length}
-              page={page}
-              onPageChange={handleChangePage}
-              rowsPerPage={rowsPerPage}
-              onRowsPerPageChange={handleChangeRowsPerPage}
-              rowsPerPageOptions={[5, 10, 25, 50]}
-              labelRowsPerPage="Filas por pagina"
-              labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-            />
+            {!isSearchMode && (
+              <TablePagination
+                component="div"
+                count={totalPatients}
+                page={page}
+                onPageChange={handleChangePage}
+                rowsPerPage={rowsPerPage}
+                onRowsPerPageChange={handleChangeRowsPerPage}
+                rowsPerPageOptions={[5, 10, 25, 50]}
+                labelRowsPerPage="Filas por pagina"
+                labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
+              />
+            )}
           </>
         )}
       </Card>

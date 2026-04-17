@@ -151,10 +151,28 @@ export const appointmentService = {
     return response.data.data;
   },
 
-  async getPatients(officeId: number): Promise<PatientSimple[]> {
+  async getPatients(
+    officeId: number,
+    options?: {
+      search?: string;
+      page?: number;
+      perPage?: number;
+    }
+  ): Promise<PatientSimple[]> {
     const response = await apiClient.get<ApiPatientsResponse>(
       '/v2/patients',
-      { params: { office_id: officeId, simple: 1 } }
+      {
+        params: {
+          office_id: officeId,
+          simple: 1,
+          view: 'list',
+          search: options?.search?.trim() ? options.search.trim() : undefined,
+          page: options?.page ?? 1,
+          per_page: options?.perPage ?? 10,
+          order_by: 'users.name',
+          order_dir: 'asc',
+        },
+      }
     );
     // Handle both paginated { data: { data: [...] } } and direct { data: [...] } formats
     const outer = response.data.data;

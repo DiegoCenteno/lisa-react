@@ -2,6 +2,15 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import type { User, UserRole } from '../types';
 import { authService } from '../api/authService';
+import {
+  AUTH_STATE_CHANGED_EVENT,
+  clearStoredAuthState,
+  getProactiveRefreshDelayMs,
+  isExtendedSessionEnabled,
+  persistAuthTokens,
+  refreshAccessToken,
+  shouldRefreshSoon,
+} from '../api/authSession';
 import { appointmentService } from '../api/appointmentService';
 import { AuthContext } from './authTypes';
 import { clearBrowserClientState } from '../utils/clientReset';
@@ -24,6 +33,75 @@ function getInitialToken(): string | null {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(getInitialUser);
   const [token, setToken] = useState<string | null>(getInitialToken);
+
+  useEffect(() => {
+    const syncAuthState = () => {
+      setUser(getInitialUser());
+      setToken(getInitialToken());
+    };
+
+    window.addEventListener(AUTH_STATE_CHANGED_EVENT, syncAuthState);
+    window.addEventListener('storage', syncAuthState);
+
+    return () => {
+      window.removeEventListener(AUTH_STATE_CHANGED_EVENT, syncAuthState);
+      window.removeEventListener('storage', syncAuthState);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user || !token || !isExtendedSessionEnabled()) {
+      return;
+    }
+
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      return;
+    }
+
+    let cancelled = false;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const redirectToLogin = () => {
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    };
+
+    const refreshSession = async () => {
+      try {
+        await refreshAccessToken(refreshToken);
+      } catch {
+        if (!cancelled) {
+          clearStoredAuthState();
+          redirectToLogin();
+        }
+      }
+    };
+
+    if (shouldRefreshSoon()) {
+      void refreshSession();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const delayMs = getProactiveRefreshDelayMs();
+    if (delayMs === null) {
+      return;
+    }
+
+    timerId = setTimeout(() => {
+      void refreshSession();
+    }, delayMs);
+
+    return () => {
+      cancelled = true;
+      if (timerId !== null) {
+        clearTimeout(timerId);
+      }
+    };
+  }, [user, token]);
 
   useEffect(() => {
     let active = true;
@@ -57,13 +135,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authService.login(email, password);
     setUser(response.user);
     setToken(response.token);
-    localStorage.setItem('token', response.token);
+    persistAuthTokens(response.token, response.refresh_token, response.expires_in);
     localStorage.setItem('user', JSON.stringify(response.user));
     localStorage.removeItem('cached_office_id');
     sessionStorage.removeItem('cached_office_id');
-    if (response.refresh_token) {
-      localStorage.setItem('refresh_token', response.refresh_token);
-    }
 
     try {
       if (response.user.role !== 'system_admin') {
@@ -81,11 +156,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authService.logout();
     setUser(null);
     setToken(null);
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('cached_office_id');
-    sessionStorage.removeItem('cached_office_id');
+    clearStoredAuthState();
   }, []);
 
   const hardResetClientAuth = useCallback(async () => {

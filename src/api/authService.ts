@@ -66,6 +66,7 @@ export const authService = {
       user,
       token: access.access_token,
       refresh_token: access.refresh_token,
+      expires_in: access.expires_in,
     };
   },
 
