@@ -65,6 +65,16 @@ function formatPhone(phone?: string) {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
 }
 
+function toPascalCaseName(value?: string) {
+  return String(value ?? '')
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function formatTagCreatedTitle(createdAt?: string | null) {
   if (!createdAt) {
     return 'Fecha de creación no disponible';
@@ -82,6 +92,10 @@ function formatTagCreatedTitle(createdAt?: string | null) {
     hour: '2-digit',
     minute: '2-digit',
   })}`;
+}
+
+function formatPatientDisplayName(patient: Patient) {
+  return toPascalCaseName(patient.full_name ?? `${patient.name ?? ''} ${patient.last_name ?? ''}`);
 }
 
 function formatTagStatusTitle(statusDate?: string | null) {
@@ -2208,7 +2222,7 @@ export default function PatientsPage() {
                     </Avatar>
                   </ListItemAvatar>
                   <ListItemText
-                    primary={patient.full_name ?? `${patient.name} ${patient.last_name}`}
+                    primary={formatPatientDisplayName(patient)}
                     secondary={
                       <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
                         <Box
@@ -2304,7 +2318,7 @@ export default function PatientsPage() {
                             {patient.last_name?.[0] ?? ''}
                           </Avatar>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {patient.full_name ?? `${patient.name} ${patient.last_name}`}
+                            {formatPatientDisplayName(patient)}
                           </Typography>
                         </Box>
                       </TableCell>
