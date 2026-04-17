@@ -52,11 +52,6 @@ type ApiPatientsPayload =
       data?: ApiPatientRecord[];
     };
 
-interface ApiPatientsResponse {
-  status: string;
-  data: ApiPatientsPayload;
-}
-
 interface ApiPatientsPaginatedPayload {
   data?: ApiPatientRecord[];
   current_page?: number;
