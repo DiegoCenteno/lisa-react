@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { Box, Toolbar, useMediaQuery, useTheme } from '@mui/material';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
+import MobileBottomNav from './MobileBottomNav';
 
 const MINI_DRAWER_WIDTH = 76;
 
@@ -32,7 +33,7 @@ export default function MainLayout() {
         <Box
           sx={{
             pt: { xs: 2, md: 3 },
-            pb: { xs: 2, md: 3 },
+            pb: { xs: 'calc(80px + env(safe-area-inset-bottom))', md: 3 },
             pl: { xs: 2, md: 3 },
             pr: {
               xs: 2,
@@ -43,6 +44,7 @@ export default function MainLayout() {
           <Outlet />
         </Box>
       </Box>
+      {isMobile ? <MobileBottomNav /> : null}
     </Box>
   );
 }

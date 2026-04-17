@@ -2096,19 +2096,20 @@ export default function PatientsPage() {
                 },
               }}
               size="small"
+              sx={{ order: { xs: 3, sm: 1 } }}
             />
             {isSearchMode && (
-              <Typography variant="body2" color="text.secondary" sx={{ minWidth: { sm: 220 } }}>
+              <Typography variant="body2" color="text.secondary" sx={{ minWidth: { sm: 220 }, order: { xs: 4, sm: 2 } }}>
                 Mostrando hasta 10 coincidencias.
               </Typography>
             )}
-            <Button variant="contained" onClick={handleOpenCreatePatient} sx={{ minWidth: { sm: 180 } }}>
+            <Button variant="contained" onClick={handleOpenCreatePatient} sx={{ minWidth: { sm: 180 }, order: { xs: 1, sm: 3 } }}>
               Nuevo paciente
             </Button>
             <Button
               variant={showTagFilters || selectedFilterTagIds.length > 0 || selectedFilterStatusIds.length > 0 ? 'outlined' : 'text'}
               onClick={() => setShowTagFilters((current) => !current)}
-              sx={{ minWidth: { sm: 170 } }}
+              sx={{ minWidth: { sm: 170 }, order: { xs: 2, sm: 4 } }}
             >
               Filtros de etiquetas
             </Button>

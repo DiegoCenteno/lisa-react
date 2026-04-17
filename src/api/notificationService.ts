@@ -6,18 +6,23 @@ import type {
 } from '../types';
 
 const notificationService = {
-  async getSettings(): Promise<NotificationSettingsData> {
+  async getSettings(officeId?: number): Promise<NotificationSettingsData> {
     const response = await apiClient.get<{ status: string; data: NotificationSettingsData }>(
-      '/v2/notifications/settings'
+      '/v2/notifications/settings',
+      {
+        params: {
+          office_id: officeId || undefined,
+        },
+      }
     );
 
     return response.data.data;
   },
 
-  async updateSettings(preferences: Record<string, boolean>): Promise<NotificationSettingsData> {
+  async updateSettings(preferences: Record<string, boolean>, officeId?: number): Promise<NotificationSettingsData> {
     const response = await apiClient.put<{ status: string; data: NotificationSettingsData }>(
       '/v2/notifications/settings',
-      { preferences }
+      { preferences, office_id: officeId || undefined }
     );
 
     return response.data.data;

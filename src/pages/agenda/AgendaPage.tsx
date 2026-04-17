@@ -1680,55 +1680,87 @@ export default function AgendaPage() {
               )}
 
               {!showAppointmentDetails && !showAppointmentMore && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: isShortViewport ? 0.7 : 1, sm: isShortViewport ? 1 : 1.5 }, flexWrap: 'wrap' }}>
-                <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
-                  Celular: {String(selectedEvent.event.extendedProps.phone || '-')}
-                </Typography>
-                <IconButton
-                  size="small"
-                  onClick={() => handleCopyPhone(String(selectedEvent.event.extendedProps.phone || ''))}
+              <Box sx={{ width: '100%' }}>
+                <Box
                   sx={{
-                    border: '1px solid #49c5ff',
-                    borderRadius: 1,
-                    color: '#49c5ff',
-                    width: { xs: isShortViewport ? 34 : 38, sm: isShortViewport ? 36 : 42 },
-                    height: { xs: isShortViewport ? 28 : 32, sm: isShortViewport ? 30 : 36 },
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: { xs: isShortViewport ? 0.7 : 1, sm: isShortViewport ? 1 : 1.5 },
+                    flexWrap: { xs: 'nowrap', sm: 'wrap' },
+                    width: '100%',
                   }}
                 >
-                  <ContentCopyIcon sx={{ fontSize: { xs: isShortViewport ? 14 : 16, sm: isShortViewport ? 16 : 18 } }} />
-                </IconButton>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 } }}>
+                    <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
+                      Celular: {String(selectedEvent.event.extendedProps.phone || '-')}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={() => handleCopyPhone(String(selectedEvent.event.extendedProps.phone || ''))}
+                      sx={{
+                        border: '1px solid #49c5ff',
+                        borderRadius: 1,
+                        color: '#49c5ff',
+                        width: { xs: isShortViewport ? 34 : 38, sm: isShortViewport ? 36 : 42 },
+                        height: { xs: isShortViewport ? 28 : 32, sm: isShortViewport ? 30 : 36 },
+                      }}
+                    >
+                      <ContentCopyIcon sx={{ fontSize: { xs: isShortViewport ? 14 : 16, sm: isShortViewport ? 16 : 18 } }} />
+                    </IconButton>
+                  </Box>
+                  {isMobile ? (
+                    <IconButton
+                      size="small"
+                      component="a"
+                      href={`tel:${String(selectedEvent.event.extendedProps.phone || '')}`}
+                      sx={{
+                        borderRadius: 1,
+                        backgroundColor: '#4caf50',
+                        color: '#ffffff',
+                        width: isShortViewport ? 34 : 38,
+                        height: isShortViewport ? 28 : 32,
+                        flexShrink: 0,
+                        '&:hover': {
+                          backgroundColor: '#43a047',
+                        },
+                      }}
+                    >
+                      <PhoneIcon sx={{ fontSize: isShortViewport ? 14 : 16 }} />
+                    </IconButton>
+                  ) : (
+                    <Button
+                      variant="text"
+                      onClick={handleOpenAppointmentMore}
+                      sx={{
+                        minWidth: 'auto',
+                        p: 0,
+                        color: '#666',
+                        textDecoration: 'underline',
+                        textTransform: 'none',
+                      }}
+                    >
+                      ..más
+                    </Button>
+                  )}
+                </Box>
                 {isMobile ? (
-                  <IconButton
-                    size="small"
-                    component="a"
-                    href={`tel:${String(selectedEvent.event.extendedProps.phone || '')}`}
-                    sx={{
-                      borderRadius: 1,
-                      backgroundColor: '#4caf50',
-                      color: '#ffffff',
-                      width: isShortViewport ? 34 : 38,
-                      height: isShortViewport ? 28 : 32,
-                      '&:hover': {
-                        backgroundColor: '#43a047',
-                      },
-                    }}
-                  >
-                    <PhoneIcon sx={{ fontSize: isShortViewport ? 14 : 16 }} />
-                  </IconButton>
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-start', mt: 0.35 }}>
+                    <Button
+                      variant="text"
+                      onClick={handleOpenAppointmentMore}
+                      sx={{
+                        minWidth: 'auto',
+                        p: 0,
+                        color: '#666',
+                        textDecoration: 'underline',
+                        textTransform: 'none',
+                      }}
+                    >
+                      ..más
+                    </Button>
+                  </Box>
                 ) : null}
-                <Button
-                  variant="text"
-                  onClick={handleOpenAppointmentMore}
-                  sx={{
-                    minWidth: 'auto',
-                    p: 0,
-                    color: '#666',
-                    textDecoration: 'underline',
-                    textTransform: 'none',
-                  }}
-                >
-                  ..más
-                </Button>
               </Box>
               )}
 

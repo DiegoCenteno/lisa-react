@@ -135,8 +135,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const response = await authService.login(email, password);
     setUser(response.user);
     setToken(response.token);
-    persistAuthTokens(response.token, response.refresh_token, response.expires_in);
     localStorage.setItem('user', JSON.stringify(response.user));
+    persistAuthTokens(response.token, response.refresh_token, response.expires_in);
     localStorage.removeItem('cached_office_id');
     sessionStorage.removeItem('cached_office_id');
 

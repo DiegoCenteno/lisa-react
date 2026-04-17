@@ -1769,7 +1769,7 @@ export default function NewAppointmentDialog({
       sx={{
         '& .MuiDialog-container': {
           alignItems: 'flex-start',
-          pt: { xs: '6px', sm: '8vh' },
+          pt: { xs: '50px', sm: '8vh' },
         },
         '& .MuiDialog-paper': {
           width: isMobile ? 'calc(100vw - 8px)' : undefined,

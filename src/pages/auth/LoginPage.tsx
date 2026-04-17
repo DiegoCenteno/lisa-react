@@ -61,6 +61,12 @@ export default function LoginPage() {
     return isMobile ? '/agenda' : '/dashboard';
   };
 
+  useEffect(() => {
+    if (!preparing && isAuthenticated) {
+      navigate(getLandingPath(), { replace: true });
+    }
+  }, [isAuthenticated, navigate, preparing, user?.role, isMobile]);
+
   if (preparing) {
     return (
       <Box
@@ -77,7 +83,6 @@ export default function LoginPage() {
   }
 
   if (isAuthenticated) {
-    navigate(getLandingPath(), { replace: true });
     return null;
   }
 
@@ -88,9 +93,6 @@ export default function LoginPage() {
 
     try {
       await login(emailOrPhone, password);
-      const savedUser = localStorage.getItem('user');
-      const parsedUser = savedUser ? JSON.parse(savedUser) as { role?: string } : null;
-      navigate(parsedUser?.role === 'system_admin' ? '/admin' : (isMobile ? '/agenda' : '/dashboard'), { replace: true });
     } catch {
       setError('Credenciales inválidas. Verifica tu email/teléfono y Contraseña.');
     } finally {

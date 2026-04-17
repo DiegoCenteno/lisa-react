@@ -141,24 +141,22 @@ export default function NotificationsPage() {
   useEffect(() => {
     let active = true;
 
-    const load = async () => {
+    const loadOffices = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const [data, officeList] = await Promise.all([
-          notificationService.getSettings(),
-          appointmentService.getOffices(),
-        ]);
+        const officeList = await appointmentService.getOffices();
         if (!active) return;
 
-        setSettings(data);
-        setPreferences(data.preferences ?? {});
-        const ownerOffices = officeList.filter((office) => office.role === 'owner');
-        setOffices(ownerOffices);
-        if (ownerOffices.length > 0) {
-          setSelectedOfficeId(ownerOffices[0].id);
-        }
+        setOffices(officeList);
+        setSelectedOfficeId((current) => {
+          if (current && officeList.some((office) => office.id === current)) {
+            return current;
+          }
+
+          return officeList[0]?.id ?? 0;
+        });
       } catch (requestError) {
         console.error('Error cargando notificaciones:', requestError);
         if (!active) return;
@@ -170,7 +168,7 @@ export default function NotificationsPage() {
       }
     };
 
-    void load();
+    void loadOffices();
 
     return () => {
       active = false;
@@ -180,8 +178,39 @@ export default function NotificationsPage() {
   useEffect(() => {
     let active = true;
 
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await notificationService.getSettings(selectedOfficeId || undefined);
+        if (!active) return;
+
+        setSettings(data);
+        setPreferences(data.preferences ?? {});
+      } catch (requestError) {
+        console.error('Error cargando configuracion de mensajes:', requestError);
+        if (!active) return;
+        setError('No se pudo cargar la configuracion de notificaciones.');
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedOfficeId]);
+
+  useEffect(() => {
+    let active = true;
+
     const loadAssistants = async () => {
-      if (!selectedOfficeId || !preferences.alertas_citas_proximas) {
+      const selectedOffice = offices.find((office) => office.id === selectedOfficeId);
+      if (!selectedOfficeId || !preferences.alertas_citas_proximas || selectedOffice?.role !== 'owner') {
         setAssistantData(null);
         return;
       }
@@ -207,7 +236,7 @@ export default function NotificationsPage() {
     return () => {
       active = false;
     };
-  }, [preferences.alertas_citas_proximas, selectedOfficeId]);
+  }, [offices, preferences.alertas_citas_proximas, selectedOfficeId]);
 
   useEffect(() => {
     let active = true;
@@ -242,7 +271,7 @@ export default function NotificationsPage() {
   }, [selectedOfficeId]);
 
   const savePreferences = async (nextPreferences: Record<string, boolean>, successMessage?: string) => {
-    const data = await notificationService.updateSettings(nextPreferences);
+    const data = await notificationService.updateSettings(nextPreferences, selectedOfficeId || undefined);
     setSettings(data);
     setPreferences(data.preferences ?? nextPreferences);
     if (successMessage) {
@@ -310,6 +339,7 @@ export default function NotificationsPage() {
   const doctorOptions = notificationOptions.filter((option) => option.audience === 'doctor');
   const enabledRecipientCount = (assistantData?.limits.enabled_total ?? 0) + 1;
   const maxOptionalRecipientsReached = (assistantData?.limits.registered_total ?? 0) >= (assistantData?.limits.total_max ?? 5);
+  const selectedOffice = offices.find((office) => office.id === selectedOfficeId) ?? null;
 
   const renderOption = (option: (typeof notificationOptions)[number]) => (
     <FormControlLabel
@@ -546,6 +576,28 @@ export default function NotificationsPage() {
         </CardContent>
       </Card>
 
+      {offices.length > 0 ? (
+        <Card sx={{ borderRadius: 3 }}>
+          <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+            <FormControl size="small" sx={{ minWidth: 260, maxWidth: 420 }}>
+              <InputLabel id="notifications-global-office-label">Consultorio</InputLabel>
+              <Select
+                labelId="notifications-global-office-label"
+                value={selectedOfficeId}
+                label="Consultorio"
+                onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
+              >
+                {offices.map((office) => (
+                  <MenuItem key={office.id} value={office.id}>
+                    {office.title}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <Card sx={{ borderRadius: 3 }}>
         <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
           <Stack
@@ -601,7 +653,7 @@ export default function NotificationsPage() {
             </Box>
             </Stack>
 
-            {preferences.alertas_citas_proximas ? (
+            {preferences.alertas_citas_proximas && selectedOffice?.role === 'owner' ? (
               <Box
                 sx={{
                   mt: 2.5,
