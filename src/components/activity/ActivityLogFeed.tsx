@@ -64,7 +64,7 @@ function getNormalizedSource(log: ActivityLogItem): string {
 }
 
 function isSystemActionByMatrix(log: ActivityLogItem): boolean {
-  return SYSTEM_ACTIONS.has(getNormalizedAction(log));
+  return SYSTEM_ACTIONS.has(getNormalizedAction(log)) || isSystemAutomatedAction(log);
 }
 
 function isPatientActionByMatrix(log: ActivityLogItem): boolean {
@@ -102,8 +102,6 @@ function isSystemAutomatedAction(log: ActivityLogItem): boolean {
     || normalizedMessage === 'resumen diario de citas enviado.'
     || normalizedMessage === 'error al enviar resumen diario de citas.';
 }
-
-type RealActorType = 'system' | 'patient' | 'doctor' | 'assistant' | 'authenticated';
 
 function getDisplayTitle(log: ActivityLogItem): string {
   const normalizedAction = log.action.trim().toLowerCase();
