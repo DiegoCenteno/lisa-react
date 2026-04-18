@@ -29,16 +29,81 @@ function toCamelCaseWords(value: string): string {
     .join(' ');
 }
 
-function isPatientPublicAppointmentAction(log: ActivityLogItem): boolean {
-  const message = String(log.message ?? '').trim().toLowerCase();
+type RealActorType = 'system' | 'patient' | 'doctor' | 'assistant' | 'authenticated';
+
+const SYSTEM_ACTIONS = new Set([
+  'appointments_today_sent',
+  'appointments_today_failed',
+  'appointment_confirmation_scheduled',
+  'appointment_confirmation_sent',
+  'appointment_confirmation_failed',
+  'five_day_reminder_sent',
+  'five_day_reminder_failed',
+]);
+
+const PATIENT_SOURCE_ACTIONS: Partial<Record<string, Set<string>>> = {
+  confirmed: new Set(['patient_whatsapp', 'public_wsapp']),
+  cancelled: new Set(['patient_whatsapp', 'public_wsapp']),
+  rescheduled: new Set(['public_reschedule_link']),
+  assigned: new Set(['public_booking_link']),
+  history_form_submitted: new Set(['public_history_form']),
+};
+
+const PATIENT_ACTIONS = new Set([
+  'cancelled_from_five_day_reminder',
+  'five_day_reminder_acknowledged',
+  'incoming_message_unrecognized',
+]);
+
+function getNormalizedAction(log: ActivityLogItem): string {
+  return String(log.action ?? '').trim().toLowerCase();
+}
+
+function getNormalizedSource(log: ActivityLogItem): string {
+  return String(log.meta?.source ?? '').trim().toLowerCase();
+}
+
+function isSystemActionByMatrix(log: ActivityLogItem): boolean {
+  return SYSTEM_ACTIONS.has(getNormalizedAction(log));
+}
+
+function isPatientActionByMatrix(log: ActivityLogItem): boolean {
+  const action = getNormalizedAction(log);
+  const source = getNormalizedSource(log);
+
+  if (PATIENT_ACTIONS.has(action)) {
+    return true;
+  }
+
+  const allowedSources = PATIENT_SOURCE_ACTIONS[action];
+  return Boolean(allowedSources?.has(source));
+}
+
+function isSystemAutomatedAction(log: ActivityLogItem): boolean {
+  const normalizedAction = String(log.action ?? '').trim().toLowerCase();
+  const normalizedMessage = String(log.message ?? '').trim().toLowerCase();
   const source = String(log.meta?.source ?? '').trim().toLowerCase();
 
-  return source === 'public_wsapp'
-    || source === 'patient_whatsapp'
-    || source === 'appointment_scheduling3'
+  return normalizedAction === 'five_day_reminder_sent'
+    || normalizedAction === 'five_day_reminder_failed'
+    || normalizedAction === 'appointment_confirmation_scheduled'
+    || normalizedAction === 'appointment_confirmation_sent'
+    || normalizedAction === 'appointment_confirmation_failed'
+    || normalizedAction === 'appointments_today_sent'
+    || normalizedAction === 'appointments_today_failed'
+    || source === 'daily_schedule_summary'
     || source === 'five_day_reminder'
-    || message.includes('por paciente');
+    || source === 'appointment_scheduling3'
+    || normalizedMessage === 'recordatorio de cita enviado.'
+    || normalizedMessage === 'error al enviar recordatorio de cita.'
+    || normalizedMessage === 'confirmación de cita programada'
+    || normalizedMessage === 'confirmación de cita enviada'
+    || normalizedMessage === 'error al enviar confirmación de cita'
+    || normalizedMessage === 'resumen diario de citas enviado.'
+    || normalizedMessage === 'error al enviar resumen diario de citas.';
 }
+
+type RealActorType = 'system' | 'patient' | 'doctor' | 'assistant' | 'authenticated';
 
 function getDisplayTitle(log: ActivityLogItem): string {
   const normalizedAction = log.action.trim().toLowerCase();
@@ -66,6 +131,10 @@ function getDisplayTitle(log: ActivityLogItem): string {
 
   if (normalizedMessage === 'cita marcada como no asistió') {
     return 'Cita Marcada Como No Asistió';
+  }
+
+  if (normalizedMessage === 'recordatorio de cita enviado.') {
+    return 'Recordatorio De Cita 5 Días Antes Enviado.';
   }
 
   return toCamelCaseWords(log.message || log.action);
@@ -182,24 +251,63 @@ function getActorLineLabel(action: string): string {
   return 'Quién realizó la acción';
 }
 
+function getRealActorType(log: ActivityLogItem): RealActorType {
+  if (isSystemActionByMatrix(log)) {
+    return 'system';
+  }
+
+  if (isPatientActionByMatrix(log)) {
+    return 'patient';
+  }
+
+  if (log.user_role_id === 1) {
+    return 'doctor';
+  }
+
+  if (log.user_role_id === 2) {
+    return 'assistant';
+  }
+
+  if (log.user_name?.trim()) {
+    return 'authenticated';
+  }
+
+  return 'system';
+}
+
 function getActorDisplayName(log: ActivityLogItem): string {
-  if (isPatientPublicAppointmentAction(log)) {
+  const actorType = getRealActorType(log);
+  const normalizedUserName = log.user_name?.trim();
+
+  if (actorType === 'system') {
+    return 'Sistema';
+  }
+
+  if (actorType === 'patient') {
     return 'Paciente';
   }
 
-  if (log.user_role_id === 1 || log.user_role_id === 2) {
-    return toCamelCaseWords(log.user_name?.trim() || 'Sistema');
+  if (actorType === 'doctor') {
+    return normalizedUserName ? toCamelCaseWords(normalizedUserName) : 'Médico';
+  }
+
+  if (actorType === 'assistant') {
+    return normalizedUserName ? toCamelCaseWords(normalizedUserName) : 'Asistente';
+  }
+
+  return normalizedUserName ? toCamelCaseWords(normalizedUserName) : 'Usuario';
+}
+
+function getDoctorDisplayName(log: ActivityLogItem): string | null {
+  if (!isSystemActionByMatrix(log)) {
+    return null;
   }
 
   if (log.user_name?.trim()) {
     return toCamelCaseWords(log.user_name.trim());
   }
 
-  if (log.patient_id) {
-    return 'Paciente';
-  }
-
-  return 'Sistema';
+  return null;
 }
 
 function getLogDayKey(value?: string | null): string {
@@ -237,13 +345,37 @@ interface Props {
   showDayGroups?: boolean;
 }
 
+function filterRedundantLogs(logs: ActivityLogItem[]): ActivityLogItem[] {
+  const sentConfirmationAppointmentIds = new Set(
+    logs
+      .filter(
+        (log) => log.action === 'appointment_confirmation_sent' && log.appointment_id != null
+      )
+      .map((log) => log.appointment_id as number)
+  );
+
+  return logs.filter((log) => {
+    if (log.action !== 'appointment_confirmation_scheduled') {
+      return true;
+    }
+
+    if (log.appointment_id == null) {
+      return true;
+    }
+
+    return !sentConfirmationAppointmentIds.has(log.appointment_id);
+  });
+}
+
 export default function ActivityLogFeed({
   logs,
   emptyText,
   showPatient = false,
   showDayGroups = true,
 }: Props) {
-  if (logs.length === 0) {
+  const visibleLogs = filterRedundantLogs(logs);
+
+  if (visibleLogs.length === 0) {
     return (
       <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
         {emptyText}
@@ -254,6 +386,7 @@ export default function ActivityLogFeed({
   const renderLogCard = (log: ActivityLogItem) => {
     const metaLines = getActivityMetaLines(log);
     const title = getDisplayTitle(log);
+    const doctorName = getDoctorDisplayName(log);
 
     return (
       <Box
@@ -311,6 +444,11 @@ export default function ActivityLogFeed({
             <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
               {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
             </Typography>
+            {doctorName ? (
+              <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                Médico: {doctorName}
+              </Typography>
+            ) : null}
             {(showPatient || log.patient_id) && log.patient_name ? (
               <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
                 Paciente: {toCamelCaseWords(log.patient_name)}
@@ -327,6 +465,11 @@ export default function ActivityLogFeed({
             <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
               {getActorLineLabel(log.action)}: {getActorDisplayName(log)}
             </Typography>
+            {doctorName ? (
+              <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
+                Médico: {doctorName}
+              </Typography>
+            ) : null}
             {(showPatient || log.patient_id) && log.patient_name ? (
               <Typography sx={{ fontSize: '0.88rem', color: '#5f6b75' }}>
                 Paciente: {toCamelCaseWords(log.patient_name)}
@@ -341,12 +484,12 @@ export default function ActivityLogFeed({
   if (!showDayGroups) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-        {logs.map((log) => renderLogCard(log))}
+        {visibleLogs.map((log) => renderLogCard(log))}
       </Box>
     );
   }
 
-  const groupedLogs = logs.reduce<Array<{ dayKey: string; items: ActivityLogItem[] }>>((acc, log) => {
+  const groupedLogs = visibleLogs.reduce<Array<{ dayKey: string; items: ActivityLogItem[] }>>((acc, log) => {
     const dayKey = getLogDayKey(log.created_at);
     const lastGroup = acc[acc.length - 1];
 
