@@ -36,6 +36,8 @@ export interface Patient {
   full_name?: string;
   email?: string;
   phone?: string;
+  phone_code?: string | null;
+  full_phone?: string;
   birth_date?: string;
   gender?: string;
   blood_type?: string;
