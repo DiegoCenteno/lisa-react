@@ -71,7 +71,7 @@ function isValidTenDigitPhone(phone?: string) {
   return digits.length === 10;
 }
 
-function buildWhatsAppHref(phone?: string, phoneCode?: string) {
+function buildWhatsAppHref(phone?: string, phoneCode?: string | null) {
   if (!isValidTenDigitPhone(phone)) return null;
 
   const normalizedPhone = (phone ?? '').replace(/\D/g, '');
