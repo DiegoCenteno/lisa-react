@@ -65,6 +65,21 @@ function formatPhone(phone?: string) {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
 }
 
+function isValidTenDigitPhone(phone?: string) {
+  if (!phone) return false;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 10;
+}
+
+function buildWhatsAppHref(phone?: string, phoneCode?: string) {
+  if (!isValidTenDigitPhone(phone)) return null;
+
+  const normalizedPhone = (phone ?? '').replace(/\D/g, '');
+  const normalizedPhoneCode = (phoneCode ?? '').replace(/\D/g, '') || '52';
+
+  return `https://wa.me/${normalizedPhoneCode}${normalizedPhone}`;
+}
+
 function toPascalCaseName(value?: string) {
   return String(value ?? '')
     .trim()
@@ -539,6 +554,21 @@ export default function PatientsPage() {
       setCopyMessage('Información copiada');
     } catch (error) {
       console.error('Error copiando telefono:', error);
+    }
+  };
+
+  const handleCopyValue = async (
+    event: React.MouseEvent<HTMLButtonElement>,
+    value?: string
+  ) => {
+    event.stopPropagation();
+    if (!value) return;
+
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopyMessage('Información copiada');
+    } catch (error) {
+      console.error('Error copiando información:', error);
     }
   };
 
@@ -2223,9 +2253,54 @@ export default function PatientsPage() {
                     </Avatar>
                   </ListItemAvatar>
                   <ListItemText
-                    primary={formatPatientDisplayName(patient)}
+                    primary={(
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, width: '100%' }}>
+                        <Box
+                          sx={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 0.05,
+                            minWidth: 0,
+                            flex: 1,
+                            flexWrap: 'nowrap',
+                          }}
+                        >
+                          <Typography
+                            component="span"
+                            variant="body1"
+                            sx={{ fontWeight: 500, minWidth: 0, flexShrink: 1 }}
+                          >
+                            {formatPatientDisplayName(patient)}
+                          </Typography>
+                          <IconButton
+                            size="small"
+                            sx={{ p: 0.15, ml: -0.1, flexShrink: 0 }}
+                            onClick={(event) => handleCopyValue(event, formatPatientDisplayName(patient))}
+                          >
+                            <ContentCopyIcon sx={{ fontSize: 20 }} />
+                          </IconButton>
+                        </Box>
+                        {isValidTenDigitPhone(patient.phone) && buildWhatsAppHref(patient.phone, patient.phone_code) ? (
+                          <IconButton
+                            size="small"
+                            component="a"
+                            href={buildWhatsAppHref(patient.phone, patient.phone_code) ?? undefined}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ p: 0.1, ml: 'auto', flexShrink: 0 }}
+                          >
+                            <Box
+                              component="img"
+                              src="/pwa/wsicon.png"
+                              alt="WhatsApp"
+                              sx={{ width: 42, height: 42, display: 'block' }}
+                            />
+                          </IconButton>
+                        ) : null}
+                      </Box>
+                    )}
                     secondary={
-                      <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
+                      <Box component="span" sx={{ display: 'inline-flex', flexDirection: 'column', gap: 2.25 }}>
                         <Box
                           component="span"
                           sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}
@@ -2238,14 +2313,14 @@ export default function PatientsPage() {
                                 sx={{ p: 0.25 }}
                                 onClick={(event) => handleCopyPhone(event, patient.phone)}
                               >
-                                <ContentCopyIcon sx={{ fontSize: 14 }} />
+                                <ContentCopyIcon sx={{ fontSize: 20 }} />
                               </IconButton>
                             </>
                           ) : (
                             <span>Sin datos de contacto</span>
                           )}
                         </Box>
-                        <Box component="span" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Box component="span" sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
                           {showPatientTagsColumn && (
                             <Box component="span" sx={{ width: '100%' }}>
                               {renderPatientTagSummary(patient)}

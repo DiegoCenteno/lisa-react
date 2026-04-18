@@ -224,38 +224,44 @@ function extractPatients(payload: ApiPatientsPayload): ApiPatientRecord[] {
   return payload.data ?? [];
 }
 
-let cachedOfficeId: number | null = null;
 let officeIdPromise: Promise<number> | null = null;
 
-async function resolveOfficeId(): Promise<number> {
-  if (cachedOfficeId) {
-    return cachedOfficeId;
+export function resetResolvedOfficeIdCache(): void {
+  officeIdPromise = null;
+  try {
+    localStorage.removeItem('cached_office_id');
+  } catch {
+    // Ignore storage access errors.
+  }
+  try {
+    sessionStorage.removeItem('cached_office_id');
+  } catch {
+    // Ignore storage access errors.
+  }
+}
+
+export function primeResolvedOfficeIdCache(officeId: number): void {
+  if (!Number.isFinite(officeId) || officeId <= 0) {
+    return;
   }
 
+  try {
+    sessionStorage.setItem('cached_office_id', String(officeId));
+  } catch {
+    // Ignore storage access errors.
+  }
+}
+
+async function resolveOfficeId(): Promise<number> {
   const persistedOfficeId = sessionStorage.getItem('cached_office_id');
   if (persistedOfficeId) {
     const parsedOfficeId = Number(persistedOfficeId);
     if (Number.isFinite(parsedOfficeId) && parsedOfficeId > 0) {
-      cachedOfficeId = parsedOfficeId;
       return parsedOfficeId;
     }
   }
 
   localStorage.removeItem('cached_office_id');
-
-  const userRaw = localStorage.getItem('user');
-  if (userRaw) {
-    try {
-      const user = JSON.parse(userRaw) as { consultorio_id?: number };
-      if (user.consultorio_id) {
-        cachedOfficeId = user.consultorio_id;
-        sessionStorage.setItem('cached_office_id', String(user.consultorio_id));
-        return user.consultorio_id;
-      }
-    } catch {
-      // Ignore malformed local storage and continue with API lookup.
-    }
-  }
 
   if (!officeIdPromise) {
     officeIdPromise = appointmentService.getOffices().then((offices) => {
@@ -264,8 +270,7 @@ async function resolveOfficeId(): Promise<number> {
       }
 
       const officeId = offices[0].id;
-      cachedOfficeId = officeId;
-      sessionStorage.setItem('cached_office_id', String(officeId));
+      primeResolvedOfficeIdCache(officeId);
       return officeId;
     }).finally(() => {
       officeIdPromise = null;

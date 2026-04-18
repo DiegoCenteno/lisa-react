@@ -598,8 +598,8 @@ function ProfilePanel({
 }
 
 function CompanyPanel({ offices, saving, onSaveCompany }: { offices: Office[]; saving: boolean; onSaveCompany: (payload: SettingsCompanyData) => Promise<void>; }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [title, setTitle] = useState('');
   const [address, setAddress] = useState('');
   const [suburb, setSuburb] = useState('');
@@ -607,25 +607,24 @@ function CompanyPanel({ offices, saving, onSaveCompany }: { offices: Office[]; s
   const [logoPreview, setLogoPreview] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
-    const preferredOffice = ownerOffices.find((office) => office.logo_url) ?? ownerOffices[0];
-    setSelectedOfficeId((current) => current && ownerOffices.some((office) => office.id === current) ? current : preferredOffice.id);
-  }, [ownerOffices]);
+    setSelectedOfficeId((current) => current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id);
+  }, [availableOffices]);
 
   useEffect(() => {
-    const office = ownerOffices.find((item) => item.id === selectedOfficeId);
+    const office = availableOffices.find((item) => item.id === selectedOfficeId);
     setTitle(office?.title ?? '');
     setAddress(office?.address ?? '');
     setSuburb(office?.suburb ?? '');
     setPhone(office?.phone ?? '');
     setLogoPreview(resolveOfficeLogoUrl(office?.logo_url));
-  }, [ownerOffices, selectedOfficeId]);
+  }, [availableOffices, selectedOfficeId]);
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Empresa" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para administrar su información general." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Empresa" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para administrar su información general." />;
   }
 
   return (
@@ -633,7 +632,7 @@ function CompanyPanel({ offices, saving, onSaveCompany }: { offices: Office[]; s
       <Grid size={{ xs: 12, md: 7 }}>
         <CardShell title="Información del consultorio">
           <TextField select label="Consultorio" value={selectedOfficeId} fullWidth variant="standard" onChange={(event) => setSelectedOfficeId(Number(event.target.value))} sx={{ mb: 3.5 }}>
-            {ownerOffices.map((office) => (
+            {availableOffices.map((office) => (
               <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
             ))}
           </TextField>
@@ -701,8 +700,8 @@ function LabelsPanel({
   offices: Office[];
   onSuccess: (message: string) => void;
 }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [loading, setLoading] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [labels, setLabels] = useState<OfficeLabelItem[]>([]);
@@ -767,12 +766,12 @@ function LabelsPanel({
   };
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
-    setSelectedOfficeId((current) => current && ownerOffices.some((office) => office.id === current) ? current : ownerOffices[0].id);
-  }, [ownerOffices]);
+    setSelectedOfficeId((current) => current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id);
+  }, [availableOffices]);
 
   useEffect(() => {
     let mounted = true;
@@ -806,8 +805,8 @@ function LabelsPanel({
     };
   }, [selectedOfficeId]);
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Etiquetas" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para administrar etiquetas y estados." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Etiquetas" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para administrar etiquetas y estados." />;
   }
 
   const persistLabelStatus = async (label: OfficeLabelItem, nextStatus: number) => {
@@ -931,7 +930,7 @@ function LabelsPanel({
             onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
             sx={{ maxWidth: 420, mb: 2.5 }}
           >
-            {ownerOffices.map((office) => (
+            {availableOffices.map((office) => (
               <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
             ))}
           </TextField>
@@ -1392,8 +1391,8 @@ function FormSettingsPanel({
   offices: Office[];
   onSuccess: (message: string) => void;
 }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<SettingsFormsData | null>(null);
@@ -1416,13 +1415,13 @@ function FormSettingsPanel({
   const dailyNoteTitleInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
 
-    setSelectedOfficeId((current) => current && ownerOffices.some((office) => office.id === current) ? current : ownerOffices[0].id);
-  }, [ownerOffices]);
+    setSelectedOfficeId((current) => current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id);
+  }, [availableOffices]);
 
   useEffect(() => {
     let mounted = true;
@@ -1460,8 +1459,8 @@ function FormSettingsPanel({
     };
   }, [selectedOfficeId]);
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Formularios" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para personalizar los formularios clínicos." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Formularios" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para personalizar los formularios clínicos." />;
   }
 
   const persistSection = (
@@ -1723,7 +1722,7 @@ function FormSettingsPanel({
             onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
             sx={{ maxWidth: 420, mb: 1 }}
           >
-            {ownerOffices.map((office) => (
+            {availableOffices.map((office) => (
               <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
             ))}
           </TextField>
@@ -2140,21 +2139,21 @@ function ReportsPanel({
   offices: Office[];
   onSuccess: (message: string) => void;
 }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<SettingsReportsData | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
 
-    setSelectedOfficeId((current) => current && ownerOffices.some((office) => office.id === current) ? current : ownerOffices[0].id);
-  }, [ownerOffices]);
+    setSelectedOfficeId((current) => current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id);
+  }, [availableOffices]);
 
   useEffect(() => {
     let mounted = true;
@@ -2191,8 +2190,8 @@ function ReportsPanel({
     };
   }, [selectedOfficeId]);
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Reportes" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para configurar los tipos de reportes." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Reportes" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para configurar los tipos de reportes." />;
   }
 
   const persist = (nextData: SettingsReportsData) => {
@@ -2254,7 +2253,7 @@ function ReportsPanel({
             onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
             sx={{ maxWidth: 420, mb: 1 }}
           >
-            {ownerOffices.map((office) => (
+            {availableOffices.map((office) => (
               <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
             ))}
           </TextField>
@@ -2368,8 +2367,8 @@ function AgendaPanel({
   onSuccess: (message: string) => void;
   shouldScrollToConsultationReasons?: boolean;
 }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [agendaRows, setAgendaRows] = useState<AgendaDayRow[]>([]);
   const [savedAgendaRows, setSavedAgendaRows] = useState<AgendaDayRow[]>([]);
   const [firstTime, setFirstTime] = useState('00:10');
@@ -2381,21 +2380,21 @@ function AgendaPanel({
   const consultationReasonsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
-    setSelectedOfficeId((current) => current && ownerOffices.some((office) => office.id === current) ? current : ownerOffices[0].id);
-  }, [ownerOffices]);
+    setSelectedOfficeId((current) => current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id);
+  }, [availableOffices]);
 
   useEffect(() => {
-    const office = ownerOffices.find((item) => item.id === selectedOfficeId);
+    const office = availableOffices.find((item) => item.id === selectedOfficeId);
     const nextRows = createDefaultAgendaRows(office?.opendays);
     setAgendaRows(nextRows);
     setSavedAgendaRows(nextRows);
     setFirstTime(formatMinutesToTime(office?.firsttime));
     setRecurrent(formatMinutesToTime(office?.recurrent));
-  }, [ownerOffices, selectedOfficeId]);
+  }, [availableOffices, selectedOfficeId]);
 
   useEffect(() => {
     let mounted = true;
@@ -2444,7 +2443,7 @@ function AgendaPanel({
     return () => window.clearTimeout(timer);
   }, [formLoading, shouldScrollToConsultationReasons]);
 
-  const selectedOffice = ownerOffices.find((item) => item.id === selectedOfficeId);
+  const selectedOffice = availableOffices.find((item) => item.id === selectedOfficeId);
   const publicLink = selectedOffice?.getlink ? `${window.location.origin}/nuevacita/${selectedOffice.getlink}` : '';
   const buildAgendaPayload = (rows: AgendaDayRow[], nextFirstTime = firstTime, nextRecurrent = recurrent): SettingsAgendaData => ({
     office_id: selectedOfficeId,
@@ -2518,8 +2517,8 @@ function AgendaPanel({
     [agendaRows, savedAgendaRows]
   );
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Agenda" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para administrar sus horarios." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Agenda" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para administrar sus horarios." />;
   }
 
   return (
@@ -2532,7 +2531,7 @@ function AgendaPanel({
       <Grid size={{ xs: 12, md: 7 }}>
         <CardShell title="Link público de fechas y horarios">
           <TextField select label="Consultorio" value={selectedOfficeId} fullWidth variant="standard" onChange={(event) => setSelectedOfficeId(Number(event.target.value))} sx={{ mb: 3 }}>
-            {ownerOffices.map((office) => (
+            {availableOffices.map((office) => (
               <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
             ))}
           </TextField>
@@ -2683,8 +2682,8 @@ function UnavailableDaysPanel({ offices, onSuccess, onError }: {
   onSuccess: (message: string) => void;
   onError: (message: string) => void;
 }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [records, setRecords] = useState<SettingsUnavailableDayItem[]>([]);
@@ -2708,15 +2707,15 @@ function UnavailableDaysPanel({ offices, onSuccess, onError }: {
   const [availableError, setAvailableError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
 
     setSelectedOfficeId((current) =>
-      current && ownerOffices.some((office) => office.id === current) ? current : ownerOffices[0].id
+      current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id
     );
-  }, [ownerOffices]);
+  }, [availableOffices]);
 
   useEffect(() => {
     let mounted = true;
@@ -2760,8 +2759,8 @@ function UnavailableDaysPanel({ offices, onSuccess, onError }: {
     };
   }, [onError, selectedOfficeId]);
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Días in-hábiles" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para administrar días inhábiles." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Días in-hábiles" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para administrar días inhábiles." />;
   }
 
   return (
@@ -2780,7 +2779,7 @@ function UnavailableDaysPanel({ offices, onSuccess, onError }: {
                   onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
                   sx={{ mb: 3.5 }}
                 >
-                  {ownerOffices.map((office) => (
+                  {availableOffices.map((office) => (
                     <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
                   ))}
                 </TextField>
@@ -3276,21 +3275,21 @@ function PrintPanel({
   offices: Office[];
   onSuccess: (message: string) => void;
 }) {
-  const ownerOffices = useMemo(() => offices.filter((office) => office.role === 'owner'), [offices]);
-  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(ownerOffices[0]?.id ?? 0);
+  const availableOffices = useMemo(() => offices, [offices]);
+  const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [data, setData] = useState<SettingsPrintData | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (ownerOffices.length === 0) {
+    if (availableOffices.length === 0) {
       setSelectedOfficeId(0);
       return;
     }
 
-    setSelectedOfficeId((current) => current && ownerOffices.some((office) => office.id === current) ? current : ownerOffices[0].id);
-  }, [ownerOffices]);
+    setSelectedOfficeId((current) => current && availableOffices.some((office) => office.id === current) ? current : availableOffices[0].id);
+  }, [availableOffices]);
 
   useEffect(() => {
     let mounted = true;
@@ -3327,8 +3326,8 @@ function PrintPanel({
     };
   }, [selectedOfficeId]);
 
-  if (ownerOffices.length === 0) {
-    return <PlaceholderPanel title="Impresión" description="Esta sección estará disponible cuando tengas al menos un consultorio propio para configurar formatos de receta." />;
+  if (availableOffices.length === 0) {
+    return <PlaceholderPanel title="Impresión" description="Esta sección estará disponible cuando tengas al menos un consultorio asignado para configurar formatos de receta." />;
   }
 
   const persistField = (field: keyof SettingsPrintData, value: number | boolean) => {
@@ -3380,7 +3379,7 @@ function PrintPanel({
             onChange={(event) => setSelectedOfficeId(Number(event.target.value))}
             sx={{ mb: 3.5 }}
           >
-            {ownerOffices.map((office) => (
+            {availableOffices.map((office) => (
               <MenuItem key={office.id} value={office.id}>{office.title}</MenuItem>
             ))}
           </TextField>

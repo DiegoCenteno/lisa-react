@@ -12,6 +12,8 @@ import {
   shouldRefreshSoon,
 } from '../api/authSession';
 import { appointmentService } from '../api/appointmentService';
+import { primeResolvedOfficeIdCache as primePatientOfficeIdCache, resetResolvedOfficeIdCache as resetPatientOfficeIdCache } from '../api/patientService';
+import { primeResolvedOfficeIdCache as primeConsultationOfficeIdCache, resetResolvedOfficeIdCache as resetConsultationOfficeIdCache } from '../api/consultationService';
 import { AuthContext } from './authTypes';
 import { clearBrowserClientState } from '../utils/clientReset';
 
@@ -117,7 +119,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const offices = await appointmentService.getOffices();
         if (!active) return;
         if (offices.length > 0) {
-          sessionStorage.setItem('cached_office_id', String(offices[0].id));
+          primePatientOfficeIdCache(offices[0].id);
+          primeConsultationOfficeIdCache(offices[0].id);
         }
       } catch {
         // Ignore office bootstrap failures here; services will fallback as needed.
@@ -133,33 +136,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await authService.login(email, password);
+    resetPatientOfficeIdCache();
+    resetConsultationOfficeIdCache();
     setUser(response.user);
     setToken(response.token);
     localStorage.setItem('user', JSON.stringify(response.user));
     persistAuthTokens(response.token, response.refresh_token, response.expires_in);
-    localStorage.removeItem('cached_office_id');
-    sessionStorage.removeItem('cached_office_id');
 
     try {
       if (response.user.role !== 'system_admin') {
         const offices = await appointmentService.getOffices();
         if (offices.length > 0) {
-          sessionStorage.setItem('cached_office_id', String(offices[0].id));
+          primePatientOfficeIdCache(offices[0].id);
+          primeConsultationOfficeIdCache(offices[0].id);
         }
       }
     } catch {
-      sessionStorage.removeItem('cached_office_id');
+      resetPatientOfficeIdCache();
+      resetConsultationOfficeIdCache();
     }
   }, []);
 
   const logout = useCallback(() => {
-    authService.logout();
+    void authService.logout();
+    resetPatientOfficeIdCache();
+    resetConsultationOfficeIdCache();
     setUser(null);
     setToken(null);
     clearStoredAuthState();
   }, []);
 
   const hardResetClientAuth = useCallback(async () => {
+    resetPatientOfficeIdCache();
+    resetConsultationOfficeIdCache();
     setUser(null);
     setToken(null);
     await clearBrowserClientState();
