@@ -2137,7 +2137,7 @@ function PatientDailyNoteTab({
           display: 'flex',
           flexDirection: 'column',
           gap: 2,
-          bgcolor: editingConsultation ? '#c4c1d5' : '#cbf7cb',
+          bgcolor: editingConsultation ? '#c4c1d5' : 'rgb(244 255 244)',
           p: 2,
           borderRadius: 2,
         }}

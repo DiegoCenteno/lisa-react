@@ -96,6 +96,26 @@ function getAgendaLogActorName(log: ActivityLogItem): string {
   return log.user_name || 'Sistema';
 }
 
+function filterInstantConfirmationLogs(logs: ActivityLogItem[]): ActivityLogItem[] {
+  const sentAppointmentIds = new Set(
+    logs
+      .filter((log) => log.action === 'appointment_confirmation_sent' && typeof log.appointment_id === 'number')
+      .map((log) => log.appointment_id as number)
+  );
+
+  return logs.filter((log) => {
+    if (log.action !== 'appointment_confirmation_scheduled') {
+      return true;
+    }
+
+    if (typeof log.appointment_id !== 'number') {
+      return true;
+    }
+
+    return !sentAppointmentIds.has(log.appointment_id);
+  });
+}
+
 function getEventColors(apt: Appointment): { bg: string; text: string } {
   const now = dayjs();
   const end = dayjs(apt.dateend);
@@ -859,9 +879,14 @@ export default function AgendaPage() {
     }
   }, [selectedEvent]);
 
+  const displayAppointmentActivityLogs = useMemo(
+    () => filterInstantConfirmationLogs(appointmentActivityLogs),
+    [appointmentActivityLogs]
+  );
+
   const visibleAppointmentActivityLogs = useMemo(
-    () => (appointmentActivityLogsExpanded ? appointmentActivityLogs : appointmentActivityLogs.slice(0, 3)),
-    [appointmentActivityLogs, appointmentActivityLogsExpanded]
+    () => (appointmentActivityLogsExpanded ? displayAppointmentActivityLogs : displayAppointmentActivityLogs.slice(0, 3)),
+    [displayAppointmentActivityLogs, appointmentActivityLogsExpanded]
   );
 
   const handleOpenSummary = useCallback(async () => {
@@ -1309,7 +1334,7 @@ export default function AgendaPage() {
                     <Box sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
                       <CircularProgress />
                     </Box>
-                  ) : appointmentActivityLogs.length === 0 ? (
+                  ) : displayAppointmentActivityLogs.length === 0 ? (
                     <Typography sx={{ color: '#5f6b75', fontSize: '0.95rem' }}>
                       Aún no hay movimientos registrados para esta cita.
                     </Typography>
@@ -1383,7 +1408,7 @@ export default function AgendaPage() {
                     >
                       Regresar
                     </Button>
-                    {appointmentActivityLogs.length > 3 && !appointmentActivityLogsExpanded ? (
+                    {displayAppointmentActivityLogs.length > 3 && !appointmentActivityLogsExpanded ? (
                       <Button
                         variant="text"
                         onClick={() => setAppointmentActivityLogsExpanded(true)}
