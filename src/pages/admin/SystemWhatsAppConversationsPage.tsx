@@ -64,6 +64,27 @@ function formatPhone(phone: string): string {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
 }
 
+function hasRealProviderError(message: SystemWhatsAppConversationThread['messages'][number]): boolean {
+  const providerStatus = String(message.provider_status ?? '').trim().toLowerCase();
+  const providerErrorCode = String(message.provider_error_code ?? '').trim();
+  const providerErrorMessage = String(message.provider_error_message ?? '').trim();
+  const normalizedErrorMessage = providerErrorMessage.toLowerCase();
+
+  if (providerErrorCode !== '') {
+    return true;
+  }
+
+  if (providerStatus === 'failed' || providerStatus === 'undeliverable') {
+    return true;
+  }
+
+  if (providerErrorMessage === '') {
+    return false;
+  }
+
+  return normalizedErrorMessage !== 'ok';
+}
+
 function getStatusChipColor(status: SystemWhatsAppConversationThread['conversation_status']): 'success' | 'warning' | 'error' | 'info' {
   switch (status) {
     case 'pending_system':
@@ -380,22 +401,24 @@ export default function SystemWhatsAppConversationsPage() {
                             <Stack spacing={1.25}>
                               {thread.messages.map((message) => {
                                 const isInbound = message.direction === 'inbound';
+                                const hasProviderError = hasRealProviderError(message);
                                 const isSuccessfulOutbound = !isInbound
                                   && message.provider_status === 'sent'
-                                  && !message.provider_error_code
-                                  && !message.provider_error_message;
+                                  && !hasProviderError;
 
                                 return (
                                   <Box
                                     key={message.id}
                                     sx={{
-                                      alignSelf: isInbound ? 'flex-start' : 'stretch',
+                                      alignSelf: isInbound ? 'flex-start' : 'flex-end',
+                                      width: 'fit-content',
+                                      maxWidth: { xs: '100%', md: '82%' },
                                       borderRadius: 2,
                                       px: 1.5,
                                       py: 1.25,
                                       border: '1px solid',
-                                      borderColor: isInbound ? 'success.light' : 'primary.light',
-                                      backgroundColor: isInbound ? 'rgba(46, 125, 50, 0.08)' : 'rgba(25, 118, 210, 0.08)',
+                                      borderColor: isInbound ? 'primary.light' : 'success.light',
+                                      backgroundColor: isInbound ? 'rgba(25, 118, 210, 0.10)' : 'rgba(46, 125, 50, 0.12)',
                                     }}
                                   >
                                     <Stack spacing={1}>
@@ -408,8 +431,8 @@ export default function SystemWhatsAppConversationsPage() {
                                         <Stack direction="row" spacing={1} flexWrap="wrap">
                                           <Chip
                                             size="small"
-                                            color={isInbound ? 'success' : 'primary'}
-                                            label={isInbound ? 'Paciente' : 'Sistema'}
+                                            color={isInbound ? 'primary' : 'success'}
+                                            label={isInbound ? thread.patient_name : 'Sistema'}
                                           />
                                           {!isInbound && message.template_name ? (
                                             <Chip size="small" variant="outlined" label={message.template_name} />
@@ -434,7 +457,7 @@ export default function SystemWhatsAppConversationsPage() {
                                         {message.body_text || '[Sin texto legible]'}
                                       </Typography>
 
-                                      {message.provider_error_code || message.provider_error_message ? (
+                                      {hasProviderError ? (
                                         <Alert severity="warning" sx={{ py: 0 }}>
                                           {message.provider_error_code ? `Codigo ${message.provider_error_code}. ` : ''}
                                           {message.provider_error_message || 'Error no especificado.'}
