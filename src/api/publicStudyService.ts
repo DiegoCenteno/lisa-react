@@ -72,7 +72,7 @@ const publicStudyService = {
       }
     );
 
-    return response.data.data;
+    return response.data;
   },
 
   async respondToAppointment(code: string, action: 'confirm' | 'cancel'): Promise<PublicAppointmentPayload> {
@@ -101,7 +101,7 @@ const publicStudyService = {
       `/v2/public/history-links/${code}`
     );
 
-    return response.data.data.appointment as PublicAppointmentPayload;
+    return response.data.appointment as PublicAppointmentPayload;
   },
 
   async savePublicHistoryForm(
