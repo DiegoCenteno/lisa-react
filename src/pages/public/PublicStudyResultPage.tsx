@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
+import axios from 'axios';
 import {
   Alert,
   Box,
@@ -103,6 +104,19 @@ function normalizePhoneForWhatsApp(value: string): string {
   const digits = value.replace(/\D/g, '');
   if (!digits) return '';
   return digits.startsWith('52') ? digits : `52${digits}`;
+}
+
+function getPublicLinkLoadErrorMessage(error: unknown): string {
+  if (!axios.isAxiosError(error)) {
+    return 'Server Error';
+  }
+
+  const statusCode = error.response?.status;
+  if (statusCode === 404 || statusCode === 422) {
+    return 'No se encontró información para este enlace.';
+  }
+
+  return 'Server Error';
 }
 
 function PublicHistoryField({
@@ -844,7 +858,7 @@ export default function PublicStudyResultPage() {
       } catch (requestError) {
         console.error('Error cargando enlace público:', requestError);
         if (!active) return;
-        setError('No se encontró información para este enlace.');
+        setError(getPublicLinkLoadErrorMessage(requestError));
       } finally {
         if (active) {
           setLoading(false);

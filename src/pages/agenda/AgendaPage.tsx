@@ -25,7 +25,6 @@ import {
   DoneAll as DoneAllIcon,
   Close as CloseIcon,
   ContentCopy as ContentCopyIcon,
-  Phone as PhoneIcon,
   CheckCircle as CheckCircleIcon,
   CancelOutlined as CancelOutlinedIcon,
   CalendarMonth as CalendarMonthIcon,
@@ -77,6 +76,21 @@ function toPascalCaseName(value?: string): string {
     .join(' ');
 }
 
+function isValidTenDigitPhone(phone?: string) {
+  if (!phone) return false;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length === 10;
+}
+
+function buildWhatsAppHref(phone?: string, phoneCode?: string | null) {
+  if (!isValidTenDigitPhone(phone)) return null;
+
+  const normalizedPhone = (phone ?? '').replace(/\D/g, '');
+  const normalizedPhoneCode = (phoneCode ?? '').replace(/\D/g, '') || '52';
+
+  return `https://wa.me/${normalizedPhoneCode}${normalizedPhone}`;
+}
+
 function isPatientAppointmentAction(log: ActivityLogItem): boolean {
   const message = String(log.message ?? '').trim().toLowerCase();
   const source = String(log.meta?.source ?? '').trim().toLowerCase();
@@ -96,6 +110,10 @@ function getAgendaLogActorName(log: ActivityLogItem): string {
   }
 
   return log.user_name || 'Sistema';
+}
+
+function shouldHideAgendaLogActor(log: ActivityLogItem): boolean {
+  return log.action === 'appointment_confirmation_sent';
 }
 
 function filterInstantConfirmationLogs(logs: ActivityLogItem[]): ActivityLogItem[] {
@@ -1433,8 +1451,14 @@ export default function AgendaPage() {
                             {log.message || log.action}
                           </Typography>
                           <Typography sx={{ fontSize: '0.88rem', color: '#6b7785', mt: 0.25 }}>
-                            {getAgendaLogActorName(log)}{' '}
-                            {log.created_at ? `(${dayjs(log.created_at).format('dddd DD/MMM, HH:mm')} hrs)` : ''}
+                            {shouldHideAgendaLogActor(log)
+                              ? (log.created_at ? dayjs(log.created_at).format('dddd DD/MMM, HH:mm') + ' hrs' : '')
+                              : (
+                                <>
+                                  {getAgendaLogActorName(log)}{' '}
+                                  {log.created_at ? `(${dayjs(log.created_at).format('dddd DD/MMM, HH:mm')} hrs)` : ''}
+                                </>
+                              )}
                           </Typography>
 
                           {log.meta && (
@@ -1792,9 +1816,24 @@ export default function AgendaPage() {
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 } }}>
-                    <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
-                      Celular: {String(selectedEvent.event.extendedProps.phone || '-')}
-                    </Typography>
+                    {selectedEvent.event.extendedProps.phone ? (
+                      <Typography
+                        component="a"
+                        href={`tel:${String(selectedEvent.event.extendedProps.phone || '')}`}
+                        sx={{
+                          fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' },
+                          color: '#4b5b6b',
+                          textDecoration: 'underline',
+                          textUnderlineOffset: '2px',
+                        }}
+                      >
+                        Celular: {String(selectedEvent.event.extendedProps.phone)}
+                      </Typography>
+                    ) : (
+                      <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
+                        Celular: -
+                      </Typography>
+                    )}
                     <IconButton
                       size="small"
                       onClick={() => handleCopyPhone(String(selectedEvent.event.extendedProps.phone || ''))}
@@ -1810,24 +1849,40 @@ export default function AgendaPage() {
                     </IconButton>
                   </Box>
                   {isMobile ? (
-                    <IconButton
-                      size="small"
-                      component="a"
-                      href={`tel:${String(selectedEvent.event.extendedProps.phone || '')}`}
-                      sx={{
-                        borderRadius: 1,
-                        backgroundColor: '#4caf50',
-                        color: '#ffffff',
-                        width: isShortViewport ? 34 : 38,
-                        height: isShortViewport ? 28 : 32,
-                        flexShrink: 0,
-                        '&:hover': {
-                          backgroundColor: '#43a047',
-                        },
-                      }}
-                    >
-                      <PhoneIcon sx={{ fontSize: isShortViewport ? 14 : 16 }} />
-                    </IconButton>
+                    isValidTenDigitPhone(String(selectedEvent.event.extendedProps.phone || '')) ? (
+                      <IconButton
+                        size="small"
+                        component="a"
+                        href={buildWhatsAppHref(
+                          String(selectedEvent.event.extendedProps.phone || ''),
+                          null,
+                        ) ?? undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        sx={{
+                          borderRadius: 1,
+                          backgroundColor: '#ffffff',
+                          width: isShortViewport ? 34 : 38,
+                          height: isShortViewport ? 28 : 32,
+                          flexShrink: 0,
+                          p: 0.35,
+                          '&:hover': {
+                            backgroundColor: '#f3fff7',
+                          },
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src="/pwa/wsicon.png"
+                          alt="WhatsApp"
+                          sx={{
+                            width: isShortViewport ? 24 : 28,
+                            height: isShortViewport ? 24 : 28,
+                            objectFit: 'contain',
+                          }}
+                        />
+                      </IconButton>
+                    ) : null
                   ) : (
                     <Button
                       variant="text"

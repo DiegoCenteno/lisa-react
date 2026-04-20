@@ -2,15 +2,18 @@ import { Navigate } from 'react-router-dom';
 import { CircularProgress, Box } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import type { UserRole } from '../types';
+import type { AssistantAccessLevel } from '../utils/assistantAccess';
+import { hasAllowedAssistantAccessLevel } from '../utils/assistantAccess';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   roles?: UserRole[];
   permissions?: string[];
   anyPermissions?: string[];
+  assistantAccessLevels?: AssistantAccessLevel[];
 }
 
-export default function ProtectedRoute({ children, roles, permissions, anyPermissions }: ProtectedRouteProps) {
+export default function ProtectedRoute({ children, roles, permissions, anyPermissions, assistantAccessLevels }: ProtectedRouteProps) {
   const { isAuthenticated, isLoading, hasRole, can, user } = useAuth();
   const fallbackPath = user?.role === 'system_admin' ? '/admin' : '/dashboard';
 
@@ -34,6 +37,10 @@ export default function ProtectedRoute({ children, roles, permissions, anyPermis
   }
 
   if (roles && !hasRole(roles)) {
+    return <Navigate to={fallbackPath} replace />;
+  }
+
+  if (!hasAllowedAssistantAccessLevel(user, assistantAccessLevels)) {
     return <Navigate to={fallbackPath} replace />;
   }
 

@@ -16,6 +16,7 @@ import { primeResolvedOfficeIdCache as primePatientOfficeIdCache, resetResolvedO
 import { primeResolvedOfficeIdCache as primeConsultationOfficeIdCache, resetResolvedOfficeIdCache as resetConsultationOfficeIdCache } from '../api/consultationService';
 import { AuthContext } from './authTypes';
 import { clearBrowserClientState } from '../utils/clientReset';
+import { isPermissionAllowedByAssistantAccessLevel } from '../utils/assistantAccess';
 
 export type { AuthContextType } from './authTypes';
 export { AuthContext } from './authTypes';
@@ -188,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user.role === 'medico') return true;
       if (user.role === 'system_admin') {
         return permission.startsWith('system.');
+      }
+      if (!isPermissionAllowedByAssistantAccessLevel(user, permission)) {
+        return false;
       }
       const permissions = user.permissions ?? [];
       if (permissions.includes('*') || permissions.includes(permission)) {

@@ -108,7 +108,7 @@ export default function AppRouter() {
           <Route
             path="/bitacora"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']} assistantAccessLevels={['full']}>
                 <ActivityLogsPage />
               </ProtectedRoute>
             }
@@ -116,7 +116,7 @@ export default function AppRouter() {
           <Route
             path="/estudios"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']} assistantAccessLevels={['full']}>
                 <StudyDeliveriesPage />
               </ProtectedRoute>
             }
@@ -124,7 +124,7 @@ export default function AppRouter() {
           <Route
             path="/estudios/carga-masiva"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']} assistantAccessLevels={['full']}>
                 <BulkStudyUploadPage />
               </ProtectedRoute>
             }
@@ -132,7 +132,7 @@ export default function AppRouter() {
           <Route
             path="/estudios/interpretar"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']} assistantAccessLevels={['full']}>
                 <InterpretStudiesPage />
               </ProtectedRoute>
             }
@@ -140,7 +140,7 @@ export default function AppRouter() {
           <Route
             path="/estudios/laboratorios"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']} assistantAccessLevels={['full']}>
                 <LaboratoriesPage />
               </ProtectedRoute>
             }
@@ -148,7 +148,7 @@ export default function AppRouter() {
           <Route
             path="/estudios/tipos"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.view']} assistantAccessLevels={['full']}>
                 <StudyTypesPage />
               </ProtectedRoute>
             }
@@ -166,7 +166,7 @@ export default function AppRouter() {
           <Route
             path="/pacientes/:id"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.detail.view']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['patients.detail.view']} assistantAccessLevels={['full']}>
                 <PatientDetailPage />
               </ProtectedRoute>
             }
@@ -176,6 +176,7 @@ export default function AppRouter() {
             element={
               <ProtectedRoute
                 roles={['medico', 'asistente']}
+                assistantAccessLevels={['full']}
                 anyPermissions={[
                   'consultations.view',
                   'consultations.history_edit',
@@ -189,7 +190,7 @@ export default function AppRouter() {
           <Route
             path="/notificaciones"
             element={
-              <ProtectedRoute roles={['medico', 'asistente']} permissions={['notifications.manage']}>
+              <ProtectedRoute roles={['medico', 'asistente']} permissions={['notifications.manage']} assistantAccessLevels={['full']}>
                 <NotificationsPage />
               </ProtectedRoute>
             }
@@ -199,6 +200,7 @@ export default function AppRouter() {
               element={
                 <ProtectedRoute
                   roles={['medico', 'asistente']}
+                  assistantAccessLevels={['full']}
                   anyPermissions={[
                     'settings.profile.self',
                     'settings.company',

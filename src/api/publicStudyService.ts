@@ -20,9 +20,50 @@ const publicApiClient = axios.create({
   },
 });
 
+const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+function isRetryablePublicRequestError(error: unknown): boolean {
+  if (!axios.isAxiosError(error)) {
+    return false;
+  }
+
+  if (!error.response) {
+    return true;
+  }
+
+  return RETRYABLE_STATUS_CODES.has(error.response.status);
+}
+
+async function waitForRetry(delayMs: number): Promise<void> {
+  await new Promise((resolve) => {
+    window.setTimeout(resolve, delayMs);
+  });
+}
+
+async function getWithRetry<T>(url: string, config?: Record<string, unknown>, maxAttempts = 3): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await publicApiClient.get<T>(url, config);
+      return response.data;
+    } catch (error) {
+      lastError = error;
+
+      if (!isRetryablePublicRequestError(error) || attempt === maxAttempts) {
+        throw error;
+      }
+
+      await waitForRetry(300 * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
 const publicStudyService = {
   async resolvePublicCode(code: string, options?: { preview?: boolean }): Promise<PublicAppLinkResponse> {
-    const response = await publicApiClient.get<{ status: string; data: PublicAppLinkResponse }>(
+    const response = await getWithRetry<{ status: string; data: PublicAppLinkResponse }>(
       `/v2/public/app-links/${code}`,
       {
         params: {
@@ -56,7 +97,7 @@ const publicStudyService = {
   },
 
   async resolvePublicHistoryCode(code: string): Promise<PublicAppointmentPayload> {
-    const response = await publicApiClient.get<{ status: string; data: PublicAppLinkResponse }>(
+    const response = await getWithRetry<{ status: string; data: PublicAppLinkResponse }>(
       `/v2/public/history-links/${code}`
     );
 

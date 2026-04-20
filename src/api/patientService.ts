@@ -296,8 +296,9 @@ export const patientService = {
     page?: number;
     perPage?: number;
     view?: 'list' | 'tagged';
+    officeIdOverride?: number | null;
   }): Promise<PaginatedPatientsResult> {
-    const officeId = await resolveOfficeId();
+    const officeId = await resolveOfficeIdWithOverride(options?.officeIdOverride);
     const response = await apiClient.get<ApiPaginatedPatientsResponse>('/v2/patients', {
       params: {
         office_id: officeId,

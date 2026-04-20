@@ -167,7 +167,7 @@ export const studyDeliveryService = {
   async createSampleStudyDelivery(data: {
     office_id: number;
     patient_id: number;
-    processing_status: 'sample_collected' | 'sent_to_lab';
+    processing_status: 'sample_collected' | 'sent_to_lab' | 'result_received' | 'pending_review';
     laboratory_id?: number | null;
     study_type_ids?: number[];
   }): Promise<StudyDeliveryItem[]> {

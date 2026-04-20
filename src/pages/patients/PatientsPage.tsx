@@ -121,6 +121,26 @@ function formatTagStatusTitle(statusDate?: string | null) {
   return `Cambio de estatus: ${statusDate}`;
 }
 
+function formatTagTableDate(value?: string | null) {
+  if (!value) {
+    return '-';
+  }
+
+  const normalizedValue = value.includes(' ') ? value.replace(' ', 'T') : value;
+  const date = new Date(normalizedValue);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString('es-MX', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 const labelStatusColorMap: Record<string, { bg: string; border: string; text: string }> = {
   'btn-primary': { bg: '#1e88e5', border: '#1976d2', text: '#ffffff' },
   'btn-success': { bg: '#4caf50', border: '#43a047', text: '#ffffff' },
@@ -293,7 +313,32 @@ export default function PatientsPage() {
     );
   };
 
-  const showPatientTagsColumn = selectedFilterTagIds.length > 0;
+  const renderPatientTagDateColumn = (
+    patient: Patient,
+    field: 'created_at' | 'status_date'
+  ) => {
+    const tags = patient.patient_tags ?? [];
+    if (tags.length === 0) {
+      return (
+        <Typography variant="body2" color="text.secondary">
+          -
+        </Typography>
+      );
+    }
+
+    return (
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+        {tags.map((tag) => (
+          <Typography key={`${field}-${tag.id}`} variant="body2">
+            {formatTagTableDate(tag[field])}
+          </Typography>
+        ))}
+      </Box>
+    );
+  };
+
+  const hasActiveTagFilters = selectedFilterTagIds.length > 0 || selectedFilterStatusIds.length > 0;
+  const showPatientTagsColumn = hasActiveTagFilters;
   const assignedTagCodes = new Set((attachControl?.tags ?? []).map((tag) => tag.code.trim().toLowerCase()));
   const availableOfficeLabelsToAttach = attachOfficeLabels.filter((label) => {
     const code = (label.code ?? '').trim().toLowerCase();
@@ -2293,7 +2338,7 @@ export default function PatientsPage() {
                               component="img"
                               src="/pwa/wsicon.png"
                               alt="WhatsApp"
-                              sx={{ width: 42, height: 42, display: 'block' }}
+                              sx={{ width: 32, height: 32, display: 'block' }}
                             />
                           </IconButton>
                         ) : null}
@@ -2380,6 +2425,8 @@ export default function PatientsPage() {
                     <TableCell>{'Tel\u00e9fono'}</TableCell>
                     <TableCell>Fecha de Nacimiento</TableCell>
                     {showPatientTagsColumn && <TableCell>Etiquetas / Estatus</TableCell>}
+                    {showPatientTagsColumn && <TableCell>Fecha asignación de etiqueta</TableCell>}
+                    {showPatientTagsColumn && <TableCell>Fecha actualización de estatus de etiqueta</TableCell>}
                     <TableCell align="center">Más opciones</TableCell>
                     <TableCell align="center">Seleccionar</TableCell>
                   </TableRow>
@@ -2422,6 +2469,16 @@ export default function PatientsPage() {
                           {renderPatientTagSummary(patient)}
                         </TableCell>
                       )}
+                      {showPatientTagsColumn && (
+                        <TableCell>
+                          {renderPatientTagDateColumn(patient, 'created_at')}
+                        </TableCell>
+                      )}
+                      {showPatientTagsColumn && (
+                        <TableCell>
+                          {renderPatientTagDateColumn(patient, 'status_date')}
+                        </TableCell>
+                      )}
                       <TableCell align="center">
                         <Button
                           size="small"
@@ -2445,7 +2502,7 @@ export default function PatientsPage() {
 
                   {paginatedPatients.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={showPatientTagsColumn ? 6 : 5} sx={{ textAlign: 'center', py: 4 }}>
+                      <TableCell colSpan={showPatientTagsColumn ? 8 : 5} sx={{ textAlign: 'center', py: 4 }}>
                         <Typography color="text.secondary">
                           No se encontraron pacientes
                         </Typography>

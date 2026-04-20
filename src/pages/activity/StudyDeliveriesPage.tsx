@@ -36,9 +36,10 @@ import { useNavigate } from 'react-router-dom';
 import { useRef } from 'react';
 import dayjs from 'dayjs';
 import { appointmentService } from '../../api/appointmentService';
+import { patientService } from '../../api/patientService';
 import studyDeliveryService from '../../api/studyDeliveryService';
 import ClickableDateField from '../../components/ClickableDateField';
-import type { LaboratoryItem, Office, StudyDeliveryItem } from '../../types';
+import type { LaboratoryItem, Office, Patient, StudyDeliveryItem } from '../../types';
 
 type StudyDeliveryColumnKey =
   | 'sample_collected_at'
@@ -141,6 +142,13 @@ const processingStatusLabels: Record<string, string> = {
   cancelled: 'Cancelado',
 };
 
+const manualCreateProcessingStatusOptions = [
+  'sample_collected',
+  'sent_to_lab',
+  'result_received',
+  'pending_review',
+] as const;
+
 const statusLabels: Record<string, string> = {
   not_sent: 'No enviado',
   sent: 'Enviado',
@@ -216,15 +224,28 @@ export default function StudyDeliveriesPage() {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState(() => defaultSendDateRange.dateFrom);
   const [dateTo, setDateTo] = useState(() => defaultSendDateRange.dateTo);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [selectedRow, setSelectedRow] = useState<StudyDeliveryItem | null>(null);
   const [editingProcessingStatus, setEditingProcessingStatus] = useState('');
   const [editingLaboratoryId, setEditingLaboratoryId] = useState('');
   const [savingDetail, setSavingDetail] = useState(false);
   const [saveDetailError, setSaveDetailError] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createPatientSearch, setCreatePatientSearch] = useState('');
+  const [patientOptions, setPatientOptions] = useState<Patient[]>([]);
+  const [visiblePatientOptionCount, setVisiblePatientOptionCount] = useState(4);
+  const [patientSearchLoading, setPatientSearchLoading] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState('');
+  const [newProcessingStatus, setNewProcessingStatus] = useState<(typeof manualCreateProcessingStatusOptions)[number]>('sample_collected');
+  const [newLaboratoryId, setNewLaboratoryId] = useState('');
+  const [creatingDelivery, setCreatingDelivery] = useState(false);
+  const [createDeliveryError, setCreateDeliveryError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showColumnConfig, setShowColumnConfig] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Record<StudyDeliveryColumnKey, boolean>>(() => loadVisibleColumns());
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchDebounceTimeoutRef = useRef<number | null>(null);
+  const patientSearchDebounceTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -267,8 +288,23 @@ export default function StudyDeliveriesPage() {
       if (searchDebounceTimeoutRef.current !== null) {
         window.clearTimeout(searchDebounceTimeoutRef.current);
       }
+      if (patientSearchDebounceTimeoutRef.current !== null) {
+        window.clearTimeout(patientSearchDebounceTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (offices.length === 1) {
+      const onlyOfficeId = String(offices[0].id);
+      setSelectedOfficeId((current) => (current === onlyOfficeId ? current : onlyOfficeId));
+      return;
+    }
+
+    if (selectedOfficeId && !offices.some((office) => String(office.id) === selectedOfficeId)) {
+      setSelectedOfficeId('');
+    }
+  }, [offices, selectedOfficeId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -311,7 +347,7 @@ export default function StudyDeliveriesPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedOfficeId, page, selectedStatus, selectedProcessingStatus, selectedChannel, selectedSeenStatus, selectedLaboratoryId, search, dateFrom, dateTo]);
+  }, [selectedOfficeId, page, selectedStatus, selectedProcessingStatus, selectedChannel, selectedSeenStatus, selectedLaboratoryId, search, dateFrom, dateTo, reloadKey]);
 
   useEffect(() => {
     localStorage.setItem(STUDY_DELIVERY_COLUMNS_STORAGE_KEY, JSON.stringify(visibleColumns));
@@ -366,7 +402,7 @@ export default function StudyDeliveriesPage() {
 
   const activeFilterCount = useMemo(() => {
     return [
-      selectedOfficeId,
+      offices.length > 1 ? selectedOfficeId : '',
       selectedStatus,
       selectedProcessingStatus,
       selectedChannel,
@@ -379,6 +415,7 @@ export default function StudyDeliveriesPage() {
   }, [
     defaultSendDateRange.dateFrom,
     defaultSendDateRange.dateTo,
+    offices.length,
     selectedOfficeId,
     selectedStatus,
     selectedProcessingStatus,
@@ -391,6 +428,13 @@ export default function StudyDeliveriesPage() {
   ]);
 
   const hasMovedFilters = activeFilterCount > 0;
+  const hasAdvancedFiltersApplied = Boolean(
+    (offices.length > 1 && selectedOfficeId)
+    || selectedStatus
+    || selectedChannel
+    || selectedSeenStatus
+    || selectedLaboratoryId
+  );
 
   const detailLaboratoryOptions = useMemo(() => {
     if (!selectedRow) {
@@ -399,6 +443,89 @@ export default function StudyDeliveriesPage() {
 
     return laboratories.filter((laboratory) => laboratory.office_id === selectedRow.office_id);
   }, [laboratories, selectedRow]);
+
+  const createDialogLaboratoryOptions = useMemo(() => {
+    if (!selectedOfficeId) {
+      return [];
+    }
+
+    return laboratories.filter((laboratory) => laboratory.office_id === Number(selectedOfficeId));
+  }, [laboratories, selectedOfficeId]);
+
+  const visiblePatientOptions = useMemo(
+    () => patientOptions.slice(0, visiblePatientOptionCount),
+    [patientOptions, visiblePatientOptionCount],
+  );
+
+  useEffect(() => {
+    if (!showCreateDialog || !selectedOfficeId) {
+      setPatientOptions([]);
+      setVisiblePatientOptionCount(4);
+      setPatientSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    if (patientSearchDebounceTimeoutRef.current !== null) {
+      window.clearTimeout(patientSearchDebounceTimeoutRef.current);
+    }
+
+    setPatientSearchLoading(true);
+    patientSearchDebounceTimeoutRef.current = window.setTimeout(() => {
+      void patientService.getPatients({
+        officeIdOverride: Number(selectedOfficeId),
+        search: createPatientSearch,
+        page: 1,
+        perPage: 50,
+        view: 'list',
+      })
+        .then((result) => {
+          if (cancelled) {
+            return;
+          }
+
+          setPatientOptions(result.data ?? []);
+          setVisiblePatientOptionCount(4);
+        })
+        .catch(() => {
+          if (cancelled) {
+            return;
+          }
+
+          setPatientOptions([]);
+          setVisiblePatientOptionCount(4);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setPatientSearchLoading(false);
+          }
+        });
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      if (patientSearchDebounceTimeoutRef.current !== null) {
+        window.clearTimeout(patientSearchDebounceTimeoutRef.current);
+        patientSearchDebounceTimeoutRef.current = null;
+      }
+    };
+  }, [showCreateDialog, selectedOfficeId, createPatientSearch]);
+
+  useEffect(() => {
+    if (!showCreateDialog) {
+      return;
+    }
+
+    if (!selectedPatientId) {
+      return;
+    }
+
+    const patientStillAvailable = patientOptions.some((patient) => String(patient.id) === selectedPatientId);
+    if (!patientStillAvailable) {
+      setSelectedPatientId('');
+    }
+  }, [patientOptions, selectedPatientId, showCreateDialog]);
 
   const visibleColumnCount = useMemo(
     () => STUDY_DELIVERY_COLUMNS.filter((column) => visibleColumns[column.key]).length,
@@ -423,6 +550,7 @@ export default function StudyDeliveriesPage() {
     setSelectedChannel('');
     setSelectedSeenStatus('');
     setSelectedLaboratoryId('');
+    setShowAdvancedFilters(false);
     setSearch('');
     if (searchDebounceTimeoutRef.current !== null) {
       window.clearTimeout(searchDebounceTimeoutRef.current);
@@ -434,6 +562,64 @@ export default function StudyDeliveriesPage() {
     setDateFrom(defaultSendDateRange.dateFrom);
     setDateTo(defaultSendDateRange.dateTo);
     setPage(1);
+  };
+
+  const handleOpenCreateDialog = () => {
+    if (!selectedOfficeId) {
+      return;
+    }
+
+    setShowCreateDialog(true);
+    setCreatePatientSearch('');
+    setPatientOptions([]);
+    setVisiblePatientOptionCount(4);
+    setSelectedPatientId('');
+    setNewProcessingStatus('sample_collected');
+    setNewLaboratoryId('');
+    setCreateDeliveryError(null);
+  };
+
+  const handleCloseCreateDialog = () => {
+    setShowCreateDialog(false);
+    setCreatePatientSearch('');
+    setPatientOptions([]);
+    setVisiblePatientOptionCount(4);
+    setPatientSearchLoading(false);
+    setSelectedPatientId('');
+    setNewProcessingStatus('sample_collected');
+    setNewLaboratoryId('');
+    setCreateDeliveryError(null);
+    if (patientSearchDebounceTimeoutRef.current !== null) {
+      window.clearTimeout(patientSearchDebounceTimeoutRef.current);
+      patientSearchDebounceTimeoutRef.current = null;
+    }
+  };
+
+  const handleCreateStudyDelivery = async () => {
+    if (!selectedOfficeId || !selectedPatientId) {
+      return;
+    }
+
+    setCreatingDelivery(true);
+    setCreateDeliveryError(null);
+
+    try {
+      await studyDeliveryService.createSampleStudyDelivery({
+        office_id: Number(selectedOfficeId),
+        patient_id: Number(selectedPatientId),
+        processing_status: newProcessingStatus,
+        laboratory_id: newLaboratoryId ? Number(newLaboratoryId) : null,
+      });
+
+      handleCloseCreateDialog();
+      setPage(1);
+      setReloadKey((current) => current + 1);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'No se pudo registrar el proceso del paciente.';
+      setCreateDeliveryError(message);
+    } finally {
+      setCreatingDelivery(false);
+    }
   };
 
   const handleOpenDetail = (row: StudyDeliveryItem) => {
@@ -558,47 +744,6 @@ export default function StudyDeliveriesPage() {
                 minDate={dateFrom || undefined}
                 sx={{ flex: { md: '1 1 220px' } }}
               />
-            </Stack>
-
-            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
-              <FormControl size="small" sx={{ flex: { md: '1 1 180px' } }}>
-                <InputLabel>Consultorio</InputLabel>
-                <Select
-                  value={selectedOfficeId}
-                  label="Consultorio"
-                  onChange={(event) => {
-                    setSelectedOfficeId(event.target.value);
-                    setSelectedLaboratoryId('');
-                    setPage(1);
-                  }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {offices.map((office) => (
-                    <MenuItem key={office.id} value={String(office.id)}>
-                      {office.title}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ flex: { md: '1 1 160px' } }}>
-                <InputLabel>Estado</InputLabel>
-                <Select
-                  value={selectedStatus}
-                  label="Estado"
-                  onChange={(event) => {
-                    setSelectedStatus(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {Object.entries(statusLabels).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>
-                      {label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
 
               <FormControl size="small" sx={{ flex: { md: '1 1 180px' } }}>
                 <InputLabel>Proceso</InputLabel>
@@ -618,61 +763,6 @@ export default function StudyDeliveriesPage() {
                   ))}
                 </Select>
               </FormControl>
-
-              <FormControl size="small" sx={{ flex: { md: '1 1 170px' } }}>
-                <InputLabel>Canal</InputLabel>
-                <Select
-                  value={selectedChannel}
-                  label="Canal"
-                  onChange={(event) => {
-                    setSelectedChannel(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {Object.entries(channelLabels).map(([value, label]) => (
-                    <MenuItem key={value} value={value}>
-                      {label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ flex: { md: '1 1 140px' } }}>
-                <InputLabel>Visto</InputLabel>
-                <Select
-                  value={selectedSeenStatus}
-                  label="Visto"
-                  onChange={(event) => {
-                    setSelectedSeenStatus(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  <MenuItem value="seen">Visto</MenuItem>
-                  <MenuItem value="unseen">No visto</MenuItem>
-                </Select>
-              </FormControl>
-
-              <FormControl size="small" sx={{ flex: { md: '1 1 190px' } }}>
-                <InputLabel>Laboratorio</InputLabel>
-                <Select
-                  value={selectedLaboratoryId}
-                  label="Laboratorio"
-                  onChange={(event) => {
-                    setSelectedLaboratoryId(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <MenuItem value="">Todos</MenuItem>
-                  {laboratories.map((laboratory) => (
-                    <MenuItem key={laboratory.id} value={String(laboratory.id)}>
-                      {laboratory.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
             </Stack>
 
             <TextField
@@ -692,6 +782,129 @@ export default function StudyDeliveriesPage() {
               }}
               fullWidth
             />
+
+            <Collapse in={showAdvancedFilters || hasAdvancedFiltersApplied}>
+              <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+                {offices.length > 1 ? (
+                  <FormControl size="small" sx={{ flex: { md: '1 1 180px' } }}>
+                    <InputLabel>Consultorio</InputLabel>
+                    <Select
+                      value={selectedOfficeId}
+                      label="Consultorio"
+                      onChange={(event) => {
+                        setSelectedOfficeId(event.target.value);
+                        setSelectedLaboratoryId('');
+                        setPage(1);
+                      }}
+                    >
+                      <MenuItem value="">Todos</MenuItem>
+                      {offices.map((office) => (
+                        <MenuItem key={office.id} value={String(office.id)}>
+                          {office.title}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                ) : null}
+
+                <FormControl size="small" sx={{ flex: { md: '1 1 160px' } }}>
+                  <InputLabel>Estado</InputLabel>
+                  <Select
+                    value={selectedStatus}
+                    label="Estado"
+                    onChange={(event) => {
+                      setSelectedStatus(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {Object.entries(statusLabels).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>
+                        {label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ flex: { md: '1 1 170px' } }}>
+                  <InputLabel>Canal</InputLabel>
+                  <Select
+                    value={selectedChannel}
+                    label="Canal"
+                    onChange={(event) => {
+                      setSelectedChannel(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {Object.entries(channelLabels).map(([value, label]) => (
+                      <MenuItem key={value} value={value}>
+                        {label}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ flex: { md: '1 1 140px' } }}>
+                  <InputLabel>Visto</InputLabel>
+                  <Select
+                    value={selectedSeenStatus}
+                    label="Visto"
+                    onChange={(event) => {
+                      setSelectedSeenStatus(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    <MenuItem value="seen">Visto</MenuItem>
+                    <MenuItem value="unseen">No visto</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <FormControl size="small" sx={{ flex: { md: '1 1 190px' } }}>
+                  <InputLabel>Laboratorio</InputLabel>
+                  <Select
+                    value={selectedLaboratoryId}
+                    label="Laboratorio"
+                    onChange={(event) => {
+                      setSelectedLaboratoryId(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <MenuItem value="">Todos</MenuItem>
+                    {laboratories.map((laboratory) => (
+                      <MenuItem key={laboratory.id} value={String(laboratory.id)}>
+                        {laboratory.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+            </Collapse>
+
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
+              <Button
+                variant="text"
+                onClick={() => setShowAdvancedFilters((current) => !current)}
+                sx={{ alignSelf: 'flex-start', width: 'fit-content', textTransform: 'none', px: 0 }}
+              >
+                Más filtros
+              </Button>
+
+              <Button
+                variant="contained"
+                onClick={handleOpenCreateDialog}
+                disabled={!selectedOfficeId}
+                sx={{
+                  backgroundColor: '#1976d2',
+                  '&:hover': {
+                    backgroundColor: '#1565c0',
+                  },
+                }}
+              >
+                Asignar estudio
+              </Button>
+            </Box>
 
             {hasMovedFilters ? (
               <Button
@@ -842,6 +1055,137 @@ export default function StudyDeliveriesPage() {
           </Box>
         </CardContent>
       </Card>
+
+      <Dialog
+        open={showCreateDialog}
+        onClose={handleCloseCreateDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Asignar estudio al control de envíos</DialogTitle>
+        <DialogContent dividers sx={{ display: 'grid', gap: 2 }}>
+          {createDeliveryError ? <Alert severity="error">{createDeliveryError}</Alert> : null}
+
+          <TextField
+            size="small"
+            label="Buscar paciente"
+            value={createPatientSearch}
+            onChange={(event) => setCreatePatientSearch(event.target.value)}
+            placeholder="Nombre o teléfono"
+            fullWidth
+          />
+
+          <Box
+            sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 2,
+              p: 1.5,
+              display: 'grid',
+              gap: 1,
+            }}
+          >
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Paciente
+            </Typography>
+
+            {patientSearchLoading ? (
+              <Typography variant="body2" color="text.secondary">
+                Buscando pacientes…
+              </Typography>
+            ) : null}
+
+            {!patientSearchLoading && visiblePatientOptions.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">
+                {createPatientSearch.trim() ? 'Sin resultados para esa búsqueda.' : 'Escribe nombre o teléfono para buscar pacientes.'}
+              </Typography>
+            ) : null}
+
+            {visiblePatientOptions.map((patient) => {
+              const patientLabel = patient.full_name || `${patient.name} ${patient.last_name}`.trim() || 'Paciente';
+              const isChecked = selectedPatientId === String(patient.id);
+
+              return (
+                <Box
+                  key={patient.id}
+                  onClick={() => setSelectedPatientId(isChecked ? '' : String(patient.id))}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 1,
+                    px: 1,
+                    py: 0.75,
+                    borderRadius: 1.5,
+                    border: '1px solid',
+                    borderColor: isChecked ? 'primary.main' : 'divider',
+                    backgroundColor: isChecked ? 'rgba(25, 118, 210, 0.06)' : 'transparent',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Checkbox
+                    checked={isChecked}
+                    onClick={(event) => event.stopPropagation()}
+                    onChange={() => setSelectedPatientId(isChecked ? '' : String(patient.id))}
+                    size="small"
+                    sx={{ mt: -0.25 }}
+                  />
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      {patientLabel}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {patient.phone || 'Sin teléfono'}
+                    </Typography>
+                  </Box>
+                </Box>
+              );
+            })}
+          </Box>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Nuevo proceso</InputLabel>
+            <Select
+              value={newProcessingStatus}
+              label="Nuevo proceso"
+              onChange={(event) => setNewProcessingStatus(event.target.value as (typeof manualCreateProcessingStatusOptions)[number])}
+            >
+              {manualCreateProcessingStatusOptions.map((value) => (
+                <MenuItem key={value} value={value}>
+                  {processingStatusLabels[value]}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+
+          <FormControl size="small" fullWidth>
+            <InputLabel>Laboratorio</InputLabel>
+            <Select
+              value={newLaboratoryId}
+              label="Laboratorio"
+              onChange={(event) => setNewLaboratoryId(event.target.value)}
+            >
+              <MenuItem value="">Sin laboratorio</MenuItem>
+              {createDialogLaboratoryOptions.map((laboratory) => (
+                <MenuItem key={laboratory.id} value={String(laboratory.id)}>
+                  {laboratory.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseCreateDialog} color="inherit">
+            Cerrar
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateStudyDelivery}
+            disabled={!selectedOfficeId || !selectedPatientId || creatingDelivery}
+          >
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={Boolean(selectedRow)}

@@ -27,6 +27,8 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
+import type { AssistantAccessLevel } from '../../utils/assistantAccess';
+import { hasAllowedAssistantAccessLevel } from '../../utils/assistantAccess';
 
 const DRAWER_WIDTH = 260;
 const MINI_DRAWER_WIDTH = 76;
@@ -43,6 +45,7 @@ interface MenuItem {
   roles: UserRole[];
   permission?: string;
   anyPermissions?: string[];
+  assistantAccessLevels?: AssistantAccessLevel[];
 }
 
 const menuItems: MenuItem[] = [
@@ -70,6 +73,7 @@ const menuItems: MenuItem[] = [
     icon: <ConsultationIcon />,
     path: '/consultas',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     anyPermissions: [
       'consultations.view',
       'consultations.history_edit',
@@ -81,6 +85,7 @@ const menuItems: MenuItem[] = [
     icon: <StudiesIcon />,
     path: '/estudios',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     permission: 'patients.view',
   },
   {
@@ -88,6 +93,7 @@ const menuItems: MenuItem[] = [
     icon: <HistoryIcon />,
     path: '/bitacora',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     permission: 'patients.view',
   },
   {
@@ -95,6 +101,7 @@ const menuItems: MenuItem[] = [
     icon: <WhatsAppIcon />,
     path: '/notificaciones',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     permission: 'notifications.manage',
   },
   {
@@ -102,6 +109,7 @@ const menuItems: MenuItem[] = [
     icon: <SettingsIcon />,
     path: '/configuracion',
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     anyPermissions: [
       'settings.profile.self',
       'settings.company',
@@ -157,6 +165,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
   const filteredItems = activeMenuItems.filter((item) =>
     hasRole(item.roles)
+    && hasAllowedAssistantAccessLevel(user, item.assistantAccessLevels)
     && (!item.permission || can(item.permission))
     && (!item.anyPermissions || item.anyPermissions.some((permission) => can(permission)))
   );

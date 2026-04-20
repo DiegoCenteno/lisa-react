@@ -8,6 +8,8 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types';
+import type { AssistantAccessLevel } from '../../utils/assistantAccess';
+import { hasAllowedAssistantAccessLevel } from '../../utils/assistantAccess';
 
 interface MobileNavItem {
   key: string;
@@ -16,6 +18,7 @@ interface MobileNavItem {
   roles: UserRole[];
   permission?: string;
   anyPermissions?: string[];
+  assistantAccessLevels?: AssistantAccessLevel[];
 }
 
 const mobileNavItems: MobileNavItem[] = [
@@ -24,6 +27,7 @@ const mobileNavItems: MobileNavItem[] = [
     path: '/notificaciones',
     icon: <WhatsAppIcon />,
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     permission: 'notifications.manage',
   },
   {
@@ -31,6 +35,7 @@ const mobileNavItems: MobileNavItem[] = [
     path: '/consultas',
     icon: <ConsultationIcon />,
     roles: [UserRole.MEDICO, UserRole.ASISTENTE],
+    assistantAccessLevels: ['full'],
     anyPermissions: [
       'consultations.view',
       'consultations.history_edit',
@@ -63,6 +68,7 @@ export default function MobileBottomNav() {
 
   const items = mobileNavItems.filter((item) =>
     hasRole(item.roles)
+    && hasAllowedAssistantAccessLevel(user, item.assistantAccessLevels)
     && (!item.permission || can(item.permission))
     && (!item.anyPermissions || item.anyPermissions.some((permission) => can(permission)))
   );
