@@ -54,6 +54,8 @@ const FIRST_TIME_TEXT = 'rgb(51, 51, 51)';
 const FOLLOW_UP_BG = '#A8FBBD';
 const FOLLOW_UP_HOVER_BG = '#92f5ac';
 const FOLLOW_UP_TEXT = '#333333';
+const AGENDA_STALE_MS = 10 * 60 * 1000;
+const AGENDA_LAST_REFRESH_KEY = 'agenda_last_refresh_at';
 
 type AppointmentAction = 'confirm' | 'cancel' | 'no_show' | 'reactivate';
 
@@ -153,6 +155,32 @@ function getReadableAgeText(value?: string | null): string {
   }
 
   return `${firstNumber} a\u00f1os`;
+}
+
+function getStoredAgendaLastRefreshAt(): number {
+  if (typeof window === 'undefined') {
+    return 0;
+  }
+
+  const rawValue = window.localStorage.getItem(AGENDA_LAST_REFRESH_KEY);
+  const parsedValue = Number(rawValue);
+  return Number.isFinite(parsedValue) && parsedValue > 0 ? parsedValue : 0;
+}
+
+function setStoredAgendaLastRefreshAt(value: number): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(AGENDA_LAST_REFRESH_KEY, String(value));
+}
+
+function isStandaloneDisplayMode(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.matchMedia?.('(display-mode: standalone)').matches ?? false;
 }
 
 function appointmentToEvent(apt: Appointment): EventInput {
@@ -311,6 +339,8 @@ export default function AgendaPage() {
   const calendarRef = useRef<FullCalendar | null>(null);
   const patientSearchInputRef = useRef<HTMLInputElement | null>(null);
   const patientSearchDraftRef = useRef('');
+  const agendaLastRefreshAtRef = useRef<number>(getStoredAgendaLastRefreshAt());
+  const agendaForegroundRefreshAtRef = useRef(0);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [rescheduleAppointment, setRescheduleAppointment] = useState<{
     id: number;
@@ -342,6 +372,7 @@ export default function AgendaPage() {
 
   const [dateRange, setDateRange] = useState<{ start: string; end: string } | null>(null);
   const [viewRange, setViewRange] = useState<{ start: string; end: string; viewType: string } | null>(null);
+  const shouldAutoRefreshAgenda = isMobile || isStandaloneDisplayMode();
 
   useEffect(() => {
     if (!actionToast) {
@@ -450,6 +481,9 @@ export default function AgendaPage() {
     try {
       const data = await appointmentService.getAppointmentsByRange(startDate, endDate, appliedPatientSearch);
       setAppointments(data);
+      const refreshedAt = Date.now();
+      agendaLastRefreshAtRef.current = refreshedAt;
+      setStoredAgendaLastRefreshAt(refreshedAt);
     } catch (err) {
       console.error('Error cargando citas:', err);
     } finally {
@@ -493,6 +527,47 @@ export default function AgendaPage() {
       loadAppointments(dateRange.start, dateRange.end);
     }
   }, [dateRange, loadAppointments]);
+
+  useEffect(() => {
+    if (!shouldAutoRefreshAgenda || !dateRange) {
+      return undefined;
+    }
+
+    const maybeRefreshAgenda = () => {
+      if (document.visibilityState === 'hidden') {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - agendaForegroundRefreshAtRef.current < 1500) {
+        return;
+      }
+
+      const lastRefreshAt = agendaLastRefreshAtRef.current || getStoredAgendaLastRefreshAt();
+      if (lastRefreshAt && now - lastRefreshAt < AGENDA_STALE_MS) {
+        return;
+      }
+
+      agendaForegroundRefreshAtRef.current = now;
+      void loadAppointments(dateRange.start, dateRange.end);
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        maybeRefreshAgenda();
+      }
+    };
+
+    window.addEventListener('focus', maybeRefreshAgenda);
+    window.addEventListener('pageshow', maybeRefreshAgenda);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('focus', maybeRefreshAgenda);
+      window.removeEventListener('pageshow', maybeRefreshAgenda);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [dateRange, loadAppointments, shouldAutoRefreshAgenda]);
 
   const handleDatesSet = useCallback((arg: DatesSetArg) => {
     setViewRange({

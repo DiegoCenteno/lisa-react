@@ -105,6 +105,23 @@ function normalizePhoneForWhatsApp(value: string): string {
   return digits.startsWith('52') ? digits : `52${digits}`;
 }
 
+function PublicHistoryField({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Box>
+      <Typography variant="body2" sx={{ fontWeight: 700, mb: 0.75, color: 'text.primary' }}>
+        {label}
+      </Typography>
+      {children}
+    </Box>
+  );
+}
+
 function StudyResultView({ study }: { study: PublicStudyResult }) {
   const [previewFile, setPreviewFile] = useState<PublicStudyResult['files'][number] | null>(null);
   const hasMultipleFiles = study.files.length > 1;
@@ -411,17 +428,41 @@ function AppointmentConfirmationView({
               </Typography>
             ) : null}
             {appointment.office.phone ? (
-              <Typography variant="body1">
-                <strong>Teléfono del consultorio:</strong> {appointment.office.phone}
-              </Typography>
+              <Stack
+                direction="row"
+                spacing={1}
+                alignItems="center"
+                justifyContent="space-between"
+                flexWrap="wrap"
+              >
+                <Typography variant="body1">
+                  <strong>Teléfono:</strong> {appointment.office.phone}
+                </Typography>
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  <Button
+                    component="a"
+                    href={`tel:${appointment.office.phone}`}
+                    variant="text"
+                    sx={{ minWidth: 'auto', p: 0.5, minHeight: 'auto' }}
+                    aria-label="Llamar al consultorio"
+                  >
+                    <PhoneIcon />
+                  </Button>
+                  <Button
+                    component="a"
+                    href={`https://wa.me/${normalizePhoneForWhatsApp(appointment.office.phone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    variant="text"
+                    sx={{ minWidth: 'auto', p: 0.5, minHeight: 'auto' }}
+                    aria-label="Enviar WhatsApp al consultorio"
+                  >
+                    <ChatIcon />
+                  </Button>
+                </Stack>
+              </Stack>
             ) : null}
           </Box>
-
-          {!appointment.history_form_completed ? (
-            <Alert severity="info">
-              Si tu historia clínica aún está vacía, después de confirmar también podrás responder algunas preguntas básicas.
-            </Alert>
-          ) : null}
 
           {appointment.can_respond ? (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
@@ -444,29 +485,6 @@ function AppointmentConfirmationView({
                 sx={{ flex: 1 }}
               >
                 Cancelar cita
-              </Button>
-            </Stack>
-          ) : null}
-
-          {appointment.office.phone ? (
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignSelf: 'flex-start' }}>
-              <Button
-                component="a"
-                href={`tel:${appointment.office.phone}`}
-                variant="text"
-                startIcon={<PhoneIcon />}
-              >
-                Llamar al consultorio
-              </Button>
-              <Button
-                component="a"
-                href={`https://wa.me/${normalizePhoneForWhatsApp(appointment.office.phone)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                variant="text"
-                startIcon={<ChatIcon />}
-              >
-                Enviar WhatsApp al consultorio
               </Button>
             </Stack>
           ) : null}
@@ -500,138 +518,148 @@ function AppointmentConfirmationView({
                     Las respuestas son opcionales y puedes contestar únicamente las que tú desees.
                   </Typography>
 
-                  <TextField
-                    select
-                      label="¿Cuál es tu tipo de sangre?"
-                    value={historyFormState.tiposangre}
-                    onChange={(event) => onHistoryFormChange('tiposangre', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.blood_type_options.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-
-                  <TextField
-                    select
-                      label="¿En dónde naciste?"
-                    value={historyFormState.originaria}
-                    onChange={(event) => onHistoryFormChange('originaria', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.birth_place_options.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
-
-                  <TextField
-                      label="¿En dónde vives?"
-                    value={historyFormState.residente}
-                    onChange={(event) => onHistoryFormChange('residente', event.target.value)}
-                    fullWidth
-                  />
-
-                  {appointment.history_form.allow_gender_question ? (
+                  <PublicHistoryField label="¿Cuál es tu tipo de sangre?">
                     <TextField
                       select
-                      label="Sexo"
-                      value={historyFormState.gender}
-                      onChange={(event) => onHistoryFormChange('gender', event.target.value)}
+                      value={historyFormState.tiposangre}
+                      onChange={(event) => onHistoryFormChange('tiposangre', event.target.value)}
                       fullWidth
                     >
                       <MenuItem value="">Seleccionar</MenuItem>
-                      <MenuItem value="F">Femenino</MenuItem>
-                      <MenuItem value="M">Masculino</MenuItem>
+                      {appointment.history_form.blood_type_options.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
                     </TextField>
+                  </PublicHistoryField>
+
+                  <PublicHistoryField label="¿En dónde naciste?">
+                    <TextField
+                      select
+                      value={historyFormState.originaria}
+                      onChange={(event) => onHistoryFormChange('originaria', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Seleccionar</MenuItem>
+                      {appointment.history_form.birth_place_options.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </PublicHistoryField>
+
+                  <PublicHistoryField label="¿En dónde vives?">
+                    <TextField
+                      value={historyFormState.residente}
+                      onChange={(event) => onHistoryFormChange('residente', event.target.value)}
+                      fullWidth
+                    />
+                  </PublicHistoryField>
+
+                  {appointment.history_form.allow_gender_question ? (
+                    <PublicHistoryField label="Sexo">
+                      <TextField
+                        select
+                        value={historyFormState.gender}
+                        onChange={(event) => onHistoryFormChange('gender', event.target.value)}
+                        fullWidth
+                      >
+                        <MenuItem value="">Seleccionar</MenuItem>
+                        <MenuItem value="F">Femenino</MenuItem>
+                        <MenuItem value="M">Masculino</MenuItem>
+                      </TextField>
+                    </PublicHistoryField>
                   ) : null}
 
-                  <TextField
-                    select
-                    label="Estado civil"
-                    value={historyFormState.estadocivil}
-                    onChange={(event) => onHistoryFormChange('estadocivil', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.civil_status_options.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <PublicHistoryField label="Estado civil">
+                    <TextField
+                      select
+                      value={historyFormState.estadocivil}
+                      onChange={(event) => onHistoryFormChange('estadocivil', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Seleccionar</MenuItem>
+                      {appointment.history_form.civil_status_options.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </PublicHistoryField>
 
-                  <TextField
-                    select
-                    label="Escolaridad"
-                    value={historyFormState.escolaridad}
-                    onChange={(event) => onHistoryFormChange('escolaridad', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.education_options.map((option) => (
-                      <MenuItem key={option.value} value={option.value}>
-                        {option.label}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <PublicHistoryField label="Escolaridad">
+                    <TextField
+                      select
+                      value={historyFormState.escolaridad}
+                      onChange={(event) => onHistoryFormChange('escolaridad', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Seleccionar</MenuItem>
+                      {appointment.history_form.education_options.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </PublicHistoryField>
 
-                  <TextField
-                    select
-                      label="¿Qué tan frecuente realizas ejercicio?"
-                    value={historyFormState.txtejercicio}
-                    onChange={(event) => onHistoryFormChange('txtejercicio', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.exercise_options.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <PublicHistoryField label="¿Qué tan frecuente realizas ejercicio?">
+                    <TextField
+                      select
+                      value={historyFormState.txtejercicio}
+                      onChange={(event) => onHistoryFormChange('txtejercicio', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Seleccionar</MenuItem>
+                      {appointment.history_form.exercise_options.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </PublicHistoryField>
 
-                  <TextField
-                      label="¿Qué ocupación tienes?"
-                    value={historyFormState.ocupacion}
-                    onChange={(event) => onHistoryFormChange('ocupacion', event.target.value)}
-                    fullWidth
-                  />
+                  <PublicHistoryField label="¿Qué ocupación tienes?">
+                    <TextField
+                      value={historyFormState.ocupacion}
+                      onChange={(event) => onHistoryFormChange('ocupacion', event.target.value)}
+                      fullWidth
+                    />
+                  </PublicHistoryField>
 
-                  <TextField
-                    select
-                      label="¿Fumas o estás expuesto a alguien que fume?"
-                    value={historyFormState.txttabaquismo}
-                    onChange={(event) => onHistoryFormChange('txttabaquismo', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.smoking_options.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <PublicHistoryField label="¿Fumas o estás expuesto a alguien que fume?">
+                    <TextField
+                      select
+                      value={historyFormState.txttabaquismo}
+                      onChange={(event) => onHistoryFormChange('txttabaquismo', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Seleccionar</MenuItem>
+                      {appointment.history_form.smoking_options.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </PublicHistoryField>
 
-                  <TextField
-                    select
-                      label="¿Has consumido o consumes drogas?"
-                    value={historyFormState.txttoxicomanias}
-                    onChange={(event) => onHistoryFormChange('txttoxicomanias', event.target.value)}
-                    fullWidth
-                  >
-                    <MenuItem value="">Seleccionar</MenuItem>
-                    {appointment.history_form.substance_use_options.map((option) => (
-                      <MenuItem key={option} value={option}>
-                        {option}
-                      </MenuItem>
-                    ))}
-                  </TextField>
+                  <PublicHistoryField label="¿Has consumido o consumes drogas?">
+                    <TextField
+                      select
+                      value={historyFormState.txttoxicomanias}
+                      onChange={(event) => onHistoryFormChange('txttoxicomanias', event.target.value)}
+                      fullWidth
+                    >
+                      <MenuItem value="">Seleccionar</MenuItem>
+                      {appointment.history_form.substance_use_options.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </TextField>
+                  </PublicHistoryField>
 
                   {historyFormState.txttoxicomanias &&
                   historyFormState.txttoxicomanias !== 'No, nunca' ? (
@@ -661,12 +689,13 @@ function AppointmentConfirmationView({
                     </Box>
                   ) : null}
 
-                  <TextField
-                    label="¿Aproximadamente cuántas parejas sexuales has tenido?"
-                    value={historyFormState.parejassexuales}
-                    onChange={(event) => onHistoryFormChange('parejassexuales', event.target.value)}
-                    fullWidth
-                  />
+                  <PublicHistoryField label="¿Aproximadamente cuántas parejas sexuales has tenido?">
+                    <TextField
+                      value={historyFormState.parejassexuales}
+                      onChange={(event) => onHistoryFormChange('parejassexuales', event.target.value)}
+                      fullWidth
+                    />
+                  </PublicHistoryField>
 
                   <Box>
                     <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
@@ -694,20 +723,21 @@ function AppointmentConfirmationView({
                   </Box>
 
                   {appointment.history_form.include_referral_question ? (
-                    <TextField
-                      select
-                       label="¿Cómo llegaste con tu médico?"
-                      value={historyFormState.encuesta}
-                      onChange={(event) => onHistoryFormChange('encuesta', event.target.value)}
-                      fullWidth
-                    >
-                      <MenuItem value="">Seleccionar</MenuItem>
-                      {appointment.history_form.referral_options.map((option) => (
-                        <MenuItem key={option.value} value={option.value}>
-                          {option.label}
-                        </MenuItem>
-                      ))}
-                    </TextField>
+                    <PublicHistoryField label="¿Cómo llegaste con tu médico?">
+                      <TextField
+                        select
+                        value={historyFormState.encuesta}
+                        onChange={(event) => onHistoryFormChange('encuesta', event.target.value)}
+                        fullWidth
+                      >
+                        <MenuItem value="">Seleccionar</MenuItem>
+                        {appointment.history_form.referral_options.map((option) => (
+                          <MenuItem key={option.value} value={option.value}>
+                            {option.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+                    </PublicHistoryField>
                   ) : null}
                 </Stack>
 

@@ -33,8 +33,11 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useNavigate } from 'react-router-dom';
+import { useRef } from 'react';
+import dayjs from 'dayjs';
 import { appointmentService } from '../../api/appointmentService';
 import studyDeliveryService from '../../api/studyDeliveryService';
+import ClickableDateField from '../../components/ClickableDateField';
 import type { LaboratoryItem, Office, StudyDeliveryItem } from '../../types';
 
 type StudyDeliveryColumnKey =
@@ -75,6 +78,16 @@ const STUDY_DELIVERY_COLUMNS: Array<{ key: StudyDeliveryColumnKey; label: string
 ];
 
 const STUDY_DELIVERY_COLUMNS_STORAGE_KEY = 'study-deliveries-visible-columns';
+
+function getDefaultSendDateRange() {
+  const today = dayjs().format('YYYY-MM-DD');
+  const thirtyDaysAgo = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
+
+  return {
+    dateFrom: thirtyDaysAgo,
+    dateTo: today,
+  };
+}
 
 function getDefaultVisibleColumns(): Record<StudyDeliveryColumnKey, boolean> {
   const defaultVisibleKeys = new Set<StudyDeliveryColumnKey>([
@@ -184,6 +197,7 @@ function statusColor(status: string): 'default' | 'success' | 'warning' | 'error
 }
 
 export default function StudyDeliveriesPage() {
+  const defaultSendDateRange = useMemo(() => getDefaultSendDateRange(), []);
   const navigate = useNavigate();
   const [rows, setRows] = useState<StudyDeliveryItem[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
@@ -200,8 +214,8 @@ export default function StudyDeliveriesPage() {
   const [selectedSeenStatus, setSelectedSeenStatus] = useState('');
   const [selectedLaboratoryId, setSelectedLaboratoryId] = useState('');
   const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(() => defaultSendDateRange.dateFrom);
+  const [dateTo, setDateTo] = useState(() => defaultSendDateRange.dateTo);
   const [selectedRow, setSelectedRow] = useState<StudyDeliveryItem | null>(null);
   const [editingProcessingStatus, setEditingProcessingStatus] = useState('');
   const [editingLaboratoryId, setEditingLaboratoryId] = useState('');
@@ -209,6 +223,8 @@ export default function StudyDeliveriesPage() {
   const [saveDetailError, setSaveDetailError] = useState<string | null>(null);
   const [showColumnConfig, setShowColumnConfig] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Record<StudyDeliveryColumnKey, boolean>>(() => loadVisibleColumns());
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchDebounceTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +261,14 @@ export default function StudyDeliveriesPage() {
       cancelled = true;
     };
   }, [selectedOfficeId]);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceTimeoutRef.current !== null) {
+        window.clearTimeout(searchDebounceTimeoutRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -316,6 +340,9 @@ export default function StudyDeliveriesPage() {
     }
     if (dateFrom || dateTo) {
       columnsToEnable.add('sent_at');
+      columnsToEnable.add('sample_collected_at');
+      columnsToEnable.add('sent_to_lab_at');
+      columnsToEnable.add('created_at');
     }
 
     if (columnsToEnable.size === 0) {
@@ -346,10 +373,24 @@ export default function StudyDeliveriesPage() {
       selectedSeenStatus,
       selectedLaboratoryId,
       search.trim(),
-      dateFrom,
-      dateTo,
+      dateFrom !== defaultSendDateRange.dateFrom ? dateFrom : '',
+      dateTo !== defaultSendDateRange.dateTo ? dateTo : '',
     ].filter(Boolean).length;
-  }, [selectedOfficeId, selectedStatus, selectedProcessingStatus, selectedChannel, selectedSeenStatus, selectedLaboratoryId, search, dateFrom, dateTo]);
+  }, [
+    defaultSendDateRange.dateFrom,
+    defaultSendDateRange.dateTo,
+    selectedOfficeId,
+    selectedStatus,
+    selectedProcessingStatus,
+    selectedChannel,
+    selectedSeenStatus,
+    selectedLaboratoryId,
+    search,
+    dateFrom,
+    dateTo,
+  ]);
+
+  const hasMovedFilters = activeFilterCount > 0;
 
   const detailLaboratoryOptions = useMemo(() => {
     if (!selectedRow) {
@@ -383,8 +424,15 @@ export default function StudyDeliveriesPage() {
     setSelectedSeenStatus('');
     setSelectedLaboratoryId('');
     setSearch('');
-    setDateFrom('');
-    setDateTo('');
+    if (searchDebounceTimeoutRef.current !== null) {
+      window.clearTimeout(searchDebounceTimeoutRef.current);
+      searchDebounceTimeoutRef.current = null;
+    }
+    if (searchInputRef.current) {
+      searchInputRef.current.value = '';
+    }
+    setDateFrom(defaultSendDateRange.dateFrom);
+    setDateTo(defaultSendDateRange.dateTo);
     setPage(1);
   };
 
@@ -484,162 +532,177 @@ export default function StudyDeliveriesPage() {
 
       <Card>
         <CardContent sx={{ display: 'grid', gap: 2 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
-            <FormControl size="small" sx={{ minWidth: 210 }}>
-              <InputLabel>Consultorio</InputLabel>
-              <Select
-                value={selectedOfficeId}
-                label="Consultorio"
-                onChange={(event) => {
-                  setSelectedOfficeId(event.target.value);
-                  setSelectedLaboratoryId('');
+          <Stack spacing={1.5}>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+              <ClickableDateField
+                label="Desde"
+                value={dateFrom}
+                onChange={(value) => {
+                  setDateFrom(value);
                   setPage(1);
                 }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {offices.map((office) => (
-                  <MenuItem key={office.id} value={String(office.id)}>
-                    {office.title}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                size="small"
+                fullWidth={false}
+                sx={{ flex: { md: '1 1 220px' } }}
+              />
 
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Estado</InputLabel>
-              <Select
-                value={selectedStatus}
-                label="Estado"
-                onChange={(event) => {
-                  setSelectedStatus(event.target.value);
+              <ClickableDateField
+                label="Hasta"
+                value={dateTo}
+                onChange={(value) => {
+                  setDateTo(value);
                   setPage(1);
                 }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {Object.entries(statusLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+                size="small"
+                fullWidth={false}
+                minDate={dateFrom || undefined}
+                sx={{ flex: { md: '1 1 220px' } }}
+              />
+            </Stack>
 
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>Proceso</InputLabel>
-              <Select
-                value={selectedProcessingStatus}
-                label="Proceso"
-                onChange={(event) => {
-                  setSelectedProcessingStatus(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {Object.entries(processingStatusLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} useFlexGap flexWrap="wrap">
+              <FormControl size="small" sx={{ flex: { md: '1 1 180px' } }}>
+                <InputLabel>Consultorio</InputLabel>
+                <Select
+                  value={selectedOfficeId}
+                  label="Consultorio"
+                  onChange={(event) => {
+                    setSelectedOfficeId(event.target.value);
+                    setSelectedLaboratoryId('');
+                    setPage(1);
+                  }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {offices.map((office) => (
+                    <MenuItem key={office.id} value={String(office.id)}>
+                      {office.title}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 210 }}>
-              <InputLabel>Canal</InputLabel>
-              <Select
-                value={selectedChannel}
-                label="Canal"
-                onChange={(event) => {
-                  setSelectedChannel(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {Object.entries(channelLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              <FormControl size="small" sx={{ flex: { md: '1 1 160px' } }}>
+                <InputLabel>Estado</InputLabel>
+                <Select
+                  value={selectedStatus}
+                  label="Estado"
+                  onChange={(event) => {
+                    setSelectedStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {Object.entries(statusLabels).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>Visto</InputLabel>
-              <Select
-                value={selectedSeenStatus}
-                label="Visto"
-                onChange={(event) => {
-                  setSelectedSeenStatus(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                <MenuItem value="seen">Visto</MenuItem>
-                <MenuItem value="unseen">No visto</MenuItem>
-              </Select>
-            </FormControl>
+              <FormControl size="small" sx={{ flex: { md: '1 1 180px' } }}>
+                <InputLabel>Proceso</InputLabel>
+                <Select
+                  value={selectedProcessingStatus}
+                  label="Proceso"
+                  onChange={(event) => {
+                    setSelectedProcessingStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {Object.entries(processingStatusLabels).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
-            <FormControl size="small" sx={{ minWidth: 220 }}>
-              <InputLabel>Laboratorio</InputLabel>
-              <Select
-                value={selectedLaboratoryId}
-                label="Laboratorio"
-                onChange={(event) => {
-                  setSelectedLaboratoryId(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <MenuItem value="">Todos</MenuItem>
-                {laboratories.map((laboratory) => (
-                  <MenuItem key={laboratory.id} value={String(laboratory.id)}>
-                    {laboratory.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+              <FormControl size="small" sx={{ flex: { md: '1 1 170px' } }}>
+                <InputLabel>Canal</InputLabel>
+                <Select
+                  value={selectedChannel}
+                  label="Canal"
+                  onChange={(event) => {
+                    setSelectedChannel(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {Object.entries(channelLabels).map(([value, label]) => (
+                    <MenuItem key={value} value={value}>
+                      {label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ flex: { md: '1 1 140px' } }}>
+                <InputLabel>Visto</InputLabel>
+                <Select
+                  value={selectedSeenStatus}
+                  label="Visto"
+                  onChange={(event) => {
+                    setSelectedSeenStatus(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  <MenuItem value="seen">Visto</MenuItem>
+                  <MenuItem value="unseen">No visto</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl size="small" sx={{ flex: { md: '1 1 190px' } }}>
+                <InputLabel>Laboratorio</InputLabel>
+                <Select
+                  value={selectedLaboratoryId}
+                  label="Laboratorio"
+                  onChange={(event) => {
+                    setSelectedLaboratoryId(event.target.value);
+                    setPage(1);
+                  }}
+                >
+                  <MenuItem value="">Todos</MenuItem>
+                  {laboratories.map((laboratory) => (
+                    <MenuItem key={laboratory.id} value={String(laboratory.id)}>
+                      {laboratory.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+            </Stack>
 
             <TextField
               size="small"
               label="Paciente o teléfono"
-              value={search}
+              inputRef={searchInputRef}
+              defaultValue={search}
               onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(1);
+                const nextValue = event.target.value;
+                if (searchDebounceTimeoutRef.current !== null) {
+                  window.clearTimeout(searchDebounceTimeoutRef.current);
+                }
+                searchDebounceTimeoutRef.current = window.setTimeout(() => {
+                  setSearch(nextValue.trim());
+                  setPage(1);
+                }, 300);
               }}
-              sx={{ minWidth: { xs: '100%', md: 240 } }}
+              fullWidth
             />
 
-            <TextField
-              size="small"
-              type="date"
-              label="Desde"
-              value={dateFrom}
-              onChange={(event) => {
-                setDateFrom(event.target.value);
-                setPage(1);
-              }}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <TextField
-              size="small"
-              type="date"
-              label="Hasta"
-              value={dateTo}
-              onChange={(event) => {
-                setDateTo(event.target.value);
-                setPage(1);
-              }}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <Button
-              variant="text"
-              color="warning"
-              onClick={handleResetFilters}
-              sx={{ alignSelf: 'center', width: 'fit-content' }}
-            >
-              Restablecer filtros
-            </Button>
+            {hasMovedFilters ? (
+              <Button
+                variant="text"
+                color="warning"
+                onClick={handleResetFilters}
+                sx={{ alignSelf: 'center', width: 'fit-content' }}
+              >
+                Restablecer filtros
+              </Button>
+            ) : null}
           </Stack>
 
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap' }}>
