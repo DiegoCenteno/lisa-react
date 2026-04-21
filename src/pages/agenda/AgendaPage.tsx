@@ -1445,9 +1445,11 @@ export default function AgendaPage() {
               <Box
                 sx={{
                   display: 'flex',
-                  flexDirection: { xs: 'column', sm: 'row' },
-                  alignItems: { xs: 'flex-start', sm: 'center' },
-                  gap: { xs: 0.25, sm: 2 },
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  width: '100%',
+                  gap: { xs: 1, sm: 2 },
                 }}
               >
                 <FormControlLabel
