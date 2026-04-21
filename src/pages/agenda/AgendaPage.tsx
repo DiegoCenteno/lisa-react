@@ -39,7 +39,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import type { EventInput, EventClickArg, DatesSetArg, EventContentArg } from '@fullcalendar/core';
 import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
-import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultationSummary } from '../../types';
+import type { Appointment, PatientSimple, Office, ActivityLogItem, LastConsultationSummary, AvailableSlot } from '../../types';
 import ActivityLogTimeline from '../../components/activity/ActivityLogTimeline';
 import dayjs from 'dayjs';
 import NewAppointmentDialog from './NewAppointmentDialog';
@@ -53,8 +53,13 @@ const FIRST_TIME_TEXT = 'rgb(51, 51, 51)';
 const FOLLOW_UP_BG = '#A8FBBD';
 const FOLLOW_UP_HOVER_BG = '#92f5ac';
 const FOLLOW_UP_TEXT = '#333333';
+const AVAILABLE_SLOT_BG = '#ffffff';
+const AVAILABLE_SLOT_HOVER_BG = '#f8fbff';
+const AVAILABLE_SLOT_TEXT = '#5f6b75';
+const AVAILABLE_SLOT_ACCENT = '#0a8f84';
 const AGENDA_STALE_MS = 10 * 60 * 1000;
 const AGENDA_LAST_REFRESH_KEY = 'agenda_last_refresh_at';
+const AGENDA_SHOW_AVAILABLE_SLOTS_KEY = 'agenda_show_available_slots_in_list_v1';
 
 type AppointmentAction = 'confirm' | 'cancel' | 'no_show' | 'reactivate';
 
@@ -237,9 +242,180 @@ function appointmentToEvent(apt: Appointment): EventInput {
   };
 }
 
+function getIsoWeekday(value: dayjs.Dayjs): number {
+  const day = value.day();
+  return day === 0 ? 7 : day;
+}
+
+function buildDateTime(date: dayjs.Dayjs, time: string): dayjs.Dayjs {
+  const normalizedTime = /^\d{2}:\d{2}$/.test(time) ? `${time}:00` : time;
+  return dayjs(`${date.format('YYYY-MM-DD')}T${normalizedTime}`);
+}
+
+function normalizeAgendaStart(value: dayjs.ConfigType): dayjs.Dayjs {
+  return dayjs(value).second(0).millisecond(0);
+}
+
+function normalizeAgendaEnd(value: dayjs.ConfigType): dayjs.Dayjs {
+  const parsed = dayjs(value);
+  if (parsed.second() === 0 && parsed.millisecond() === 0) {
+    return parsed;
+  }
+
+  return parsed.add(1, 'minute').second(0).millisecond(0);
+}
+
+function getOfficeWorkingIntervals(office: Office, date: dayjs.Dayjs): Array<{ start: dayjs.Dayjs; end: dayjs.Dayjs }> {
+  const dayConfig = (office.opendays ?? []).find((item) => Number(item.day) === getIsoWeekday(date));
+  if (!dayConfig?.start || !dayConfig.end) {
+    return [];
+  }
+
+  const workStart = buildDateTime(date, dayConfig.start);
+  const workEnd = buildDateTime(date, dayConfig.end);
+  if (!workEnd.isAfter(workStart)) {
+    return [];
+  }
+
+  const breakStart = dayConfig.breakstart ? buildDateTime(date, dayConfig.breakstart) : null;
+  const breakEnd = dayConfig.breakend ? buildDateTime(date, dayConfig.breakend) : null;
+
+  if (
+    !breakStart
+    || !breakEnd
+    || !breakEnd.isAfter(breakStart)
+    || !breakStart.isAfter(workStart)
+    || !workEnd.isAfter(breakEnd)
+  ) {
+    return [{ start: workStart, end: workEnd }];
+  }
+
+  return [
+    { start: workStart, end: breakStart },
+    { start: breakEnd, end: workEnd },
+  ].filter((item) => item.end.isAfter(item.start));
+}
+
+function buildAvailableSlotEventsForList(
+  appointments: Appointment[],
+  office: Office,
+  slotMinutes: number
+): EventInput[] {
+  const appointmentsByDate = appointments
+    .filter((appointment) => Number(appointment.office?.id ?? 0) === office.id)
+    .reduce<Map<string, Appointment[]>>((acc, appointment) => {
+      const dateKey = dayjs(appointment.datestart).format('YYYY-MM-DD');
+      const current = acc.get(dateKey) ?? [];
+      current.push(appointment);
+      acc.set(dateKey, current);
+      return acc;
+    }, new Map());
+
+  const events: EventInput[] = [];
+
+  appointmentsByDate.forEach((items, dateKey) => {
+    const date = dayjs(`${dateKey}T00:00:00`);
+    const workingIntervals = getOfficeWorkingIntervals(office, date);
+    if (workingIntervals.length === 0) {
+      return;
+    }
+
+    const sortedAppointments = [...items].sort((a, b) => dayjs(a.datestart).valueOf() - dayjs(b.datestart).valueOf());
+
+    workingIntervals.forEach((interval) => {
+      let cursor = interval.start;
+
+      sortedAppointments.forEach((appointment) => {
+        const appointmentStart = normalizeAgendaStart(appointment.datestart);
+        const appointmentEnd = normalizeAgendaEnd(appointment.dateend);
+
+        if (!appointmentEnd.isAfter(interval.start) || !appointmentStart.isBefore(interval.end)) {
+          return;
+        }
+
+        const boundedStart = appointmentStart.isAfter(interval.start) ? appointmentStart : interval.start;
+        const boundedEnd = appointmentEnd.isBefore(interval.end) ? appointmentEnd : interval.end;
+
+        if (boundedStart.isAfter(cursor)) {
+          let slotCursor = cursor;
+
+          while (boundedStart.diff(slotCursor, 'minute') >= 5) {
+            const remainingMinutes = boundedStart.diff(slotCursor, 'minute');
+            const currentSlotMinutes = Math.min(slotMinutes, remainingMinutes);
+            const slotEnd = slotCursor.add(currentSlotMinutes, 'minute');
+
+            events.push({
+              id: `available-slot:${office.id}:${slotCursor.toISOString()}:${slotEnd.toISOString()}`,
+              title: 'Crear cita',
+              start: slotCursor.format('YYYY-MM-DD HH:mm:ss'),
+              end: slotEnd.format('YYYY-MM-DD HH:mm:ss'),
+              backgroundColor: AVAILABLE_SLOT_BG,
+              borderColor: '#d8dee8',
+              textColor: AVAILABLE_SLOT_TEXT,
+              classNames: ['appointment-event', 'appointment-event--available-slot'],
+              extendedProps: {
+                isAvailabilityGap: true,
+                rowTextColor: AVAILABLE_SLOT_TEXT,
+                rowType: 'available-slot',
+                durationMinutes: currentSlotMinutes,
+              },
+            });
+
+            if (!slotEnd.isAfter(slotCursor)) {
+              break;
+            }
+
+            slotCursor = slotEnd;
+          }
+        }
+
+        if (boundedEnd.isAfter(cursor)) {
+          cursor = boundedEnd;
+        }
+      });
+
+      if (interval.end.isAfter(cursor)) {
+        let slotCursor = cursor;
+
+        while (interval.end.diff(slotCursor, 'minute') >= 5) {
+          const remainingMinutes = interval.end.diff(slotCursor, 'minute');
+          const currentSlotMinutes = Math.min(slotMinutes, remainingMinutes);
+          const slotEnd = slotCursor.add(currentSlotMinutes, 'minute');
+
+          events.push({
+            id: `available-slot:${office.id}:${slotCursor.toISOString()}:${slotEnd.toISOString()}`,
+            title: 'Crear cita',
+            start: slotCursor.format('YYYY-MM-DD HH:mm:ss'),
+            end: slotEnd.format('YYYY-MM-DD HH:mm:ss'),
+            backgroundColor: AVAILABLE_SLOT_BG,
+            borderColor: '#d8dee8',
+            textColor: AVAILABLE_SLOT_TEXT,
+            classNames: ['appointment-event', 'appointment-event--available-slot'],
+            extendedProps: {
+              isAvailabilityGap: true,
+              rowTextColor: AVAILABLE_SLOT_TEXT,
+              rowType: 'available-slot',
+              durationMinutes: currentSlotMinutes,
+            },
+          });
+
+          if (!slotEnd.isAfter(slotCursor)) {
+            break;
+          }
+
+          slotCursor = slotEnd;
+        }
+      }
+    });
+  });
+
+  return events;
+}
+
 function renderEventContent(arg: EventContentArg) {
   const { confirmed, confirmation_whatsapp_status, phone, status } = arg.event.extendedProps;
   const isListView = arg.view.type.startsWith('list');
+  const isAvailabilityGap = Boolean(arg.event.extendedProps.isAvailabilityGap);
   const bgColor = arg.event.backgroundColor;
   const normalizedStatus = Number(status);
   const isNoShow = normalizedStatus === 2;
@@ -272,6 +448,41 @@ function renderEventContent(arg: EventContentArg) {
   ) : null;
 
   if (isListView) {
+    if (isAvailabilityGap) {
+      const durationMinutes = Number(arg.event.extendedProps.durationMinutes ?? 0);
+
+      return (
+        <div
+          className="agenda-available-slot-card"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            width: '100%',
+          }}
+        >
+          <AddIcon sx={{ color: AVAILABLE_SLOT_ACCENT, fontSize: 26, flexShrink: 0 }} />
+          <span
+            style={{
+              fontWeight: 500,
+              color: AVAILABLE_SLOT_ACCENT,
+              letterSpacing: '0.01em',
+            }}
+          >
+            Crear cita
+          </span>
+          <span
+            style={{
+              color: AVAILABLE_SLOT_TEXT,
+              fontWeight: 500,
+            }}
+          >
+            - {durationMinutes} {durationMinutes === 1 ? 'minuto' : 'minutos'}
+          </span>
+        </div>
+      );
+    }
+
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
@@ -345,6 +556,7 @@ export default function AgendaPage() {
   const [offices, setOffices] = useState<Office[]>([]);
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [prefilledAppointmentSlot, setPrefilledAppointmentSlot] = useState<AvailableSlot | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<EventClickArg | null>(null);
   const [officeId, setOfficeId] = useState<number>(0);
   const [pendingAction, setPendingAction] = useState<AppointmentAction | null>(null);
@@ -382,6 +594,13 @@ export default function AgendaPage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryData, setSummaryData] = useState<LastConsultationSummary | null>(null);
   const [selectedPatientRecord, setSelectedPatientRecord] = useState<Appointment['patient'] & { birth_date?: string; age?: number | string } | null>(null);
+  const [showAvailableSlotsInList, setShowAvailableSlotsInList] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(AGENDA_SHOW_AVAILABLE_SLOTS_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [birthEditorOpen, setBirthEditorOpen] = useState(false);
   const [birthEditorValue, setBirthEditorValue] = useState('');
   const [birthSaving, setBirthSaving] = useState(false);
@@ -408,8 +627,11 @@ export default function AgendaPage() {
   }, [actionToast]);
 
   const canViewPatientSummary = can('agenda.patient_summary');
+  const selectedOffice = useMemo(
+    () => offices.find((office) => office.id === officeId) ?? null,
+    [officeId, offices]
+  );
   const doctorName = useMemo(() => {
-    const selectedOffice = offices.find((office) => office.id === officeId);
     if (selectedOffice?.doctor_name?.trim()) {
       return selectedOffice.doctor_name.trim();
     }
@@ -422,7 +644,7 @@ export default function AgendaPage() {
     } catch {
       return 'Doctor';
     }
-  }, [officeId, offices]);
+  }, [selectedOffice]);
 
   // Load office_id on mount
   useEffect(() => {
@@ -435,9 +657,8 @@ export default function AgendaPage() {
   }, []);
 
   const selectedOfficeNotificationPreferences = useMemo(() => {
-    const selectedOffice = offices.find((office) => office.id === officeId);
     return selectedOffice?.notification_preferences ?? {};
-  }, [officeId, offices]);
+  }, [selectedOffice]);
 
   const cancelNotificationDefault = Boolean(
     selectedOfficeNotificationPreferences.cancelacion_cita_paciente
@@ -449,19 +670,24 @@ export default function AgendaPage() {
     selectedOfficeNotificationPreferences.nueva_cita
   );
   const newAppointmentDefaultGender = useMemo(() => {
-    const selectedOffice = offices.find((office) => office.id === officeId);
     return selectedOffice?.new_appointment_default_gender ?? '';
-  }, [officeId, offices]);
+  }, [selectedOffice]);
   const newAppointmentConsultationReasons = useMemo(() => {
-    const selectedOffice = offices.find((office) => office.id === officeId);
     return selectedOffice?.consultation_reasons ?? [];
-  }, [officeId, offices]);
+  }, [selectedOffice]);
   const newAppointmentBaseMinutes = useMemo(() => {
-    const selectedOffice = offices.find((office) => office.id === officeId);
     const firsttime = selectedOffice?.firsttime ?? 0;
     const recurrent = selectedOffice?.recurrent ?? 0;
     return Math.max(firsttime, recurrent, 10);
-  }, [officeId, offices]);
+  }, [selectedOffice]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AGENDA_SHOW_AVAILABLE_SLOTS_KEY, showAvailableSlotsInList ? '1' : '0');
+    } catch {
+      // Ignore storage failures for this local-only preference.
+    }
+  }, [showAvailableSlotsInList]);
 
   useEffect(() => {
     const resetToken = (location.state as { sidebarResetAt?: number } | null)?.sidebarResetAt;
@@ -475,6 +701,7 @@ export default function AgendaPage() {
       patientSearchInputRef.current.value = '';
     }
       setDialogOpen(false);
+      setPrefilledAppointmentSlot(null);
       setSelectedEvent(null);
       setSelectedAppointmentData(null);
       setPendingAction(null);
@@ -611,11 +838,38 @@ export default function AgendaPage() {
     });
   }, [appointments, showPreviousAppointments]);
 
-  const events = useMemo(
-    () => visibleAppointments.map(appointmentToEvent),
-    [visibleAppointments]
-  );
+  const events = useMemo(() => {
+    const appointmentEvents = visibleAppointments.map(appointmentToEvent);
+
+    if (!viewRange?.viewType.startsWith('list') || !showAvailableSlotsInList || !selectedOffice) {
+      return appointmentEvents;
+    }
+
+    return [
+      ...appointmentEvents,
+      ...buildAvailableSlotEventsForList(visibleAppointments, selectedOffice, newAppointmentBaseMinutes),
+    ];
+  }, [newAppointmentBaseMinutes, selectedOffice, showAvailableSlotsInList, viewRange, visibleAppointments]);
   const handleEventClick = (clickInfo: EventClickArg) => {
+    if (clickInfo.event.extendedProps.isAvailabilityGap) {
+      const slotStart = dayjs(clickInfo.event.start ?? undefined);
+      const slotEnd = dayjs(clickInfo.event.end ?? undefined);
+      const slotMinutes = slotEnd.diff(slotStart, 'minute');
+
+      setPrefilledAppointmentSlot({
+        datestart: slotStart.format('YYYY-MM-DD HH:mm:ss'),
+        dateend: slotEnd.format('YYYY-MM-DD HH:mm:ss'),
+        timeshow: `${slotStart.format('HH:mm')} - ${slotEnd.format('HH:mm')}`,
+        estatus: 1,
+        minutes: slotMinutes,
+        dateesp: slotStart.format('YYYY-MM-DD'),
+        is_past: false,
+        is_past_4hours: false,
+      });
+      setDialogOpen(true);
+      return;
+    }
+
     setSelectedEvent(clickInfo);
     setSelectedAppointmentData(null);
     setPendingAction(null);
@@ -1090,7 +1344,7 @@ export default function AgendaPage() {
     navigate(`/pacientes/${patientId}?tab=soap`);
   }, [navigate, selectedAppointmentView, summaryData]);
 
-  const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
+  const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; start: Date | null; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
       const row = info.el.tagName === 'TR'
         ? info.el
@@ -1099,6 +1353,7 @@ export default function AgendaPage() {
         const bgColor = info.event.backgroundColor;
         const textColor = (info.event.extendedProps.rowTextColor as string) || info.event.textColor || '#333';
         const rowType = (info.event.extendedProps.rowType as string) || '';
+        const isAvailabilityGap = Boolean(info.event.extendedProps.isAvailabilityGap);
         row.style.backgroundColor = bgColor;
         row.dataset.rowType = rowType;
         row.querySelectorAll('td').forEach((cell) => {
@@ -1108,6 +1363,32 @@ export default function AgendaPage() {
         const dot = row.querySelector('.fc-list-event-dot') as HTMLElement | null;
         if (dot) {
           dot.style.display = 'none';
+        }
+
+        if (isAvailabilityGap) {
+          row.style.cursor = 'pointer';
+          const timeCell = row.querySelector('.fc-list-event-time') as HTMLElement | null;
+          const graphicCell = row.querySelector('.fc-list-event-graphic') as HTMLElement | null;
+          const titleCell = row.querySelector('.fc-list-event-title') as HTMLTableCellElement | null;
+
+          if (timeCell) {
+            timeCell.style.display = 'table-cell';
+            timeCell.style.color = '#2f3a45';
+            timeCell.style.fontWeight = '500';
+            timeCell.style.whiteSpace = 'nowrap';
+            timeCell.style.paddingTop = '8px';
+            timeCell.style.paddingBottom = '8px';
+          }
+
+          if (graphicCell) {
+            graphicCell.style.backgroundColor = 'transparent';
+          }
+
+          if (titleCell) {
+            titleCell.style.padding = '4px 10px 4px 0';
+            titleCell.style.backgroundColor = 'transparent';
+            titleCell.style.color = AVAILABLE_SLOT_TEXT;
+          }
         }
       }
     }
@@ -1142,7 +1423,10 @@ export default function AgendaPage() {
             <Button
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => setDialogOpen(true)}
+              onClick={() => {
+                setPrefilledAppointmentSlot(null);
+                setDialogOpen(true);
+              }}
             >
               Nueva Cita
             </Button>
@@ -1150,24 +1434,40 @@ export default function AgendaPage() {
 
           <Box sx={{ mb: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-              <Button
-                variant="text"
-                onClick={() => setShowPreviousAppointments((value) => !value)}
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    size="small"
+                    checked={showPreviousAppointments}
+                    onChange={(event) => setShowPreviousAppointments(event.target.checked)}
+                  />
+                )}
+                label={isMobile ? 'Citas previas' : 'Mostrar citas previas'}
                 sx={{
-                  p: 0,
-                  minWidth: 'auto',
-                  textTransform: 'none',
-                  textDecoration: 'underline',
-                  color: '#2d64c8',
-                  fontWeight: 400,
+                  ml: 0,
+                  '& .MuiFormControlLabel-label': {
+                    fontSize: '0.92rem',
+                  },
                 }}
-              >
-                {showPreviousAppointments
-                  ? 'Ocultar citas previas'
-                  : isMobile
-                    ? 'Citas previas'
-                    : 'Mostrar citas previas'}
-              </Button>
+              />
+              {viewRange?.viewType.startsWith('list') ? (
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      size="small"
+                      checked={showAvailableSlotsInList}
+                      onChange={(event) => setShowAvailableSlotsInList(event.target.checked)}
+                    />
+                  )}
+                  label="Mostrar espacios disponibles"
+                  sx={{
+                    ml: { xs: 0, sm: 0.5 },
+                    '& .MuiFormControlLabel-label': {
+                      fontSize: '0.92rem',
+                    },
+                  }}
+                />
+              ) : null}
               <Box sx={{ flex: 1 }} />
               <Button
                   variant="text"
@@ -1340,6 +1640,33 @@ export default function AgendaPage() {
                    backgroundColor: 'rgb(189 189 189) !important',
                    color: '#ffffff !important',
                   filter: 'none',
+                },
+                '& .fc-list-event[data-row-type="available-slot"]:hover td, & tr.fc-list-event[data-row-type="available-slot"]:hover td': {
+                  backgroundColor: 'transparent !important',
+                  color: `${AVAILABLE_SLOT_TEXT} !important`,
+                  filter: 'none',
+                },
+                '& .fc-list-event[data-row-type="available-slot"] td, & tr.fc-list-event[data-row-type="available-slot"] td': {
+                  backgroundColor: 'transparent !important',
+                  color: `${AVAILABLE_SLOT_TEXT} !important`,
+                  paddingTop: '2px',
+                  paddingBottom: '2px',
+                  borderTop: '0 !important',
+                },
+                '& .fc-list-event[data-row-type="available-slot"] .agenda-available-slot-card, & tr.fc-list-event[data-row-type="available-slot"] .agenda-available-slot-card': {
+                  backgroundColor: `${AVAILABLE_SLOT_BG}`,
+                  border: '1px solid #d9e1ea',
+                  borderRadius: '10px',
+                  minHeight: '34px',
+                  padding: '7px 14px',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+                  transition: 'background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease',
+                },
+                '& .fc-list-event[data-row-type="available-slot"]:hover .agenda-available-slot-card, & tr.fc-list-event[data-row-type="available-slot"]:hover .agenda-available-slot-card': {
+                  backgroundColor: `${AVAILABLE_SLOT_HOVER_BG}`,
+                  borderColor: '#c8d3df',
+                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.08)',
                 },
                 '& .fc-list-event td': {
                   transition: 'filter 0.2s, background-color 0.2s, color 0.2s',
@@ -2510,16 +2837,22 @@ export default function AgendaPage() {
       {/* Dialog: Nueva cita (wizard) */}
       <NewAppointmentDialog
         open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        onClose={() => {
+          setDialogOpen(false);
+          setPrefilledAppointmentSlot(null);
+        }}
         officeId={officeId}
         onAppointmentCreated={(appointment) => {
           handleAppointmentCreated(appointment);
           setActionToast('Cita guardada correctamente');
+          setPrefilledAppointmentSlot(null);
         }}
         initialNotifyPatient={newAppointmentNotificationDefault}
         initialGenderDefault={newAppointmentDefaultGender}
         consultationReasons={newAppointmentConsultationReasons}
         defaultAvailabilityMinutes={newAppointmentBaseMinutes}
+        initialSlot={prefilledAppointmentSlot}
+        initialStep={prefilledAppointmentSlot ? 'patient' : 'dates'}
       />
       <NewAppointmentDialog
         open={rescheduleDialogOpen}

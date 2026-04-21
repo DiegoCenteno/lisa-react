@@ -121,6 +121,8 @@ interface Props {
     minutes: number | null;
   }>;
   defaultAvailabilityMinutes?: number;
+  initialSlot?: AvailableSlot | null;
+  initialStep?: WizardStep;
 }
 
 type WizardStep = 'dates' | 'patient' | 'summary';
@@ -147,6 +149,8 @@ export default function NewAppointmentDialog({
   initialGenderDefault = '',
   consultationReasons = [],
   defaultAvailabilityMinutes = 10,
+  initialSlot = null,
+  initialStep = 'dates',
 }: Props) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -216,13 +220,13 @@ export default function NewAppointmentDialog({
   // â”€â”€ Reset on open â”€â”€
   useEffect(() => {
     if (open) {
-      setStep('dates');
+      setStep(initialSlot ? initialStep : 'dates');
       setAvailableDates([]);
       setAvailableTxt('');
       setShowAllDates(false);
       setExpandedDate(null);
       setSlots([]);
-      setSelectedSlot(null);
+      setSelectedSlot(initialSlot);
       setShowConsultationReasonPicker(false);
       setSelectedConsultationReasonKey('');
       setPatients([]);
@@ -262,7 +266,7 @@ export default function NewAppointmentDialog({
       loadAvailableDates();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialGenderDefault, initialNotifyPatient, open]);
+  }, [initialGenderDefault, initialNotifyPatient, initialSlot, initialStep, open]);
 
   useEffect(() => {
     if (patientSearchDebounceRef.current !== null) {
