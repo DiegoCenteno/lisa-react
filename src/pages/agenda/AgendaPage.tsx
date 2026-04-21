@@ -370,6 +370,7 @@ export default function AgendaPage() {
     patient: PatientSimple | null;
     reason?: string;
   } | null>(null);
+  const [selectedAppointmentData, setSelectedAppointmentData] = useState<Appointment | null>(null);
   const [showAppointmentDetails, setShowAppointmentDetails] = useState(false);
   const [showAppointmentMore, setShowAppointmentMore] = useState(false);
   const [newsRailCollapsed, setNewsRailCollapsed] = useState(false);
@@ -473,9 +474,10 @@ export default function AgendaPage() {
     if (patientSearchInputRef.current) {
       patientSearchInputRef.current.value = '';
     }
-    setDialogOpen(false);
-    setSelectedEvent(null);
-    setPendingAction(null);
+      setDialogOpen(false);
+      setSelectedEvent(null);
+      setSelectedAppointmentData(null);
+      setPendingAction(null);
     setNotifyPatientAction(false);
     setActionLoading(false);
     setActionToast(null);
@@ -615,6 +617,7 @@ export default function AgendaPage() {
   );
   const handleEventClick = (clickInfo: EventClickArg) => {
     setSelectedEvent(clickInfo);
+    setSelectedAppointmentData(null);
     setPendingAction(null);
     setNotifyPatientAction(false);
     setShowAppointmentDetails(false);
@@ -624,24 +627,68 @@ export default function AgendaPage() {
     setAppointmentActivityLogsExpanded(false);
   };
 
-  const isSelectedEventToday = selectedEvent
-    ? dayjs(selectedEvent.event.start).isSame(dayjs(), 'day')
+  const selectedAppointmentView = useMemo(() => {
+    if (selectedAppointmentData) {
+      const patientName = selectedAppointmentData.patient
+        ? `${toPascalCaseName(selectedAppointmentData.patient.name)} ${toPascalCaseName(selectedAppointmentData.patient.last_name)}`.trim()
+        : `Paciente #${selectedAppointmentData.patient_id}`;
+
+      return {
+        id: Number(selectedAppointmentData.id),
+        patientId: Number(selectedAppointmentData.patient_id),
+        patientName,
+        datestart: selectedAppointmentData.datestart,
+        dateend: selectedAppointmentData.dateend,
+        status: Number(selectedAppointmentData.status ?? 0),
+        reason: String(selectedAppointmentData.reason ?? ''),
+        phone: String(selectedAppointmentData.patient?.phone ?? ''),
+        confirmed: Boolean(selectedAppointmentData.confirmed || Number(selectedAppointmentData.status) === 1),
+        smscode: String(selectedAppointmentData.smscode ?? ''),
+        isFirstTime: Boolean(selectedAppointmentData.is_first_time),
+        historyFormRequired: Boolean(selectedAppointmentData.history_form_required),
+      };
+    }
+
+    if (selectedEvent) {
+      return {
+        id: Number(selectedEvent.event.id),
+        patientId: Number(selectedEvent.event.extendedProps.patientId ?? 0),
+        patientName: String(selectedEvent.event.title || '').trim() || 'Paciente',
+        datestart: dayjs(selectedEvent.event.start).format('YYYY-MM-DD HH:mm:ss'),
+        dateend: dayjs(selectedEvent.event.end ?? selectedEvent.event.start).format('YYYY-MM-DD HH:mm:ss'),
+        status: Number(selectedEvent.event.extendedProps.status ?? 0),
+        reason: String(selectedEvent.event.extendedProps.reason ?? ''),
+        phone: String(selectedEvent.event.extendedProps.phone ?? ''),
+        confirmed: Boolean(
+          selectedEvent.event.extendedProps.confirmed || Number(selectedEvent.event.extendedProps.status ?? 0) === 1
+        ),
+        smscode: String(selectedEvent.event.extendedProps.smscode ?? ''),
+        isFirstTime: Boolean(selectedEvent.event.extendedProps.is_first_time),
+        historyFormRequired: Boolean(selectedEvent.event.extendedProps.history_form_required),
+      };
+    }
+
+    return null;
+  }, [selectedAppointmentData, selectedEvent]);
+
+  const isSelectedEventToday = selectedAppointmentView
+    ? dayjs(selectedAppointmentView.datestart).isSame(dayjs(), 'day')
     : false;
-  const selectedEventDayDiff = selectedEvent
-    ? dayjs(selectedEvent.event.start).startOf('day').diff(dayjs().startOf('day'), 'day')
+  const selectedEventDayDiff = selectedAppointmentView
+    ? dayjs(selectedAppointmentView.datestart).startOf('day').diff(dayjs().startOf('day'), 'day')
     : 0;
   const isSelectedEventTomorrow = selectedEventDayDiff === 1;
   const isSelectedEventPastTwoOrMoreDays = selectedEventDayDiff <= -2;
   const isSelectedEventFutureTwoOrMoreDays = selectedEventDayDiff >= 2;
-  const selectedEventStatus = Number(selectedEvent?.event.extendedProps.status ?? -1);
+  const selectedEventStatus = Number(selectedAppointmentView?.status ?? -1);
   const selectedEventIsConfirmed = Boolean(
-    selectedEvent
+    selectedAppointmentView
     && selectedEventStatus !== 2
     && selectedEventStatus !== 3
-    && (selectedEvent.event.extendedProps.confirmed || selectedEventStatus === 1)
+    && (selectedAppointmentView.confirmed || selectedEventStatus === 1)
   );
   const selectedEventIsCancelled = selectedEventStatus === 3;
-  const canConfirmSelectedEvent = selectedEvent
+  const canConfirmSelectedEvent = selectedAppointmentView
     ? (
       !selectedEventIsConfirmed
       && (
@@ -652,17 +699,28 @@ export default function AgendaPage() {
     )
     : false;
   const canReactivateSelectedEvent = Boolean(
-    selectedEvent
+    selectedAppointmentView
     && selectedEventIsCancelled
     && isSelectedEventFutureTwoOrMoreDays
   );
   const selectedEventCanNotifyPatient = Boolean(
-    String(selectedEvent?.event.extendedProps.phone ?? '').trim()
+    String(selectedAppointmentView?.phone ?? '').trim()
   );
 
-  const handleAppointmentCreated = useCallback(() => {
+  const handleAppointmentCreated = useCallback((appointment?: Appointment) => {
+    if (appointment?.id) {
+      setSelectedEvent(null);
+      setSelectedAppointmentData(appointment);
+      setPendingAction(null);
+      setNotifyPatientAction(false);
+      setShowAppointmentDetails(true);
+      setShowAppointmentMore(false);
+      setAppointmentActivityLogs([]);
+      setAppointmentActivityLogsScope('appointment');
+      setAppointmentActivityLogsExpanded(false);
+    }
     if (dateRange) {
-      loadAppointments(dateRange.start, dateRange.end);
+      void loadAppointments(dateRange.start, dateRange.end);
     }
   }, [dateRange, loadAppointments]);
 
@@ -707,16 +765,19 @@ export default function AgendaPage() {
   }, [birthEditorValue, selectedPatientRecord]);
 
   const handleSaveAppointmentReason = useCallback(async () => {
-    if (!selectedEvent) return;
+    if (!selectedAppointmentView) return;
 
     setReasonSaving(true);
     try {
       const nextReason = String(reasonInputRef.current?.value ?? '').trim();
-      await appointmentService.updateAppointment(Number(selectedEvent.event.id), {
+      await appointmentService.updateAppointment(Number(selectedAppointmentView.id), {
         reason: nextReason,
       });
 
-      selectedEvent.event.setExtendedProp('reason', nextReason);
+      if (selectedEvent) {
+        selectedEvent.event.setExtendedProp('reason', nextReason);
+      }
+      setSelectedAppointmentData((prev) => prev ? { ...prev, reason: nextReason } : prev);
       setReasonEditorOpen(false);
       setActionToast('Motivo actualizado');
     } catch (error) {
@@ -725,10 +786,11 @@ export default function AgendaPage() {
     } finally {
       setReasonSaving(false);
     }
-  }, [selectedEvent]);
+  }, [selectedAppointmentView, selectedEvent]);
 
   const handleCloseSelectedEvent = useCallback(() => {
     setSelectedEvent(null);
+    setSelectedAppointmentData(null);
     setSelectedPatientRecord(null);
     setBirthEditorOpen(false);
     setBirthEditorValue('');
@@ -760,7 +822,7 @@ export default function AgendaPage() {
   }, [officeId, offices]);
 
   useEffect(() => {
-    const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
+    const patientId = Number(selectedAppointmentView?.patientId ?? 0);
     if (!patientId) {
       setSelectedPatientRecord(null);
       return;
@@ -790,15 +852,15 @@ export default function AgendaPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedEvent]);
+  }, [selectedAppointmentView]);
 
   const handleCopyAppointmentDetails = useCallback(async () => {
-    if (!selectedEvent) return;
+    if (!selectedAppointmentView) return;
 
     const selectedOffice = offices.find((office) => office.id === officeId);
-    const patientName = String(selectedEvent.event.title || '').trim() || 'Paciente';
-    const appointmentDate = dayjs(selectedEvent.event.start).format('dddd, DD/MMM/YYYY');
-    const appointmentTime = `${dayjs(selectedEvent.event.start).format('HH:mm')} hrs`;
+    const patientName = String(selectedAppointmentView.patientName || '').trim() || 'Paciente';
+    const appointmentDate = dayjs(selectedAppointmentView.datestart).format('dddd, DD/MMM/YYYY');
+    const appointmentTime = `${dayjs(selectedAppointmentView.datestart).format('HH:mm')} hrs`;
     const address = selectedOffice
       ? [selectedOffice.address, selectedOffice.suburb].filter(Boolean).join(' ')
       : 'Consultorio';
@@ -821,12 +883,12 @@ export default function AgendaPage() {
     } catch (error) {
       console.error('Error copiando datos de la cita:', error);
     }
-  }, [doctorName, doctorSpecialty, handleCloseSelectedEvent, officeId, offices, selectedEvent]);
+  }, [doctorName, doctorSpecialty, handleCloseSelectedEvent, officeId, offices, selectedAppointmentView]);
 
   const handleCopyHistoryFormLink = useCallback(async () => {
-    if (!selectedEvent) return;
+    if (!selectedAppointmentView) return;
 
-    const smscode = String(selectedEvent.event.extendedProps.smscode || '').trim();
+    const smscode = String(selectedAppointmentView.smscode || '').trim();
     if (!smscode) return;
 
     const baseUrl = (import.meta.env.VITE_PUBLIC_APP_BASE_URL as string | undefined)?.trim() || 'https://lisamedic.com';
@@ -838,61 +900,61 @@ export default function AgendaPage() {
     } catch (error) {
       console.error('Error copiando enlace de historia clínica:', error);
     }
-  }, [selectedEvent]);
+  }, [selectedAppointmentView]);
 
   const handleOpenReschedule = useCallback(() => {
-    if (!selectedEvent) return;
+    if (!selectedAppointmentView) return;
 
-    const patientName = String(selectedEvent.event.title || '').trim();
+    const patientName = String(selectedAppointmentView.patientName || '').trim();
     const patientNameParts = patientName.split(/\s+/);
-    const currentPatient: PatientSimple | null = selectedEvent.event.extendedProps.patientId
+    const currentPatient: PatientSimple | null = selectedAppointmentView.patientId
       ? {
-          id: Number(selectedEvent.event.extendedProps.patientId),
+          id: Number(selectedAppointmentView.patientId),
           full_name: patientName,
           name: patientNameParts[0] ?? patientName,
           last_name: patientNameParts.slice(1).join(' '),
-          phone: String(selectedEvent.event.extendedProps.phone || ''),
+          phone: String(selectedAppointmentView.phone || ''),
           phone_code: '',
-          full_phone: String(selectedEvent.event.extendedProps.phone || ''),
+          full_phone: String(selectedAppointmentView.phone || ''),
         }
       : null;
 
     setRescheduleAppointment({
-      id: Number(selectedEvent.event.id),
+      id: Number(selectedAppointmentView.id),
       patient: currentPatient,
-      reason: String(selectedEvent.event.extendedProps.reason || ''),
+      reason: String(selectedAppointmentView.reason || ''),
     });
     handleCloseSelectedEvent();
     setRescheduleDialogOpen(true);
-  }, [selectedEvent, handleCloseSelectedEvent]);
+  }, [selectedAppointmentView, handleCloseSelectedEvent]);
 
   const handleOpenAssignAppointment = useCallback(() => {
-    if (!selectedEvent) return;
+    if (!selectedAppointmentView) return;
 
-    const patientName = String(selectedEvent.event.title || '').trim();
+    const patientName = String(selectedAppointmentView.patientName || '').trim();
     const patientNameParts = patientName.split(/\s+/);
-    const currentPatient: PatientSimple | null = selectedEvent.event.extendedProps.patientId
+    const currentPatient: PatientSimple | null = selectedAppointmentView.patientId
       ? {
-          id: Number(selectedEvent.event.extendedProps.patientId),
+          id: Number(selectedAppointmentView.patientId),
           full_name: patientName,
           name: patientNameParts[0] ?? patientName,
           last_name: patientNameParts.slice(1).join(' '),
-          phone: String(selectedEvent.event.extendedProps.phone || ''),
+          phone: String(selectedAppointmentView.phone || ''),
           phone_code: '',
-          full_phone: String(selectedEvent.event.extendedProps.phone || ''),
+          full_phone: String(selectedAppointmentView.phone || ''),
         }
       : null;
 
     setAssignAppointment({
       patient: currentPatient,
-      reason: String(selectedEvent.event.extendedProps.reason || ''),
+      reason: String(selectedAppointmentView.reason || ''),
     });
     handleCloseSelectedEvent();
     setAssignDialogOpen(true);
-  }, [selectedEvent, handleCloseSelectedEvent]);
+  }, [selectedAppointmentView, handleCloseSelectedEvent]);
 
   const handleAppointmentStatusAction = useCallback(async () => {
-    if (!selectedEvent || !pendingAction) return;
+    if (!selectedAppointmentView || !pendingAction) return;
 
     const statusMap: Record<AppointmentAction, number> = {
       confirm: 1,
@@ -909,7 +971,7 @@ export default function AgendaPage() {
 
     setActionLoading(true);
     try {
-      await appointmentService.updateAppointment(Number(selectedEvent.event.id), {
+      await appointmentService.updateAppointment(Number(selectedAppointmentView.id), {
         status: statusMap[pendingAction],
         notify_patient:
           pendingAction === 'confirm' || pendingAction === 'cancel'
@@ -927,10 +989,10 @@ export default function AgendaPage() {
       console.error('Error actualizando estatus de la cita:', error);
       setActionLoading(false);
     }
-  }, [selectedEvent, pendingAction, notifyPatientAction, selectedEventCanNotifyPatient, dateRange, loadAppointments, handleCloseSelectedEvent]);
+  }, [selectedAppointmentView, pendingAction, notifyPatientAction, selectedEventCanNotifyPatient, dateRange, loadAppointments, handleCloseSelectedEvent]);
 
   const handleOpenAppointmentMore = useCallback(async () => {
-    if (!selectedEvent) return;
+    if (!selectedAppointmentView) return;
 
     setShowAppointmentMore(true);
     setShowAppointmentDetails(false);
@@ -938,7 +1000,7 @@ export default function AgendaPage() {
     setAppointmentActivityLogsExpanded(false);
 
     try {
-      const appointmentLogs = await appointmentService.getAppointmentActivityLogs(Number(selectedEvent.event.id), {
+      const appointmentLogs = await appointmentService.getAppointmentActivityLogs(Number(selectedAppointmentView.id), {
         days: 7,
         limit: 10,
       });
@@ -949,7 +1011,7 @@ export default function AgendaPage() {
         return;
       }
 
-      const patientId = Number(selectedEvent.event.extendedProps.patientId ?? 0);
+      const patientId = Number(selectedAppointmentView.patientId ?? 0);
       if (!patientId) {
         setAppointmentActivityLogs([]);
         setAppointmentActivityLogsScope('appointment');
@@ -970,7 +1032,7 @@ export default function AgendaPage() {
     } finally {
       setActivityLogsLoading(false);
     }
-  }, [selectedEvent]);
+  }, [selectedAppointmentView]);
 
   const displayAppointmentActivityLogs = useMemo(
     () => filterInstantConfirmationLogs(appointmentActivityLogs),
@@ -985,7 +1047,7 @@ export default function AgendaPage() {
   const handleOpenSummary = useCallback(async () => {
     if (!canViewPatientSummary) return;
 
-    const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
+    const patientId = Number(selectedAppointmentView?.patientId ?? 0);
     if (!patientId) return;
 
     setSummaryOpen(true);
@@ -1002,31 +1064,31 @@ export default function AgendaPage() {
     } finally {
       setSummaryLoading(false);
     }
-  }, [canViewPatientSummary, handleCloseSelectedEvent, selectedEvent]);
+  }, [canViewPatientSummary, handleCloseSelectedEvent, selectedAppointmentView]);
 
   const handleOpenPatientHistoryFromSummary = useCallback(() => {
-    const patientId = Number(summaryData?.patient.id ?? selectedEvent?.event.extendedProps.patientId ?? 0);
+    const patientId = Number(summaryData?.patient.id ?? selectedAppointmentView?.patientId ?? 0);
     if (!patientId) return;
 
     setSummaryOpen(false);
     navigate(`/pacientes/${patientId}?tab=history`);
-  }, [navigate, selectedEvent, summaryData]);
+  }, [navigate, selectedAppointmentView, summaryData]);
 
   const handleOpenPatientProfile = useCallback(() => {
-    const patientId = Number(selectedEvent?.event.extendedProps.patientId ?? 0);
+    const patientId = Number(selectedAppointmentView?.patientId ?? 0);
     if (!patientId) return;
 
     handleCloseSelectedEvent();
     navigate(`/pacientes/${patientId}?tab=general`);
-  }, [handleCloseSelectedEvent, navigate, selectedEvent]);
+  }, [handleCloseSelectedEvent, navigate, selectedAppointmentView]);
 
   const handleOpenNewConsultationFromSummary = useCallback(() => {
-    const patientId = Number(summaryData?.patient.id ?? selectedEvent?.event.extendedProps.patientId ?? 0);
+    const patientId = Number(summaryData?.patient.id ?? selectedAppointmentView?.patientId ?? 0);
     if (!patientId) return;
 
     setSummaryOpen(false);
     navigate(`/pacientes/${patientId}?tab=soap`);
-  }, [navigate, selectedEvent, summaryData]);
+  }, [navigate, selectedAppointmentView, summaryData]);
 
   const handleEventDidMount = useCallback((info: { el: HTMLElement; event: { backgroundColor: string; textColor: string; extendedProps: Record<string, unknown> }; view: { type: string } }) => {
     if (info.view.type.startsWith('list')) {
@@ -1347,7 +1409,7 @@ export default function AgendaPage() {
 
       {/* Dialog: Detalle de cita */}
       <Dialog
-        open={!!selectedEvent}
+        open={!!selectedAppointmentView}
         onClose={handleCloseSelectedEvent}
         maxWidth="xs"
         fullWidth
@@ -1382,7 +1444,7 @@ export default function AgendaPage() {
             maxHeight: { xs: 'calc(100vh - 24px)', sm: 'calc(100vh - 96px)' },
           }}
         >
-          {selectedEvent && (
+          {selectedAppointmentView && (
             <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <Box
                   sx={{
@@ -1406,11 +1468,7 @@ export default function AgendaPage() {
                     flex: 1,
                   }}
                 >
-                  {showAppointmentMore
-                    ? `Movimientos de la cita`
-                    : showAppointmentDetails
-                    ? ''
-                    : doctorName}
+                    {showAppointmentMore ? 'Movimientos de la cita' : ''}
                 </Typography>
                 <IconButton
                   onClick={handleCloseSelectedEvent}
@@ -1590,19 +1648,19 @@ export default function AgendaPage() {
                         <Typography sx={{ fontSize: { xs: '0.9rem', sm: '0.98rem' }, color: '#666' }}>
                           Paciente:{' '}
                           <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
-                            {selectedEvent.event.title}
+                            {selectedAppointmentView.patientName}
                           </Box>
                         </Typography>
                         <Typography sx={{ fontSize: { xs: '0.9rem', sm: '0.98rem' }, color: '#666' }}>
                           Fecha de la cita:{' '}
                           <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
-                            {dayjs(selectedEvent.event.start).format('dddd, DD/MMM/YYYY')}
+                            {dayjs(selectedAppointmentView.datestart).format('dddd, DD/MMM/YYYY')}
                           </Box>
                         </Typography>
                         <Typography sx={{ fontSize: { xs: '0.9rem', sm: '0.98rem' }, color: '#666' }}>
                           Hora de la cita:{' '}
                           <Box component="span" sx={{ fontWeight: 500, color: '#555' }}>
-                            {dayjs(selectedEvent.event.start).format('HH:mm')} hrs
+                            {dayjs(selectedAppointmentView.datestart).format('HH:mm')} hrs
                           </Box>
                         </Typography>
 
@@ -1667,8 +1725,8 @@ export default function AgendaPage() {
                     Regresar
                   </Button>
 
-                  {selectedEvent.event.extendedProps.smscode &&
-                  selectedEvent.event.extendedProps.is_first_time ? (
+                  {selectedAppointmentView.smscode &&
+                  selectedAppointmentView.isFirstTime ? (
                     <Box
                       sx={{
                         mt: 1.5,
@@ -1677,7 +1735,7 @@ export default function AgendaPage() {
                         gap: 1.25,
                       }}
                     >
-                      {selectedEvent.event.extendedProps.history_form_required ? (
+                      {selectedAppointmentView.historyFormRequired ? (
                         <>
                           <Typography sx={{ fontSize: '0.95rem', color: '#5f6a76', lineHeight: 1.6 }}>
                             Comparte un enlace con tu paciente para que conteste las preguntas de su historia clínica.
@@ -1727,7 +1785,7 @@ export default function AgendaPage() {
               ) : (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: isShortViewport ? 0.2 : 0.35, sm: isShortViewport ? 0.45 : 0.65 } }}>
                 <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
-                  Paciente: {selectedEvent.event.title}{' '}
+                  Paciente: {selectedAppointmentView.patientName}{' '}
                   <Button
                     variant="text"
                     onClick={() => setBirthEditorOpen((current) => !current)}
@@ -1762,7 +1820,7 @@ export default function AgendaPage() {
                   </Box>
                 ) : null}
                 <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
-                  Fecha de la cita: {`${dayjs(selectedEvent.event.start).format('dddd, DD/MMM HH:mm')} hrs`}
+                  Fecha de la cita: {`${dayjs(selectedAppointmentView.datestart).format('dddd, DD/MMM HH:mm')} hrs`}
                 </Typography>
                 <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
                   Motivo de la consulta:{' '}
@@ -1777,17 +1835,17 @@ export default function AgendaPage() {
                       verticalAlign: 'baseline',
                     }}
                   >
-                    {String(selectedEvent.event.extendedProps.reason || 'No registrado')}
+                    {String(selectedAppointmentView.reason || 'No registrado')}
                   </Button>
                 </Typography>
                 {reasonEditorOpen ? (
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                     <TextField
-                      key={`reason-editor-${selectedEvent.event.id}-${String(selectedEvent.event.extendedProps.reason ?? '')}`}
+                      key={`reason-editor-${selectedAppointmentView.id}-${String(selectedAppointmentView.reason ?? '')}`}
                       inputRef={reasonInputRef}
                       size="small"
                       fullWidth
-                      defaultValue={String(selectedEvent.event.extendedProps.reason ?? '')}
+                      defaultValue={String(selectedAppointmentView.reason ?? '')}
                       sx={{ maxWidth: 420 }}
                     />
                     <Button
@@ -1816,10 +1874,10 @@ export default function AgendaPage() {
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.75, sm: 1 } }}>
-                    {selectedEvent.event.extendedProps.phone ? (
+                    {selectedAppointmentView.phone ? (
                       <Typography
                         component="a"
-                        href={`tel:${String(selectedEvent.event.extendedProps.phone || '')}`}
+                        href={`tel:${String(selectedAppointmentView.phone || '')}`}
                         sx={{
                           fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' },
                           color: '#4b5b6b',
@@ -1827,7 +1885,7 @@ export default function AgendaPage() {
                           textUnderlineOffset: '2px',
                         }}
                       >
-                        Celular: {String(selectedEvent.event.extendedProps.phone)}
+                        Celular: {String(selectedAppointmentView.phone)}
                       </Typography>
                     ) : (
                       <Typography sx={{ fontSize: { xs: isShortViewport ? '0.84rem' : '0.9rem', sm: isShortViewport ? '0.9rem' : '0.95rem' }, color: '#4b5b6b' }}>
@@ -1836,7 +1894,7 @@ export default function AgendaPage() {
                     )}
                     <IconButton
                       size="small"
-                      onClick={() => handleCopyPhone(String(selectedEvent.event.extendedProps.phone || ''))}
+                      onClick={() => handleCopyPhone(String(selectedAppointmentView.phone || ''))}
                       sx={{
                         border: '1px solid #49c5ff',
                         borderRadius: 1,
@@ -1849,12 +1907,12 @@ export default function AgendaPage() {
                     </IconButton>
                   </Box>
                   {isMobile ? (
-                    isValidTenDigitPhone(String(selectedEvent.event.extendedProps.phone || '')) ? (
+                    isValidTenDigitPhone(String(selectedAppointmentView.phone || '')) ? (
                       <IconButton
                         size="small"
                         component="a"
                         href={buildWhatsAppHref(
-                          String(selectedEvent.event.extendedProps.phone || ''),
+                          String(selectedAppointmentView.phone || ''),
                           null,
                         ) ?? undefined}
                         target="_blank"
@@ -2454,8 +2512,8 @@ export default function AgendaPage() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         officeId={officeId}
-        onAppointmentCreated={() => {
-          handleAppointmentCreated();
+        onAppointmentCreated={(appointment) => {
+          handleAppointmentCreated(appointment);
           setActionToast('Cita guardada correctamente');
         }}
         initialNotifyPatient={newAppointmentNotificationDefault}
@@ -2470,8 +2528,8 @@ export default function AgendaPage() {
           setRescheduleAppointment(null);
         }}
         officeId={officeId}
-        onAppointmentCreated={() => {
-          handleAppointmentCreated();
+        onAppointmentCreated={(appointment) => {
+          handleAppointmentCreated(appointment);
           setActionToast('Cita reprogramada correctamente');
           setRescheduleDialogOpen(false);
           setRescheduleAppointment(null);
@@ -2492,8 +2550,8 @@ export default function AgendaPage() {
           setAssignAppointment(null);
         }}
         officeId={officeId}
-        onAppointmentCreated={() => {
-          handleAppointmentCreated();
+        onAppointmentCreated={(appointment) => {
+          handleAppointmentCreated(appointment);
           setAssignDialogOpen(false);
           setAssignAppointment(null);
         }}

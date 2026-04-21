@@ -28,7 +28,7 @@ import {
   CalendarMonth as CalendarMonthIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
-import type { AvailableSlot, PatientSimple, NewPatientData, PatientSearchResult } from '../../types';
+import type { Appointment, AvailableSlot, PatientSimple, NewPatientData, PatientSearchResult } from '../../types';
 import { appointmentService } from '../../api/appointmentService';
 import dayjs from 'dayjs';
 import 'dayjs/locale/es';
@@ -108,7 +108,7 @@ interface Props {
   open: boolean;
   onClose: () => void;
   officeId: number;
-  onAppointmentCreated: () => void;
+  onAppointmentCreated: (appointment: Appointment) => void;
   mode?: 'create' | 'reschedule' | 'assign';
   appointmentId?: number;
   initialPatient?: PatientSimple | null;
@@ -539,6 +539,7 @@ export default function NewAppointmentDialog({
     setSaving(true);
     setSaveError('');
     try {
+      let savedAppointment: Appointment | null = null;
       if (mode === 'reschedule') {
         if (!appointmentId) {
           throw new Error('Appointment ID requerido para reprogramar');
@@ -549,14 +550,14 @@ export default function NewAppointmentDialog({
           appointmentDate.isSame(dayjs().add(1, 'day'), 'day')
         ) ? 1 : 0;
 
-        await appointmentService.updateAppointment(appointmentId, {
+        savedAppointment = await appointmentService.updateAppointment(appointmentId, {
           datestart: selectedSlot.datestart,
           dateend: selectedSlot.dateend,
           status: recalculatedStatus,
           reason: reason || undefined,
         });
       } else if (mode === 'assign' && selectedPatient) {
-        await appointmentService.createAppointment({
+        savedAppointment = await appointmentService.createAppointment({
           office_id: officeId,
           patient_id: selectedPatient.id,
           datestart: selectedSlot.datestart,
@@ -570,7 +571,7 @@ export default function NewAppointmentDialog({
             : undefined,
         });
       } else if (selectedPatient) {
-        await appointmentService.createAppointment({
+        savedAppointment = await appointmentService.createAppointment({
           office_id: officeId,
           patient_id: selectedPatient.id,
           datestart: selectedSlot.datestart,
@@ -584,7 +585,7 @@ export default function NewAppointmentDialog({
             : undefined,
         });
       } else {
-        await appointmentService.createAppointmentWithNewPatient({
+        savedAppointment = await appointmentService.createAppointmentWithNewPatient({
           office_id: officeId,
           datestart: selectedSlot.datestart,
           dateend: selectedSlot.dateend,
@@ -599,7 +600,10 @@ export default function NewAppointmentDialog({
           notify_patient: patientCanBeNotified ? notifyPatient : false,
         });
       }
-      onAppointmentCreated();
+      if (!savedAppointment?.id) {
+        throw new Error('No se pudo resolver la cita guardada');
+      }
+      onAppointmentCreated(savedAppointment);
       onClose();
     } catch (err) {
       console.error('Error saving appointment:', err);
