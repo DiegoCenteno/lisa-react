@@ -781,6 +781,7 @@ export interface StudyDeliveryItem {
   download_count: number;
   notes?: string | null;
   sent_by?: string | null;
+  evidence_file?: StudyDeliveryFileItem | null;
   files: StudyDeliveryFileItem[];
 }
 

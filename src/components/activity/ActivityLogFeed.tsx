@@ -135,6 +135,10 @@ function getDisplayTitle(log: ActivityLogItem): string {
     return 'Recordatorio De Cita 5 Días Antes Enviado.';
   }
 
+  if (normalizedAction === 'study_shipment_registered') {
+    return 'Envío A Laboratorio Registrado';
+  }
+
   return toCamelCaseWords(log.message || log.action);
 }
 
@@ -223,6 +227,26 @@ function getActivityMetaLines(log: ActivityLogItem): string[] {
     lines.push(`Motivo: ${String(meta.new_reason)}`);
   } else if ('reason' in meta && String(meta.reason ?? '').trim() !== '') {
     lines.push(`Motivo: ${String(meta.reason)}`);
+  }
+
+  if (log.action === 'study_shipment_registered') {
+    if ('study_name' in meta && String(meta.study_name ?? '').trim() !== '') {
+      lines.push(`Estudio: ${String(meta.study_name)}`);
+    }
+    if ('laboratory_name' in meta && String(meta.laboratory_name ?? '').trim() !== '') {
+      lines.push(`Laboratorio: ${String(meta.laboratory_name)}`);
+    }
+    if ('sent_at' in meta && String(meta.sent_at ?? '').trim() !== '') {
+      lines.push(`Envío: ${String(meta.sent_at)}`);
+    }
+    if ('source_mode' in meta) {
+      const sourceMode = String(meta.source_mode ?? '').trim().toLowerCase();
+      if (sourceMode === 'existing_sample') {
+        lines.push('Origen: Muestra tomada existente');
+      } else if (sourceMode === 'new_study') {
+        lines.push('Origen: Estudio nuevo');
+      }
+    }
   }
 
   return lines;

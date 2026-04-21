@@ -77,6 +77,7 @@ type DailyNoteBootstrapData = {
 };
 
 const dailyNoteBootstrapRequests = new Map<string, Promise<DailyNoteBootstrapData>>();
+const PRESCRIPTION_PRINT_A5_HINT_KEY = 'lisa_prescription_print_a5_hint_seen_v1';
 
 function isDailyNoteFieldVisible(visibility: DailyNoteVisibilityMap, key: string): boolean {
   return visibility[key] !== false;
@@ -1410,6 +1411,7 @@ function PatientDailyNoteTab({
   const [recentMedicamentHistory, setRecentMedicamentHistory] = useState<MedicamentHistoryItem[]>([]);
   const [prescriptionPreviewUrl, setPrescriptionPreviewUrl] = useState<string | null>(null);
   const [prescriptionPreviewName, setPrescriptionPreviewName] = useState('Receta PDF');
+  const [prescriptionPrintHintOpen, setPrescriptionPrintHintOpen] = useState(false);
   const [studyTypes, setStudyTypes] = useState<StudyTypeItem[]>([]);
   const [selectedStudyTypeIds, setSelectedStudyTypeIds] = useState<number[]>([]);
   const draftRestoredRef = useRef(false);
@@ -2095,7 +2097,8 @@ function PatientDailyNoteTab({
     setPrescriptionPreviewUrl(null);
     setPrescriptionPreviewName('Receta PDF');
   }, [prescriptionPreviewUrl]);
-  const handlePrintPrescription = useCallback(() => {
+
+  const openPrescriptionPreview = useCallback(() => {
     setDailyNoteError(null);
     void consultationService.downloadPrescriptionPdf(buildPrescriptionPayload())
       .then((blob) => {
@@ -2107,10 +2110,48 @@ function PatientDailyNoteTab({
         setPrescriptionPreviewName('Receta PDF');
       })
       .catch((error) => {
-        console.error('Error abriendo receta para impresi?n:', error);
-        setDailyNoteError('No se pudo abrir la receta para impresi?n.');
+        console.error('Error abriendo receta para impresión:', error);
+        setDailyNoteError('No se pudo abrir la receta para impresión.');
       });
   }, [buildPrescriptionPayload, prescriptionPreviewUrl]);
+
+  const handleConfirmPrescriptionPrintHint = useCallback(() => {
+    try {
+      localStorage.setItem(PRESCRIPTION_PRINT_A5_HINT_KEY, '1');
+    } catch (error) {
+      console.warn('No se pudo persistir el aviso de impresión de receta:', error);
+    }
+    setPrescriptionPrintHintOpen(false);
+    openPrescriptionPreview();
+  }, [openPrescriptionPreview]);
+
+  const handlePrintPrescription = useCallback(async () => {
+    setDailyNoteError(null);
+    const officeId = Number(patient.office_id ?? sessionStorage.getItem('cached_office_id') ?? 0);
+
+    if (officeId > 0) {
+      let hintAlreadySeen = false;
+      try {
+        hintAlreadySeen = localStorage.getItem(PRESCRIPTION_PRINT_A5_HINT_KEY) === '1';
+      } catch (error) {
+        console.warn('No se pudo leer el aviso de impresión de receta:', error);
+      }
+
+      if (!hintAlreadySeen) {
+        try {
+          const printSettings = await settingsService.getPrintSettings(officeId);
+          if (printSettings.print_type === 0 || printSettings.print_type === 2) {
+            setPrescriptionPrintHintOpen(true);
+            return;
+          }
+        } catch (error) {
+          console.error('No se pudo obtener la configuración de impresión de la receta:', error);
+        }
+      }
+    }
+
+    openPrescriptionPreview();
+  }, [openPrescriptionPreview, patient.office_id]);
 
   const handleSelectPrescriptionWord = useCallback(async () => {
     setPrescriptionFormatOpen(false);
@@ -2310,7 +2351,7 @@ function PatientDailyNoteTab({
         <DialogTitle>Descargar receta</DialogTitle>
         <DialogContent dividers>
           <Typography>
-            ?En qu? formato deseas descargar la receta?
+            ¿En qué formato deseas descargar la receta?
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -2322,6 +2363,27 @@ function PatientDailyNoteTab({
           </Button>
           <Button variant="contained" onClick={() => void handleSelectPrescriptionWord()}>
             Word
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={prescriptionPrintHintOpen}
+        onClose={() => setPrescriptionPrintHintOpen(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Configuración de impresión</DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            En la ventana de impresión, selecciona tamaño A5 para que la receta respete el formato correcto.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPrescriptionPrintHintOpen(false)} color="inherit">
+            Cancelar
+          </Button>
+          <Button variant="contained" onClick={handleConfirmPrescriptionPrintHint}>
+            Continuar
           </Button>
         </DialogActions>
       </Dialog>

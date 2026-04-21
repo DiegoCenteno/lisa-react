@@ -175,6 +175,55 @@ export const studyDeliveryService = {
     return response.data.data ?? [];
   },
 
+  async createLabShipment(data: {
+    office_id: number;
+    laboratory_id?: number | null;
+    sent_at: string;
+    notes?: string;
+    evidence_file?: File | null;
+    items: Array<{
+      patient_id: number;
+      mode: 'existing_sample' | 'new_study';
+      study_delivery_id?: number | null;
+      study_type_id?: number | null;
+    }>;
+  }): Promise<StudyDeliveryItem[]> {
+    const formData = new FormData();
+    formData.append('office_id', String(data.office_id));
+    formData.append('sent_at', data.sent_at);
+
+    if (data.laboratory_id) {
+      formData.append('laboratory_id', String(data.laboratory_id));
+    }
+
+    if (data.notes?.trim()) {
+      formData.append('notes', data.notes.trim());
+    }
+
+    if (data.evidence_file) {
+      formData.append('evidence_file', data.evidence_file);
+    }
+
+    data.items.forEach((item, index) => {
+      formData.append(`items[${index}][patient_id]`, String(item.patient_id));
+      formData.append(`items[${index}][mode]`, item.mode);
+      if (item.study_delivery_id) {
+        formData.append(`items[${index}][study_delivery_id]`, String(item.study_delivery_id));
+      }
+      if (item.study_type_id) {
+        formData.append(`items[${index}][study_type_id]`, String(item.study_type_id));
+      }
+    });
+
+    const response = await apiClient.post<ApiStudyDeliveryBatchResponse>('/v2/study-deliveries/lab-shipment', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data.data ?? [];
+  },
+
   async updateStudyDelivery(id: number, data: {
     processing_status?: string;
     laboratory_id?: number | null;

@@ -28,16 +28,15 @@ import {
   Typography,
 } from '@mui/material';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import { useNavigate } from 'react-router-dom';
 import { useRef } from 'react';
 import dayjs from 'dayjs';
 import { appointmentService } from '../../api/appointmentService';
 import { patientService } from '../../api/patientService';
 import studyDeliveryService from '../../api/studyDeliveryService';
+import StudyModuleTabs from '../../components/activity/StudyModuleTabs';
 import ClickableDateField from '../../components/ClickableDateField';
 import type { LaboratoryItem, Office, Patient, StudyDeliveryItem } from '../../types';
 
@@ -206,7 +205,6 @@ function statusColor(status: string): 'default' | 'success' | 'warning' | 'error
 
 export default function StudyDeliveriesPage() {
   const defaultSendDateRange = useMemo(() => getDefaultSendDateRange(), []);
-  const navigate = useNavigate();
   const [rows, setRows] = useState<StudyDeliveryItem[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
   const [laboratories, setLaboratories] = useState<LaboratoryItem[]>([]);
@@ -230,6 +228,7 @@ export default function StudyDeliveriesPage() {
   const [editingLaboratoryId, setEditingLaboratoryId] = useState('');
   const [savingDetail, setSavingDetail] = useState(false);
   const [saveDetailError, setSaveDetailError] = useState<string | null>(null);
+  const [saveDetailSuccess, setSaveDetailSuccess] = useState<string | null>(null);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [createPatientSearch, setCreatePatientSearch] = useState('');
   const [patientOptions, setPatientOptions] = useState<Patient[]>([]);
@@ -627,6 +626,7 @@ export default function StudyDeliveriesPage() {
     setEditingProcessingStatus(row.processing_status);
     setEditingLaboratoryId(row.laboratory_id ? String(row.laboratory_id) : '');
     setSaveDetailError(null);
+    setSaveDetailSuccess(null);
   };
 
   const handleSaveDetail = async () => {
@@ -646,6 +646,7 @@ export default function StudyDeliveriesPage() {
 
     setSavingDetail(true);
     setSaveDetailError(null);
+    setSaveDetailSuccess(null);
 
     try {
       const updated = await studyDeliveryService.updateStudyDelivery(selectedRow.id, {
@@ -657,6 +658,7 @@ export default function StudyDeliveriesPage() {
       setEditingProcessingStatus(updated.processing_status);
       setEditingLaboratoryId(updated.laboratory_id ? String(updated.laboratory_id) : '');
       setRows((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      setSaveDetailSuccess('Cambios guardados correctamente.');
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : 'No se pudo actualizar el envío.';
       setSaveDetailError(message);
@@ -665,55 +667,37 @@ export default function StudyDeliveriesPage() {
     }
   };
 
+  const handleOpenEvidenceFile = async (fileId: number) => {
+    try {
+      const blob = await patientService.getFileBlob(fileId);
+      const blobUrl = window.URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => {
+        window.URL.revokeObjectURL(blobUrl);
+      }, 60_000);
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : 'No se pudo abrir la evidencia de envío.';
+      setSaveDetailError(message);
+    }
+  };
+
   return (
     <Box sx={{ display: 'grid', gap: 2.5 }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-          <LocalShippingIcon sx={{ color: 'primary.main' }} />
-          <Box>
-            <Typography variant="h5" sx={{ fontWeight: 700 }}>
-              Control de envíos de estudios
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Seguimiento de resultados de estudios enviados, vistos y descargados.
-            </Typography>
+      <Box sx={{ display: 'grid', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <LocalShippingIcon sx={{ color: 'primary.main' }} />
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                Control de envíos de estudios
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Seguimiento de resultados de estudios enviados, vistos y descargados.
+              </Typography>
+            </Box>
           </Box>
         </Box>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ alignItems: { xs: 'stretch', sm: 'center' } }}>
-          <Button
-            variant="outlined"
-            sx={{
-              color: '#0288d1',
-              borderColor: '#0288d1',
-              '&:hover': {
-                borderColor: '#0277bd',
-                backgroundColor: 'rgba(2, 136, 209, 0.04)',
-              },
-            }}
-            onClick={() => navigate('/estudios/interpretar')}
-          >
-            Interpretación de estudios
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => navigate('/estudios/laboratorios')}
-          >
-            Laboratorio
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => navigate('/estudios/tipos')}
-          >
-            Tipos de estudio
-          </Button>
-          <Button
-            variant="contained"
-            startIcon={<UploadFileIcon />}
-            onClick={() => navigate('/estudios/carga-masiva')}
-          >
-            Carga masiva
-          </Button>
-        </Stack>
+        <StudyModuleTabs />
       </Box>
 
       <Card>
@@ -882,27 +866,13 @@ export default function StudyDeliveriesPage() {
               </Stack>
             </Collapse>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 1.5, flexWrap: 'wrap' }}>
               <Button
                 variant="text"
                 onClick={() => setShowAdvancedFilters((current) => !current)}
                 sx={{ alignSelf: 'flex-start', width: 'fit-content', textTransform: 'none', px: 0 }}
               >
                 Más filtros
-              </Button>
-
-              <Button
-                variant="contained"
-                onClick={handleOpenCreateDialog}
-                disabled={!selectedOfficeId}
-                sx={{
-                  backgroundColor: '#1976d2',
-                  '&:hover': {
-                    backgroundColor: '#1565c0',
-                  },
-                }}
-              >
-                Asignar estudio
               </Button>
             </Box>
 
@@ -1197,6 +1167,14 @@ export default function StudyDeliveriesPage() {
         <DialogContent dividers sx={{ display: 'grid', gap: 2 }}>
           {selectedRow ? (
             <>
+              {saveDetailSuccess ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                  <Alert severity="success" sx={{ width: 'fit-content', minWidth: 280, justifyContent: 'center' }}>
+                    {saveDetailSuccess}
+                  </Alert>
+                </Box>
+              ) : null}
+
               <Box sx={{ display: 'grid', gap: 0.5 }}>
                 <Typography variant="h6">{selectedRow.patient_name || 'Paciente'}</Typography>
                 <Typography variant="body2" color="text.secondary">
@@ -1294,6 +1272,53 @@ export default function StudyDeliveriesPage() {
                     </Box>
                   ) : null}
                 </Box>
+              </Box>
+
+              <Box sx={{ display: 'grid', gap: 1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                  Evidencia de envío
+                </Typography>
+                {selectedRow.evidence_file ? (
+                  <Box
+                    sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      px: 1.5,
+                      py: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1,
+                    }}
+                  >
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {selectedRow.evidence_file.title || selectedRow.evidence_file.file || 'Evidencia de envío'}
+                      </Typography>
+                      {selectedRow.evidence_file.description ? (
+                        <Typography variant="caption" color="text.secondary">
+                          {selectedRow.evidence_file.description}
+                        </Typography>
+                      ) : null}
+                    </Box>
+                    <Button
+                      size="small"
+                      startIcon={<OpenInNewIcon />}
+                      onClick={() => {
+                        if (selectedRow.evidence_file?.id) {
+                          void handleOpenEvidenceFile(selectedRow.evidence_file.id);
+                        }
+                      }}
+                    >
+                      Ver
+                    </Button>
+                  </Box>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    No hay evidencia de envío asociada.
+                  </Typography>
+                )}
               </Box>
 
               <Box sx={{ display: 'grid', gap: 1 }}>

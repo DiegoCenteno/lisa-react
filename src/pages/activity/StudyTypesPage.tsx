@@ -20,14 +20,12 @@ import {
   Typography,
 } from '@mui/material';
 import BiotechIcon from '@mui/icons-material/Biotech';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useNavigate } from 'react-router-dom';
 import { appointmentService } from '../../api/appointmentService';
 import studyDeliveryService from '../../api/studyDeliveryService';
+import StudyModuleTabs from '../../components/activity/StudyModuleTabs';
 import type { Office, StudyTypeItem } from '../../types';
 
 export default function StudyTypesPage() {
-  const navigate = useNavigate();
   const [offices, setOffices] = useState<Office[]>([]);
   const [studyTypes, setStudyTypes] = useState<StudyTypeItem[]>([]);
   const [selectedOfficeId, setSelectedOfficeId] = useState('');
@@ -168,12 +166,6 @@ export default function StudyTypesPage() {
 
   return (
     <Box sx={{ display: 'grid', gap: 2.5 }}>
-      <Box>
-        <Button variant="text" startIcon={<ArrowBackIcon />} onClick={() => navigate('/estudios')} sx={{ px: 0, minWidth: 0 }}>
-          Regresar
-        </Button>
-      </Box>
-
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
         <BiotechIcon sx={{ color: 'primary.main' }} />
         <Box>
@@ -185,6 +177,8 @@ export default function StudyTypesPage() {
           </Typography>
         </Box>
       </Box>
+
+      <StudyModuleTabs />
 
       <Card>
         <CardContent sx={{ display: 'grid', gap: 2 }}>

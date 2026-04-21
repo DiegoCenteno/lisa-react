@@ -27,11 +27,10 @@ import {
 import PsychologyIcon from '@mui/icons-material/Psychology';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CloseIcon from '@mui/icons-material/Close';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useNavigate } from 'react-router-dom';
 import notificationService from '../../api/notificationService';
 import { patientService } from '../../api/patientService';
 import studyDeliveryService from '../../api/studyDeliveryService';
+import StudyModuleTabs from '../../components/activity/StudyModuleTabs';
 import type { PatientResultTemplate, StudyDeliveryItem } from '../../types';
 
 type PreviewEntry = {
@@ -61,7 +60,6 @@ function formatDateTime(value?: string | null): string {
 }
 
 export default function InterpretStudiesPage() {
-  const navigate = useNavigate();
   const [rows, setRows] = useState<StudyDeliveryItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -305,16 +303,6 @@ export default function InterpretStudiesPage() {
 
   return (
     <Box sx={{ display: 'grid', gap: 2.5 }}>
-      <Box>
-        <Button
-          variant="text"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/estudios')}
-          sx={{ px: 0, minWidth: 0 }}
-        >
-          Regresar
-        </Button>
-      </Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <PsychologyIcon sx={{ color: 'primary.main' }} />
@@ -345,6 +333,8 @@ export default function InterpretStudiesPage() {
           </Button>
         </Box>
       </Box>
+
+      <StudyModuleTabs />
 
       <Card>
         <CardContent sx={{ display: 'grid', gap: 2 }}>
