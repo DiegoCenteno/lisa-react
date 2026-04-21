@@ -563,21 +563,6 @@ export default function StudyDeliveriesPage() {
     setPage(1);
   };
 
-  const handleOpenCreateDialog = () => {
-    if (!selectedOfficeId) {
-      return;
-    }
-
-    setShowCreateDialog(true);
-    setCreatePatientSearch('');
-    setPatientOptions([]);
-    setVisiblePatientOptionCount(4);
-    setSelectedPatientId('');
-    setNewProcessingStatus('sample_collected');
-    setNewLaboratoryId('');
-    setCreateDeliveryError(null);
-  };
-
   const handleCloseCreateDialog = () => {
     setShowCreateDialog(false);
     setCreatePatientSearch('');
