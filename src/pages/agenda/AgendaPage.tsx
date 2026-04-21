@@ -1433,47 +1433,65 @@ export default function AgendaPage() {
           </Box>
 
           <Box sx={{ mb: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-              <FormControlLabel
-                control={(
-                  <Checkbox
-                    size="small"
-                    checked={showPreviousAppointments}
-                    onChange={(event) => setShowPreviousAppointments(event.target.checked)}
-                  />
-                )}
-                label={isMobile ? 'Citas previas' : 'Mostrar citas previas'}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: { xs: 'flex-start', sm: 'center' },
+                justifyContent: 'space-between',
+                gap: { xs: 0.5, sm: 2 },
+                flexDirection: { xs: 'column', sm: 'row' },
+              }}
+            >
+              <Box
                 sx={{
-                  ml: 0,
-                  '& .MuiFormControlLabel-label': {
-                    fontSize: '0.92rem',
-                  },
+                  display: 'flex',
+                  flexDirection: { xs: 'column', sm: 'row' },
+                  alignItems: { xs: 'flex-start', sm: 'center' },
+                  gap: { xs: 0.25, sm: 2 },
                 }}
-              />
-              {viewRange?.viewType.startsWith('list') ? (
+              >
                 <FormControlLabel
                   control={(
                     <Checkbox
                       size="small"
-                      checked={showAvailableSlotsInList}
-                      onChange={(event) => setShowAvailableSlotsInList(event.target.checked)}
+                      checked={showPreviousAppointments}
+                      onChange={(event) => setShowPreviousAppointments(event.target.checked)}
                     />
                   )}
-                  label="Mostrar espacios disponibles"
+                  label={isMobile ? 'Citas previas' : 'Mostrar citas previas'}
                   sx={{
-                    ml: { xs: 0, sm: 0.5 },
+                    ml: 0,
+                    mr: 0,
                     '& .MuiFormControlLabel-label': {
                       fontSize: '0.92rem',
                     },
                   }}
                 />
-              ) : null}
-              <Box sx={{ flex: 1 }} />
+                {viewRange?.viewType.startsWith('list') ? (
+                  <FormControlLabel
+                    control={(
+                      <Checkbox
+                        size="small"
+                        checked={showAvailableSlotsInList}
+                        onChange={(event) => setShowAvailableSlotsInList(event.target.checked)}
+                      />
+                    )}
+                    label={isMobile ? 'Espacios disponibles' : 'Mostrar espacios disponibles'}
+                    sx={{
+                      ml: { xs: 0, sm: 0.5 },
+                      mr: 0,
+                      '& .MuiFormControlLabel-label': {
+                        fontSize: '0.92rem',
+                      },
+                    }}
+                  />
+                ) : null}
+              </Box>
               <Button
-                  variant="text"
-                  onClick={() => {
-                    setShowOfficeActivityLogs((value) => !value);
-                  }}
+                variant="text"
+                onClick={() => {
+                  setShowOfficeActivityLogs((value) => !value);
+                }}
                 sx={{
                   p: 0,
                   minWidth: 'auto',
@@ -1482,6 +1500,7 @@ export default function AgendaPage() {
                   color: '#2d64c8',
                   fontWeight: 400,
                   pr: { xs: 0, lg: '20px' },
+                  alignSelf: { xs: 'flex-end', sm: 'auto' },
                 }}
               >
                 {showOfficeActivityLogs ? 'Ocultar bitácora' : 'Bitácora'}
