@@ -202,8 +202,12 @@ export default function SubscriptionPage() {
   const handleCardNumberInput = (e: React.FormEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
     const raw = input.value.replace(/\D/g, '').slice(0, 16);
-    const formatted = raw.replace(/(.{4})/g, '$1 ').trim();
-    input.value = formatted;
+    // Only add spaces in text mode; in password mode raw digits avoid extra dots
+    if (input.type === 'text') {
+      input.value = raw.replace(/(.{4})/g, '$1 ').trim();
+    } else {
+      input.value = raw;
+    }
   };
 
   const handleExpirationInput = (e: React.FormEvent<HTMLInputElement>, nextFieldId: string) => {
@@ -462,7 +466,7 @@ export default function SubscriptionPage() {
                   data-checkout="cardNumber"
                   type={showCardNumber ? 'text' : 'password'}
                   inputMode="numeric"
-                  maxLength={19}
+                  maxLength={showCardNumber ? 19 : 16}
                   autoComplete="off"
                   onInput={handleCardNumberInput}
                   onBlur={guessPaymentMethod}
@@ -473,7 +477,20 @@ export default function SubscriptionPage() {
                 />
                 <button
                   type="button"
-                  onClick={() => setShowCardNumber(!showCardNumber)}
+                  onClick={() => {
+                    const input = document.getElementById('cardNumber') as HTMLInputElement | null;
+                    if (input) {
+                      const raw = input.value.replace(/\D/g, '');
+                      if (!showCardNumber) {
+                        // Switching to text: add spaces
+                        input.value = raw.replace(/(.{4})/g, '$1 ').trim();
+                      } else {
+                        // Switching to password: remove spaces
+                        input.value = raw;
+                      }
+                    }
+                    setShowCardNumber(!showCardNumber);
+                  }}
                   style={{
                     position: 'absolute',
                     right: '8px',
