@@ -2,6 +2,8 @@ import axios from 'axios';
 import type { InternalAxiosRequestConfig } from 'axios';
 import { clearStoredAuthState, isExtendedSessionEnabled, refreshAccessToken } from './authSession';
 
+export const SUBSCRIPTION_EXPIRED_EVENT = 'subscription:expired';
+
 interface RetriableRequestConfig extends InternalAxiosRequestConfig {
   _retry?: boolean;
 }
@@ -59,6 +61,14 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config as RetriableRequestConfig | undefined;
+
+    if (
+      error.response?.status === 403 &&
+      error.response?.data?.error_code === 'subscription_expired'
+    ) {
+      window.dispatchEvent(new CustomEvent(SUBSCRIPTION_EXPIRED_EVENT));
+      return Promise.reject(error);
+    }
 
     if (
       error.response?.status === 401 &&

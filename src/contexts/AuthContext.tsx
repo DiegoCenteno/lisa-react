@@ -11,6 +11,7 @@ import {
   refreshAccessToken,
   shouldRefreshSoon,
 } from '../api/authSession';
+import { SUBSCRIPTION_EXPIRED_EVENT } from '../api/client';
 import { appointmentService } from '../api/appointmentService';
 import { primeResolvedOfficeIdCache as primePatientOfficeIdCache, resetResolvedOfficeIdCache as resetPatientOfficeIdCache } from '../api/patientService';
 import { primeResolvedOfficeIdCache as primeConsultationOfficeIdCache, resetResolvedOfficeIdCache as resetConsultationOfficeIdCache } from '../api/consultationService';
@@ -134,6 +135,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       active = false;
     };
   }, [user, token]);
+
+  useEffect(() => {
+    const handleSubscriptionExpired = () => {
+      if (typeof window !== 'undefined' && window.location.pathname !== '/suscripcion' && window.location.pathname !== '/login') {
+        window.location.href = '/suscripcion';
+      }
+    };
+
+    window.addEventListener(SUBSCRIPTION_EXPIRED_EVENT, handleSubscriptionExpired);
+
+    return () => {
+      window.removeEventListener(SUBSCRIPTION_EXPIRED_EVENT, handleSubscriptionExpired);
+    };
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     const response = await authService.login(email, password);

@@ -27,6 +27,7 @@ import SystemAnnouncementsPage from '../pages/admin/SystemAnnouncementsPage';
 import SystemAnnouncementReadersPage from '../pages/admin/SystemAnnouncementReadersPage';
 import SystemTemplateRequestsPage from '../pages/admin/SystemTemplateRequestsPage';
 import SystemWhatsAppConversationsPage from '../pages/admin/SystemWhatsAppConversationsPage';
+import SubscriptionPage from '../pages/subscription/SubscriptionPage';
 import { useAuth } from '../hooks/useAuth';
 
 function HomeRedirect() {
@@ -56,6 +57,7 @@ export default function AppRouter() {
         <Route path="/historia/:token" element={<PublicHistoryFormPage />} />
         <Route path="/wshc/:code" element={<PublicHistoryFormPage />} />
         <Route path="/wsapp/:code" element={<PublicStudyResultPage />} />
+        <Route path="/suscripcion" element={<SubscriptionPage />} />
         <Route path="/:code" element={<PublicStudyResultPage />} />
 
         {/* Protected routes */}
