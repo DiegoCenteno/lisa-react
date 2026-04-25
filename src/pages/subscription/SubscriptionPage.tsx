@@ -155,6 +155,26 @@ export default function SubscriptionPage() {
     document.head.appendChild(script);
   };
 
+  const preventSensitiveActions = (e: React.SyntheticEvent) => {
+    e.preventDefault();
+  };
+
+  const sensitiveFieldProps = {
+    onCopy: preventSensitiveActions,
+    onPaste: preventSensitiveActions,
+    onCut: preventSensitiveActions,
+    onDrag: preventSensitiveActions,
+    onDrop: preventSensitiveActions,
+  };
+
+  const clearSensitiveFields = () => {
+    const fields = ['cardNumber', 'cardExpirationMonth', 'cardExpirationYear', 'securityCode'];
+    fields.forEach((id) => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.value = '';
+    });
+  };
+
   const handleCardholderNameInput = (e: React.FormEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
     input.value = input.value.replace(/[0-9]/g, '').slice(0, 80);
@@ -283,11 +303,13 @@ export default function SubscriptionPage() {
         const result = await subscriptionService.createPreapproval(response.id);
 
         if (result.subscription_active) {
+          clearSensitiveFields();
           setSuccess('Suscripción activada correctamente. Redirigiendo...');
           setTimeout(() => {
             navigate('/dashboard', { replace: true });
           }, 2000);
         } else if (result.payment_pending) {
+          clearSensitiveFields();
           setSuccess('Pago en proceso. Tu suscripción se activará en breve.');
           setTimeout(() => {
             navigate('/dashboard', { replace: true });
@@ -386,7 +408,7 @@ export default function SubscriptionPage() {
             </Box>
           </Box>
 
-          <form ref={formRef} id="paymentForm" onSubmit={handleSubmit}>
+          <form ref={formRef} id="paymentForm" onSubmit={handleSubmit} autoComplete="off">
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
               <CreditCardIcon /> Tarjeta de crédito
             </Typography>
@@ -414,6 +436,7 @@ export default function SubscriptionPage() {
                 id="cardNumber"
                 data-checkout="cardNumber"
                 type="text"
+                inputMode="numeric"
                 maxLength={19}
                 autoComplete="off"
                 onInput={handleCardNumberInput}
@@ -421,6 +444,7 @@ export default function SubscriptionPage() {
                 style={{ ...inputStyle, letterSpacing: '2px' }}
                 placeholder="0000 0000 0000 0000"
                 disabled={submitting}
+                {...sensitiveFieldProps}
               />
             </div>
 
@@ -431,12 +455,14 @@ export default function SubscriptionPage() {
                   id="cardExpirationMonth"
                   data-checkout="cardExpirationMonth"
                   type="text"
+                  inputMode="numeric"
                   placeholder="MM"
                   maxLength={2}
                   autoComplete="off"
                   onInput={(e) => handleExpirationInput(e, 'cardExpirationYear')}
                   style={inputStyle}
                   disabled={submitting}
+                  {...sensitiveFieldProps}
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -445,12 +471,14 @@ export default function SubscriptionPage() {
                   id="cardExpirationYear"
                   data-checkout="cardExpirationYear"
                   type="text"
+                  inputMode="numeric"
                   placeholder="YY"
                   maxLength={2}
                   autoComplete="off"
                   onInput={(e) => handleExpirationInput(e, 'securityCode')}
                   style={inputStyle}
                   disabled={submitting}
+                  {...sensitiveFieldProps}
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -460,11 +488,13 @@ export default function SubscriptionPage() {
                     id="securityCode"
                     data-checkout="securityCode"
                     type={showCvv ? 'text' : 'password'}
+                    inputMode="numeric"
                     placeholder="•••"
                     maxLength={4}
                     autoComplete="off"
                     style={{ ...inputStyle, paddingRight: '40px' }}
                     disabled={submitting}
+                    {...sensitiveFieldProps}
                   />
                   <button
                     type="button"
