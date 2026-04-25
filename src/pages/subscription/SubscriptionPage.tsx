@@ -14,6 +14,8 @@ import {
 import {
   CreditCard as CreditCardIcon,
   CheckCircleOutline as CheckIcon,
+  Visibility,
+  VisibilityOff,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { subscriptionService } from '../../api/subscriptionService';
@@ -87,6 +89,7 @@ export default function SubscriptionPage() {
   const [success, setSuccess] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [showIssuers, setShowIssuers] = useState(false);
+  const [showCvv, setShowCvv] = useState(false);
 
   const loadSubscriptionStatus = useCallback(async () => {
     try {
@@ -152,11 +155,32 @@ export default function SubscriptionPage() {
     document.head.appendChild(script);
   };
 
+  const handleCardholderNameInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    input.value = input.value.replace(/[0-9]/g, '').slice(0, 80);
+  };
+
+  const handleCardNumberInput = (e: React.FormEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const raw = input.value.replace(/\D/g, '').slice(0, 16);
+    const formatted = raw.replace(/(.{4})/g, '$1 ').trim();
+    input.value = formatted;
+  };
+
+  const handleExpirationInput = (e: React.FormEvent<HTMLInputElement>, nextFieldId: string) => {
+    const input = e.currentTarget;
+    input.value = input.value.replace(/\D/g, '').slice(0, 2);
+    if (input.value.length === 2) {
+      const nextField = document.getElementById(nextFieldId);
+      if (nextField) nextField.focus();
+    }
+  };
+
   const guessPaymentMethod = () => {
     const cardNumberInput = document.getElementById('cardNumber') as HTMLInputElement | null;
     if (!cardNumberInput || !window.Mercadopago) return;
 
-    const cardnumber = cardNumberInput.value;
+    const cardnumber = cardNumberInput.value.replace(/\s/g, '');
     if (cardnumber.length >= 6) {
       const bin = cardnumber.substring(0, 6);
       window.Mercadopago.getPaymentMethod({ bin }, (status, response) => {
@@ -227,19 +251,28 @@ export default function SubscriptionPage() {
     }
 
     const cardholderName = (document.getElementById('cardholderName') as HTMLInputElement)?.value;
-    const cardNumber = (document.getElementById('cardNumber') as HTMLInputElement)?.value;
+    const cardNumberRaw = (document.getElementById('cardNumber') as HTMLInputElement)?.value?.replace(/\s/g, '');
     const month = (document.getElementById('cardExpirationMonth') as HTMLInputElement)?.value;
     const year = (document.getElementById('cardExpirationYear') as HTMLInputElement)?.value;
     const cvv = (document.getElementById('securityCode') as HTMLInputElement)?.value;
 
-    if (!cardholderName || !cardNumber || !month || !year || !cvv) {
+    if (!cardholderName || !cardNumberRaw || !month || !year || !cvv) {
       setError('Completa todos los campos de la tarjeta.');
       return;
     }
 
     setSubmitting(true);
 
+    const cardNumberInput = document.getElementById('cardNumber') as HTMLInputElement;
+    const originalValue = cardNumberInput?.value;
+    if (cardNumberInput) {
+      cardNumberInput.value = cardNumberInput.value.replace(/\s/g, '');
+    }
+
     window.Mercadopago.createToken(formRef.current, async (status, response) => {
+      if (cardNumberInput && originalValue) {
+        cardNumberInput.value = originalValue;
+      }
       if (status !== 200 && status !== 201) {
         setSubmitting(false);
         setError('Error al validar los datos de la tarjeta. Verifica la información.');
@@ -368,6 +401,8 @@ export default function SubscriptionPage() {
                 id="cardholderName"
                 data-checkout="cardholderName"
                 type="text"
+                maxLength={80}
+                onInput={handleCardholderNameInput}
                 style={inputStyle}
                 disabled={submitting}
               />
@@ -379,9 +414,12 @@ export default function SubscriptionPage() {
                 id="cardNumber"
                 data-checkout="cardNumber"
                 type="text"
+                maxLength={19}
                 autoComplete="off"
+                onInput={handleCardNumberInput}
                 onBlur={guessPaymentMethod}
-                style={inputStyle}
+                style={{ ...inputStyle, letterSpacing: '2px' }}
+                placeholder="0000 0000 0000 0000"
                 disabled={submitting}
               />
             </div>
@@ -396,6 +434,7 @@ export default function SubscriptionPage() {
                   placeholder="MM"
                   maxLength={2}
                   autoComplete="off"
+                  onInput={(e) => handleExpirationInput(e, 'cardExpirationYear')}
                   style={inputStyle}
                   disabled={submitting}
                 />
@@ -409,22 +448,45 @@ export default function SubscriptionPage() {
                   placeholder="YY"
                   maxLength={2}
                   autoComplete="off"
+                  onInput={(e) => handleExpirationInput(e, 'securityCode')}
                   style={inputStyle}
                   disabled={submitting}
                 />
               </div>
               <div style={{ flex: 1 }}>
                 <label htmlFor="securityCode" style={labelStyle}>CVV</label>
-                <input
-                  id="securityCode"
-                  data-checkout="securityCode"
-                  type="text"
-                  placeholder="CVV"
-                  maxLength={4}
-                  autoComplete="off"
-                  style={inputStyle}
-                  disabled={submitting}
-                />
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="securityCode"
+                    data-checkout="securityCode"
+                    type={showCvv ? 'text' : 'password'}
+                    placeholder="•••"
+                    maxLength={4}
+                    autoComplete="off"
+                    style={{ ...inputStyle, paddingRight: '40px' }}
+                    disabled={submitting}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCvv(!showCvv)}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      color: '#999',
+                    }}
+                    tabIndex={-1}
+                  >
+                    {showCvv ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                  </button>
+                </div>
               </div>
             </div>
 
