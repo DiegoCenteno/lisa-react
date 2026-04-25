@@ -417,7 +417,7 @@ export default function SubscriptionPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Obtén el primer mes gratis y sin compromisos, cancela cuando quieras.
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
               <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
                 $559
               </Typography>
@@ -428,6 +428,9 @@ export default function SubscriptionPage() {
                 /mes
               </Typography>
             </Box>
+            <Typography variant="body2" color="text.secondary">
+              El precio de la suscripción mensual es de ${price} MXN. Puedes cancelar en cualquier momento.
+            </Typography>
           </Box>
 
           <form ref={formRef} id="paymentForm" onSubmit={handleSubmit} autoComplete="off">
