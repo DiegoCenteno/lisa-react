@@ -95,6 +95,7 @@ export default function SubscriptionPage() {
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [showIssuers, setShowIssuers] = useState(false);
   const [showCvv, setShowCvv] = useState(false);
+  const [showCardNumber, setShowCardNumber] = useState(false);
   const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const publicKeyRef = useRef<string>('');
 
@@ -201,8 +202,12 @@ export default function SubscriptionPage() {
   const handleCardNumberInput = (e: React.FormEvent<HTMLInputElement>) => {
     const input = e.currentTarget;
     const raw = input.value.replace(/\D/g, '').slice(0, 16);
-    const formatted = raw.replace(/(.{4})/g, '$1 ').trim();
-    input.value = formatted;
+    // Only add spaces in text mode; in password mode raw digits avoid extra dots
+    if (input.type === 'text') {
+      input.value = raw.replace(/(.{4})/g, '$1 ').trim();
+    } else {
+      input.value = raw;
+    }
   };
 
   const handleExpirationInput = (e: React.FormEvent<HTMLInputElement>, nextFieldId: string) => {
@@ -412,7 +417,7 @@ export default function SubscriptionPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
               Obtén el primer mes gratis y sin compromisos, cancela cuando quieras.
             </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
               <Typography variant="body2" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
                 $559
               </Typography>
@@ -423,6 +428,9 @@ export default function SubscriptionPage() {
                 /mes
               </Typography>
             </Box>
+            <Typography variant="body2" color="text.secondary">
+              El precio de la suscripción mensual es de ${price} MXN. Puedes cancelar en cualquier momento.
+            </Typography>
           </Box>
 
           <form ref={formRef} id="paymentForm" onSubmit={handleSubmit} autoComplete="off">
@@ -455,20 +463,55 @@ export default function SubscriptionPage() {
 
             <div style={{ marginBottom: '16px' }}>
               <label htmlFor="cardNumber" style={labelStyle}>Número de la tarjeta</label>
-              <input
-                id="cardNumber"
-                data-checkout="cardNumber"
-                type="text"
-                inputMode="numeric"
-                maxLength={19}
-                autoComplete="off"
-                onInput={handleCardNumberInput}
-                onBlur={guessPaymentMethod}
-                style={{ ...inputStyle, letterSpacing: '2px' }}
-                placeholder="0000 0000 0000 0000"
-                disabled={submitting}
-                {...sensitiveFieldProps}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="cardNumber"
+                  data-checkout="cardNumber"
+                  type={showCardNumber ? 'text' : 'password'}
+                  inputMode="numeric"
+                  maxLength={showCardNumber ? 19 : 16}
+                  autoComplete="off"
+                  onInput={handleCardNumberInput}
+                  onBlur={guessPaymentMethod}
+                  style={{ ...inputStyle, letterSpacing: '2px', paddingRight: '40px' }}
+                  placeholder={showCardNumber ? '0000 0000 0000 0000' : '••••••••••••••••'}
+                  disabled={submitting}
+                  {...sensitiveFieldProps}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const input = document.getElementById('cardNumber') as HTMLInputElement | null;
+                    if (input) {
+                      const raw = input.value.replace(/\D/g, '');
+                      if (!showCardNumber) {
+                        // Switching to text: add spaces
+                        input.value = raw.replace(/(.{4})/g, '$1 ').trim();
+                      } else {
+                        // Switching to password: remove spaces
+                        input.value = raw;
+                      }
+                    }
+                    setShowCardNumber(!showCardNumber);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: '#999',
+                  }}
+                  tabIndex={-1}
+                >
+                  {showCardNumber ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
