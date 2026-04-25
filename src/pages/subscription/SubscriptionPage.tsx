@@ -75,6 +75,11 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 500,
 };
 
+// Same key used in the legacy Blade template (tdc.blade.php) and config/services.php default.
+// This is a *publishable* key — safe to include in client-side code.
+const MERCADOPAGO_DEFAULT_PUBLIC_KEY = 'APP_USR-ceea55ab-2d01-49ef-a8bb-bc1b19e3d705';
+const MERCADOPAGO_SDK_URL = 'https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js';
+
 export default function SubscriptionPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -93,39 +98,42 @@ export default function SubscriptionPage() {
   const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const publicKeyRef = useRef<string>('');
 
+  const getPublicKey = () => publicKeyRef.current || MERCADOPAGO_DEFAULT_PUBLIC_KEY;
+
   // Load SDK script eagerly on mount (like legacy does synchronously)
   useEffect(() => {
-    const initSdkWithKey = () => {
-      if (window.Mercadopago && publicKeyRef.current) {
-        window.Mercadopago.setPublishableKey(publicKeyRef.current);
-        setSdkStatus('ready');
-        return true;
-      }
-      if (window.Mercadopago) {
-        setSdkStatus('ready');
-        return true;
-      }
-      return false;
-    };
-
-    if (initSdkWithKey()) return;
-
-    const existingScript = document.querySelector('script[src*="mercadopago.js"]');
-    if (!existingScript) {
-      const script = document.createElement('script');
-      script.src = 'https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js';
-      script.onerror = () => {
-        setSdkStatus('error');
-      };
-      document.head.appendChild(script);
+    if (window.Mercadopago) {
+      window.Mercadopago.setPublishableKey(getPublicKey());
+      setSdkStatus('ready');
+      return;
     }
 
-    // Poll for SDK availability regardless of script load event
+    const insertScript = (retryCount: number) => {
+      const existingScript = document.querySelector(`script[src="${MERCADOPAGO_SDK_URL}"]`);
+      if (existingScript) existingScript.remove();
+
+      const script = document.createElement('script');
+      script.src = MERCADOPAGO_SDK_URL;
+      script.onerror = () => {
+        if (retryCount < 2) {
+          setTimeout(() => insertScript(retryCount + 1), 1000);
+        } else {
+          setSdkStatus('error');
+        }
+      };
+      document.head.appendChild(script);
+    };
+
+    insertScript(0);
+
+    // Poll for window.Mercadopago availability
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
-      if (initSdkWithKey()) {
+      if (window.Mercadopago) {
         clearInterval(interval);
+        window.Mercadopago.setPublishableKey(getPublicKey());
+        setSdkStatus('ready');
       } else if (attempts >= 50) {
         clearInterval(interval);
         setSdkStatus('error');
@@ -133,6 +141,7 @@ export default function SubscriptionPage() {
     }, 300);
 
     return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadSubscriptionStatus = useCallback(async () => {
@@ -147,7 +156,7 @@ export default function SubscriptionPage() {
 
       if (data.public_key) {
         publicKeyRef.current = data.public_key;
-        // If SDK already loaded, set the key now
+        // If SDK already loaded, re-set key with API value
         if (window.Mercadopago) {
           window.Mercadopago.setPublishableKey(data.public_key);
           setSdkStatus('ready');
@@ -275,13 +284,8 @@ export default function SubscriptionPage() {
       return;
     }
 
-    if (!publicKeyRef.current) {
-      setError('No se pudo obtener la configuración de pagos. Recarga la página.');
-      return;
-    }
-
-    // Ensure key is set before token creation
-    window.Mercadopago.setPublishableKey(publicKeyRef.current);
+    // Always ensure the key is set before token creation
+    window.Mercadopago.setPublishableKey(getPublicKey());
 
     const cardholderName = (document.getElementById('cardholderName') as HTMLInputElement)?.value;
     const cardNumberRaw = (document.getElementById('cardNumber') as HTMLInputElement)?.value?.replace(/\s/g, '');
