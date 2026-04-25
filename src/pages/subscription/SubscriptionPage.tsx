@@ -90,6 +90,50 @@ export default function SubscriptionPage() {
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [showIssuers, setShowIssuers] = useState(false);
   const [showCvv, setShowCvv] = useState(false);
+  const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const publicKeyRef = useRef<string>('');
+
+  // Load SDK script eagerly on mount (like legacy does synchronously)
+  useEffect(() => {
+    const initSdkWithKey = () => {
+      if (window.Mercadopago && publicKeyRef.current) {
+        window.Mercadopago.setPublishableKey(publicKeyRef.current);
+        setSdkStatus('ready');
+        return true;
+      }
+      if (window.Mercadopago) {
+        setSdkStatus('ready');
+        return true;
+      }
+      return false;
+    };
+
+    if (initSdkWithKey()) return;
+
+    const existingScript = document.querySelector('script[src*="mercadopago.js"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = 'https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js';
+      script.onerror = () => {
+        setSdkStatus('error');
+      };
+      document.head.appendChild(script);
+    }
+
+    // Poll for SDK availability regardless of script load event
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (initSdkWithKey()) {
+        clearInterval(interval);
+      } else if (attempts >= 50) {
+        clearInterval(interval);
+        setSdkStatus('error');
+      }
+    }, 300);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const loadSubscriptionStatus = useCallback(async () => {
     try {
@@ -102,7 +146,12 @@ export default function SubscriptionPage() {
       }
 
       if (data.public_key) {
-        loadMercadoPagoSdk(data.public_key);
+        publicKeyRef.current = data.public_key;
+        // If SDK already loaded, set the key now
+        if (window.Mercadopago) {
+          window.Mercadopago.setPublishableKey(data.public_key);
+          setSdkStatus('ready');
+        }
       }
     } catch {
       setError('Error al cargar el estado de la suscripción.');
@@ -114,46 +163,6 @@ export default function SubscriptionPage() {
   useEffect(() => {
     void loadSubscriptionStatus();
   }, [loadSubscriptionStatus]);
-
-  const loadMercadoPagoSdk = (publicKey: string) => {
-    const initSdk = () => {
-      if (window.Mercadopago) {
-        window.Mercadopago.setPublishableKey(publicKey);
-        return true;
-      }
-      return false;
-    };
-
-    if (initSdk()) return;
-
-    const existingScript = document.querySelector('script[src*="mercadopago.js"]');
-    if (existingScript) {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (initSdk() || attempts >= 30) {
-          clearInterval(interval);
-        }
-      }, 200);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js';
-    script.onload = () => {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (initSdk() || attempts >= 30) {
-          clearInterval(interval);
-        }
-      }, 200);
-    };
-    script.onerror = () => {
-      setError('No se pudo cargar el sistema de pagos. Verifica tu conexión e intenta recargar la página.');
-    };
-    document.head.appendChild(script);
-  };
 
   const preventSensitiveActions = (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -262,13 +271,17 @@ export default function SubscriptionPage() {
     setSuccess('');
 
     if (!window.Mercadopago || !formRef.current) {
-      if (!window.Mercadopago) {
-        setError('MercadoPago no se cargó correctamente. Recarga la página (Ctrl+Shift+R).');
-      } else {
-        setError('Error interno del formulario. Recarga la página.');
-      }
+      setError('MercadoPago no se cargó correctamente. Recarga la página (Ctrl+Shift+R). Si el problema persiste, verifica que no tengas un bloqueador de anuncios activo.');
       return;
     }
+
+    if (!publicKeyRef.current) {
+      setError('No se pudo obtener la configuración de pagos. Recarga la página.');
+      return;
+    }
+
+    // Ensure key is set before token creation
+    window.Mercadopago.setPublishableKey(publicKeyRef.current);
 
     const cardholderName = (document.getElementById('cardholderName') as HTMLInputElement)?.value;
     const cardNumberRaw = (document.getElementById('cardNumber') as HTMLInputElement)?.value?.replace(/\s/g, '');
@@ -416,6 +429,12 @@ export default function SubscriptionPage() {
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
               Tu transacción es segura gracias a MercadoPago.
             </Typography>
+
+            {sdkStatus === 'error' && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                No se pudo cargar el sistema de pagos. Recarga la página o verifica que no tengas un bloqueador de anuncios activo.
+              </Alert>
+            )}
 
             <div style={{ marginBottom: '16px' }}>
               <label htmlFor="cardholderName" style={labelStyle}>Nombre del titular</label>
