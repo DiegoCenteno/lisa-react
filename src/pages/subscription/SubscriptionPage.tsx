@@ -180,6 +180,8 @@ export default function SubscriptionPage() {
           setTimeout(() => {
             navigate('/dashboard', { replace: true });
           }, 2000);
+        } else {
+          setError('No se pudo activar la suscripción. Intenta nuevamente.');
         }
       } catch (err: unknown) {
         const axiosErr = err as { response?: { data?: { message?: string } } };
