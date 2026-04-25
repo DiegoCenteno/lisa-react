@@ -34,6 +34,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { useRef } from 'react';
 import dayjs from 'dayjs';
 import { appointmentService } from '../../api/appointmentService';
+import { consultationService } from '../../api/consultationService';
 import { patientService } from '../../api/patientService';
 import studyDeliveryService from '../../api/studyDeliveryService';
 import StudyModuleTabs from '../../components/activity/StudyModuleTabs';
@@ -56,6 +57,7 @@ type StudyDeliveryColumnKey =
   | 'seen'
   | 'downloads'
   | 'sent_by'
+  | 'report'
   | 'detail';
 
 const STUDY_DELIVERY_COLUMNS: Array<{ key: StudyDeliveryColumnKey; label: string }> = [
@@ -74,6 +76,7 @@ const STUDY_DELIVERY_COLUMNS: Array<{ key: StudyDeliveryColumnKey; label: string
   { key: 'seen', label: 'Visto' },
   { key: 'downloads', label: 'Descargas' },
   { key: 'sent_by', label: 'Enviado por' },
+  { key: 'report', label: 'Reporte' },
   { key: 'detail', label: 'Detalle' },
 ];
 
@@ -98,6 +101,7 @@ function getDefaultVisibleColumns(): Record<StudyDeliveryColumnKey, boolean> {
     'process',
     'status',
     'sent_by',
+    'report',
     'detail',
   ]);
 
@@ -201,6 +205,15 @@ function statusColor(status: string): 'default' | 'success' | 'warning' | 'error
   if (status === 'not_sent') return 'default';
   if (status === 'cancelled') return 'error';
   return 'default';
+}
+
+function buildPdfDownloadName(title?: string | null): string {
+  const normalized = String(title ?? 'reporte_pdf')
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return `${normalized || 'reporte_pdf'}.pdf`;
 }
 
 export default function StudyDeliveriesPage() {
@@ -561,6 +574,27 @@ export default function StudyDeliveriesPage() {
     setDateFrom(defaultSendDateRange.dateFrom);
     setDateTo(defaultSendDateRange.dateTo);
     setPage(1);
+  };
+
+  const handleDownloadLinkedReport = async (row: StudyDeliveryItem) => {
+    if (!row.linked_pdf_report?.id) {
+      return;
+    }
+
+    try {
+      const blob = await consultationService.downloadPatientReportDocx(row.linked_pdf_report.id);
+      const blobUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = buildPdfDownloadName(row.linked_pdf_report.title);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (downloadError) {
+      const message = downloadError instanceof Error ? downloadError.message : 'No se pudo descargar el reporte relacionado.';
+      setError(message);
+    }
   };
 
   const handleCloseCreateDialog = () => {
@@ -937,6 +971,7 @@ export default function StudyDeliveriesPage() {
                   {visibleColumns.seen ? <TableCell>Visto</TableCell> : null}
                   {visibleColumns.downloads ? <TableCell>Descargas</TableCell> : null}
                   {visibleColumns.sent_by ? <TableCell>Enviado por</TableCell> : null}
+                  {visibleColumns.report ? <TableCell>Reporte</TableCell> : null}
                   {visibleColumns.detail ? <TableCell align="right">Detalle</TableCell> : null}
                 </TableRow>
               </TableHead>
@@ -977,6 +1012,19 @@ export default function StudyDeliveriesPage() {
                     {visibleColumns.seen ? <TableCell>{row.viewed_at || row.status === 'viewed' || row.status === 'downloaded' ? 'Sí' : 'No'}</TableCell> : null}
                     {visibleColumns.downloads ? <TableCell>{row.download_count}</TableCell> : null}
                     {visibleColumns.sent_by ? <TableCell>{row.sent_by || 'Sistema'}</TableCell> : null}
+                    {visibleColumns.report ? (
+                      <TableCell>
+                        {row.linked_pdf_report ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            onClick={() => void handleDownloadLinkedReport(row)}
+                          >
+                            Descargar reporte
+                          </Button>
+                        ) : '—'}
+                      </TableCell>
+                    ) : null}
                     {visibleColumns.detail ? (
                       <TableCell align="right">
                         <Button

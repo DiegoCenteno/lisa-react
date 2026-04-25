@@ -30,9 +30,10 @@ import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { appointmentService } from '../../api/appointmentService';
 import { useLocation } from 'react-router-dom';
 import notificationService from '../../api/notificationService';
-import settingsService, { type SettingsAgendaData, type SettingsAgendaDayInput, type SettingsCompanyData, type SettingsFormsData, type SettingsLabelStatusItem, type SettingsPrintData, type SettingsProfileData, type SettingsReportsData, type SettingsUnavailableDayItem } from '../../api/settingsService';
+import settingsService, { type SettingsAgendaData, type SettingsAgendaDayInput, type SettingsCompanyData, type SettingsFormsData, type SettingsLabelStatusItem, type SettingsPdfReportTemplateCatalogData, type SettingsPdfReportTemplateSummary, type SettingsPrintData, type SettingsProfileData, type SettingsReportsData, type SettingsUnavailableDayItem } from '../../api/settingsService';
 import { useAuth } from '../../hooks/useAuth';
 import type { NotificationAssistantItem, NotificationAssistantRecipientsData, NotificationPreassistantItem, Office, OfficeLabelItem } from '../../types';
+import { getPdfReportTemplateCategoryLabel } from '../../utils/pdfReportTemplateLabels';
 
 dayjs.locale('es');
 
@@ -475,6 +476,45 @@ function CardShell({ title, children }: { title: string; children: ReactNode }) 
         {children}
       </CardContent>
     </Card>
+  );
+}
+
+function CollapsibleCardSection({
+  title,
+  collapsed,
+  onToggle,
+  children,
+}: {
+  title: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <Box sx={{ border: '1px solid #d8e8ef', borderRadius: 2, overflow: 'hidden', backgroundColor: '#fff' }}>
+      <Box
+        onClick={onToggle}
+        sx={{
+          px: 2,
+          py: 1.5,
+          backgroundColor: '#f2fbff',
+          borderBottom: collapsed ? 'none' : '1px solid #d8e8ef',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1.5,
+          cursor: 'pointer',
+        }}
+      >
+        <Typography sx={{ color: '#1e8b2d', fontWeight: 600 }}>{title}</Typography>
+        {collapsed ? <ExpandMore sx={{ color: '#1e8b2d' }} /> : <ExpandLess sx={{ color: '#1e8b2d' }} />}
+      </Box>
+      {!collapsed ? (
+        <Box sx={{ p: { xs: 2, md: 2.5 } }}>
+          {children}
+        </Box>
+      ) : null}
+    </Box>
   );
 }
 
@@ -2143,8 +2183,22 @@ function ReportsPanel({
   const [selectedOfficeId, setSelectedOfficeId] = useState<number>(availableOffices[0]?.id ?? 0);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [submittingTemplate, setSubmittingTemplate] = useState(false);
   const [data, setData] = useState<SettingsReportsData | null>(null);
+  const [catalog, setCatalog] = useState<SettingsPdfReportTemplateCatalogData | null>(null);
+  const [templates, setTemplates] = useState<SettingsPdfReportTemplateSummary[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [templateNotice, setTemplateNotice] = useState<string | null>(null);
+  const [preconfiguredCollapsed, setPreconfiguredCollapsed] = useState(true);
+  const [pdfReportsCollapsed, setPdfReportsCollapsed] = useState(true);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [templateOutputName, setTemplateOutputName] = useState('');
+  const [templateCategory, setTemplateCategory] = useState('lab_attachment');
+  const [templateLaboratoryId, setTemplateLaboratoryId] = useState<number | ''>('');
+  const [templateStudyTypeId, setTemplateStudyTypeId] = useState<number | ''>('');
+  const [selectedTemplateFile, setSelectedTemplateFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (availableOffices.length === 0) {
@@ -2166,11 +2220,21 @@ function ReportsPanel({
 
       setLoading(true);
       setLocalError(null);
+      setTemplateNotice(null);
 
       try {
-        const response = await settingsService.getReportSettings(selectedOfficeId);
+        const [reportSettings, nextCatalog, nextTemplates] = await Promise.all([
+          settingsService.getReportSettings(selectedOfficeId),
+          settingsService.getPdfReportTemplateCatalog(selectedOfficeId),
+          settingsService.getPdfReportTemplates(selectedOfficeId),
+        ]);
         if (mounted) {
-          setData(response);
+          setData(reportSettings);
+          setCatalog(nextCatalog);
+          setTemplates(nextTemplates);
+          if (nextCatalog.template_categories.includes(templateCategory) === false) {
+            setTemplateCategory(nextCatalog.template_categories[0] ?? 'lab_attachment');
+          }
         }
       } catch (err) {
         if (mounted) {
@@ -2237,12 +2301,88 @@ function ReportsPanel({
     };
   };
 
+  const resetTemplateForm = () => {
+    setTemplateName('');
+    setTemplateDescription('');
+    setTemplateOutputName('');
+    setTemplateCategory('lab_attachment');
+    setTemplateLaboratoryId('');
+    setTemplateStudyTypeId('');
+    setSelectedTemplateFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleTemplateFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextFile = event.target.files?.[0] ?? null;
+    setSelectedTemplateFile(nextFile);
+  };
+
+  const handleTemplateSubmit = async () => {
+    if (!selectedOfficeId) {
+      setLocalError('Selecciona un consultorio antes de registrar el reporte.');
+      return;
+    }
+
+    if (!selectedTemplateFile) {
+      setLocalError('Selecciona el PDF base del reporte.');
+      return;
+    }
+
+    if (!templateName.trim() || !templateOutputName.trim()) {
+      setLocalError('Completa el nombre del reporte y el nombre del archivo descargable.');
+      return;
+    }
+
+    setSubmittingTemplate(true);
+    setLocalError(null);
+    setTemplateNotice(null);
+
+    try {
+      const uploadedFile = await settingsService.uploadPdfReportTemplateBasePdf({
+        office_id: selectedOfficeId,
+        file: selectedTemplateFile,
+      });
+
+      const created = await settingsService.createPdfReportTemplate({
+        office_id: selectedOfficeId,
+        laboratory_id: templateLaboratoryId === '' ? null : Number(templateLaboratoryId),
+        study_type_id: templateStudyTypeId === '' ? null : Number(templateStudyTypeId),
+        name: templateName.trim(),
+        description: templateDescription.trim(),
+        output_file_name: templateOutputName.trim(),
+        template_category: templateCategory,
+        base_pdf_file_id: uploadedFile.id,
+        status: 'pending_review',
+        fields: [],
+      });
+
+      setTemplates((current) => [created, ...current]);
+      setTemplateNotice('Tu reporte fue recibido. En un máximo de 24 horas estará listo para utilizarse.');
+      onSuccess('Tu reporte fue recibido. En un máximo de 24 horas estará listo para utilizarse.');
+      resetTemplateForm();
+    } catch (err) {
+      const backendMessage =
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { data?: { message?: unknown } } }).response?.data?.message === 'string'
+          ? ((err as { response?: { data?: { message?: string } } }).response?.data?.message ?? '')
+          : '';
+
+      setLocalError(backendMessage || (err instanceof Error ? err.message : 'No fue posible registrar el reporte específico.'));
+    } finally {
+      setSubmittingTemplate(false);
+    }
+  };
+
   return (
-    <CardShell title="Tipos de reportes">
+    <CardShell title="Reportes">
       <Grid container spacing={3}>
         <Grid size={{ xs: 12 }}>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-            Activa o desactiva los tipos de reportes que estarán disponibles para tu consultorio.
+            Configura aquí los reportes generales del sistema y registra reportes específicos en PDF para revisión interna.
           </Typography>
           <TextField
             select
@@ -2263,6 +2403,11 @@ function ReportsPanel({
             <Alert severity="error">{localError}</Alert>
           </Grid>
         ) : null}
+        {templateNotice ? (
+          <Grid size={{ xs: 12 }}>
+            <Alert severity="success">{templateNotice}</Alert>
+          </Grid>
+        ) : null}
         {loading || !data ? (
           <Grid size={{ xs: 12 }}>
             <Box sx={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2270,82 +2415,279 @@ function ReportsPanel({
             </Box>
           </Grid>
         ) : (
-          <>
-            <Grid size={{ xs: 12, md: 8 }}>
-              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
-                {data.reports.map((report) => (
-                  <Box
-                    key={report.key}
-                    onClick={() => persist(buildNextReportsState(data, report.key, !report.enabled))}
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 1.5,
-                      px: 1.5,
-                      py: 1.25,
-                      borderRadius: 1.75,
-                      border: '1px solid #d8e8ef',
-                      cursor: saving ? 'default' : 'pointer',
-                      backgroundColor: '#ffffff',
-                      transition: 'background-color 0.18s ease, border-color 0.18s ease',
-                      '&:hover': saving ? undefined : {
-                        backgroundColor: '#f6fbfd',
-                        borderColor: '#b7d7e4',
-                      },
-                    }}
-                  >
-                    <Checkbox
-                      checked={report.enabled}
-                      disabled={saving}
-                      onChange={(event) => {
-                        event.stopPropagation();
-                        persist(buildNextReportsState(data, report.key, event.target.checked));
-                      }}
-                      onClick={(event) => event.stopPropagation()}
-                      sx={{ p: 0.5 }}
-                    />
-                    <Typography sx={{ color: '#183844', fontWeight: 500 }}>{report.label}</Typography>
-                  </Box>
-                ))}
-              </Box>
-            </Grid>
-            <Grid size={{ xs: 12, md: 4 }}>
-              <Box
-                onClick={() => persist({
-                  ...data,
-                  show_in_new_appointment: !data.show_in_new_appointment,
-                })}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  px: 1.5,
-                  py: 1.25,
-                  borderRadius: 1.75,
-                  border: '1px solid #d8e8ef',
-                  cursor: saving ? 'default' : 'pointer',
-                  backgroundColor: '#ffffff',
-                }}
+          <Grid size={{ xs: 12 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <CollapsibleCardSection
+                title="Reportes preconfigurados"
+                collapsed={preconfiguredCollapsed}
+                onToggle={() => setPreconfiguredCollapsed((current) => !current)}
               >
-                <Checkbox
-                  checked={data.show_in_new_appointment}
-                  disabled={saving}
-                  onChange={(event) => {
-                    event.stopPropagation();
-                    persist({
-                      ...data,
-                      show_in_new_appointment: event.target.checked,
-                    });
-                  }}
-                  onClick={(event) => event.stopPropagation()}
-                  sx={{ p: 0.5 }}
-                />
-                <Typography sx={{ color: '#183844', fontWeight: 500 }}>
-                  Mostrar tipos de reportes en nueva cita (funcionalidad pendiente)
-                </Typography>
-              </Box>
-            </Grid>
-          </>
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, md: 8 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Activa o desactiva los tipos de reportes que estarán disponibles para tu consultorio.
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.75 }}>
+                      {data.reports.map((report) => (
+                        <Box
+                          key={report.key}
+                          onClick={() => persist(buildNextReportsState(data, report.key, !report.enabled))}
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                            px: 1.5,
+                            py: 1.25,
+                            borderRadius: 1.75,
+                            border: '1px solid #d8e8ef',
+                            cursor: saving ? 'default' : 'pointer',
+                            backgroundColor: '#ffffff',
+                            transition: 'background-color 0.18s ease, border-color 0.18s ease',
+                            '&:hover': saving ? undefined : {
+                              backgroundColor: '#f6fbfd',
+                              borderColor: '#b7d7e4',
+                            },
+                          }}
+                        >
+                          <Checkbox
+                            checked={report.enabled}
+                            disabled={saving}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              persist(buildNextReportsState(data, report.key, event.target.checked));
+                            }}
+                            onClick={(event) => event.stopPropagation()}
+                            sx={{ p: 0.5 }}
+                          />
+                          <Typography sx={{ color: '#183844', fontWeight: 500 }}>{report.label}</Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Ajustes complementarios de disponibilidad para la agenda médica.
+                    </Typography>
+                    <Box
+                      onClick={() => persist({
+                        ...data,
+                        show_in_new_appointment: !data.show_in_new_appointment,
+                      })}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 1.5,
+                        px: 1.5,
+                        py: 1.25,
+                        borderRadius: 1.75,
+                        border: '1px solid #d8e8ef',
+                        cursor: saving ? 'default' : 'pointer',
+                        backgroundColor: '#ffffff',
+                      }}
+                    >
+                      <Checkbox
+                        checked={data.show_in_new_appointment}
+                        disabled={saving}
+                        onChange={(event) => {
+                          event.stopPropagation();
+                          persist({
+                            ...data,
+                            show_in_new_appointment: event.target.checked,
+                          });
+                        }}
+                        onClick={(event) => event.stopPropagation()}
+                        sx={{ p: 0.5 }}
+                      />
+                      <Typography sx={{ color: '#183844', fontWeight: 500 }}>
+                        Mostrar tipos de reportes en nueva cita (funcionalidad pendiente)
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </CollapsibleCardSection>
+
+              <CollapsibleCardSection
+                title="Reportes específicos en PDF"
+                collapsed={pdfReportsCollapsed}
+                onToggle={() => setPdfReportsCollapsed((current) => !current)}
+              >
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, lg: 7 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                      Registra aquí los formatos PDF que uses en tu operación diaria. Una vez cargados, el equipo interno los revisará y en un lapso máximo de 24 horas quedarán listos para utilizarse.
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField
+                          label="Nombre del reporte"
+                          value={templateName}
+                          onChange={(event) => setTemplateName(event.target.value)}
+                          fullWidth
+                          variant="standard"
+                          disabled={submittingTemplate}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField
+                          label="Nombre del archivo descargable"
+                          value={templateOutputName}
+                          onChange={(event) => setTemplateOutputName(event.target.value)}
+                          fullWidth
+                          variant="standard"
+                          disabled={submittingTemplate}
+                          helperText="Este nombre se usará para el PDF final."
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          label="Descripción"
+                          value={templateDescription}
+                          onChange={(event) => setTemplateDescription(event.target.value)}
+                          fullWidth
+                          variant="standard"
+                          disabled={submittingTemplate}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField
+                          select
+                          label="Tipo de reporte"
+                          value={templateCategory}
+                          onChange={(event) => setTemplateCategory(event.target.value)}
+                          fullWidth
+                          variant="standard"
+                          disabled={submittingTemplate}
+                        >
+                          {(catalog?.template_categories ?? []).map((category) => (
+                            <MenuItem key={category} value={category}>
+                              {getPdfReportTemplateCategoryLabel(category)}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField
+                          select
+                          label="Laboratorio"
+                          value={templateLaboratoryId}
+                          onChange={(event) => setTemplateLaboratoryId(event.target.value === '' ? '' : Number(event.target.value))}
+                          fullWidth
+                          variant="standard"
+                          disabled={submittingTemplate}
+                        >
+                          <MenuItem value="">Sin laboratorio específico</MenuItem>
+                          {(catalog?.laboratories ?? []).map((laboratory) => (
+                            <MenuItem key={laboratory.id} value={laboratory.id}>
+                              {laboratory.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField
+                          select
+                          label="Estudio ligado"
+                          value={templateStudyTypeId}
+                          onChange={(event) => setTemplateStudyTypeId(event.target.value === '' ? '' : Number(event.target.value))}
+                          fullWidth
+                          variant="standard"
+                          disabled={submittingTemplate}
+                        >
+                          <MenuItem value="">Sin estudio ligado</MenuItem>
+                          {(catalog?.study_types ?? []).map((studyType) => (
+                            <MenuItem key={studyType.id} value={studyType.id}>
+                              {studyType.name}
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="application/pdf"
+                          hidden
+                          onChange={handleTemplateFileChange}
+                        />
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                          <Button
+                            variant="outlined"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={submittingTemplate}
+                          >
+                            {selectedTemplateFile ? 'Reemplazar PDF' : 'Seleccionar PDF'}
+                          </Button>
+                          <Typography variant="body2" color="text.secondary">
+                            {selectedTemplateFile ? selectedTemplateFile.name : 'Aún no se ha seleccionado un PDF base.'}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <Button
+                          variant="contained"
+                          onClick={() => { void handleTemplateSubmit(); }}
+                          disabled={submittingTemplate || !templateName.trim() || !templateOutputName.trim() || !selectedTemplateFile}
+                          sx={{ minWidth: 220, borderRadius: 1, backgroundColor: '#ea1d63', boxShadow: '0 8px 18px rgba(234, 29, 99, 0.28)', '&:hover': { backgroundColor: '#cf1857' } }}
+                        >
+                          {submittingTemplate ? 'Enviando...' : 'Registrar reporte específico'}
+                        </Button>
+                      </Grid>
+                    </Grid>
+                  </Grid>
+                  <Grid size={{ xs: 12, lg: 5 }}>
+                    <Typography sx={{ color: '#183844', fontWeight: 600, mb: 2 }}>
+                      Reportes registrados
+                    </Typography>
+                    {templates.length === 0 ? (
+                      <Alert severity="info">Todavía no hay reportes específicos registrados para este consultorio.</Alert>
+                    ) : (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                        {templates.map((template) => (
+                          <Box
+                            key={template.id}
+                            sx={{
+                              border: '1px solid #d8e8ef',
+                              borderRadius: 2,
+                              p: 1.75,
+                              backgroundColor: '#fff',
+                            }}
+                          >
+                            <Typography sx={{ color: '#183844', fontWeight: 600 }}>
+                              {template.name}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Estado: {template.status}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Tipo: {getPdfReportTemplateCategoryLabel(template.template_category)}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Archivo final: {template.output_file_name}
+                            </Typography>
+                            {template.study_type ? (
+                              <Typography variant="body2" color="text.secondary">
+                                Estudio: {template.study_type.name}
+                              </Typography>
+                            ) : null}
+                            {template.laboratory ? (
+                              <Typography variant="body2" color="text.secondary">
+                                Laboratorio: {template.laboratory.name}
+                              </Typography>
+                            ) : null}
+                            {template.base_pdf_file ? (
+                              <Typography variant="body2" color="text.secondary">
+                                PDF base: {template.base_pdf_file.title}
+                              </Typography>
+                            ) : null}
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+                  </Grid>
+                </Grid>
+              </CollapsibleCardSection>
+            </Box>
+          </Grid>
         )}
       </Grid>
     </CardShell>

@@ -51,6 +51,12 @@ type RefreshPayload = {
   patient: Patient;
   soapNotes: SOAPNote[];
   targetTab?: 'historical';
+  reportSuggestion?: {
+    templateId: number;
+    studyDeliveryId: number | null;
+    templateName: string;
+    studyName: string;
+  } | null;
 };
 
 type Props = {
@@ -1775,6 +1781,7 @@ function PatientDailyNoteTab({
       const currentAnalysisForm = analysisFormRef.current;
       const currentPlanForm = planFormRef.current;
       const currentPersonalNotes = personalNotesRef.current;
+      let reportSuggestion: RefreshPayload['reportSuggestion'] = null;
       const payload = {
         patient_id: patient.id,
         currentcondition: currentSubjectiveForm.currentCondition.trim() || undefined,
@@ -1802,12 +1809,30 @@ function PatientDailyNoteTab({
         if (selectedStudyTypeIds.length > 0) {
           const officeId = Number(patient.office_id ?? sessionStorage.getItem('cached_office_id') ?? 0);
           if (officeId > 0) {
-            await studyDeliveryService.createSampleStudyDelivery({
+            const createdStudyDeliveries = await studyDeliveryService.createSampleStudyDelivery({
               office_id: officeId,
               patient_id: patient.id,
               processing_status: 'sample_collected',
               study_type_ids: selectedStudyTypeIds,
             });
+
+            const reportsData = await consultationService.getPatientReports(patient.id, officeId);
+            const matchedTemplate = (reportsData.pdf_templates_enabled ?? []).find((template) => (
+              Boolean(template.study_type?.id) && selectedStudyTypeIds.includes(Number(template.study_type?.id))
+            ));
+
+            if (matchedTemplate?.study_type?.id) {
+              const matchedStudyDelivery = createdStudyDeliveries.find(
+                (delivery) => Number(delivery.study_type_id) === Number(matchedTemplate.study_type?.id)
+              );
+
+              reportSuggestion = {
+                templateId: matchedTemplate.id,
+                studyDeliveryId: matchedStudyDelivery?.id ?? null,
+                templateName: matchedTemplate.name,
+                studyName: matchedTemplate.study_type.name,
+              };
+            }
           }
         }
       }
@@ -1820,7 +1845,12 @@ function PatientDailyNoteTab({
       setClinicalHistory(nextClinicalHistory);
       setSoapContext(nextSoapContext);
       setPatientTagControl(await patientService.getPatientTagControl(patient.id));
-      onRefreshAfterSave({ patient: nextPatient, soapNotes: nextSoapNotes, targetTab: 'historical' });
+      onRefreshAfterSave({
+        patient: nextPatient,
+        soapNotes: nextSoapNotes,
+        targetTab: 'historical',
+        reportSuggestion,
+      });
       const wasEditingHistoricalConsultation = Boolean(editingConsultation?.consultation_id);
       setEditingConsultation(null);
       if (!wasEditingHistoricalConsultation) {

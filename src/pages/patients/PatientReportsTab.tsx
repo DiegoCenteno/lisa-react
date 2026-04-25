@@ -29,6 +29,7 @@ import {
   type FetalVitalityReportPayload,
   type GeneticReportPayload,
   type NuchalTranslucencyReportPayload,
+  type PatientPdfTemplateSummary,
   type PatientReportItem,
   type PatientReportRecord,
   type PatientReportsData,
@@ -39,19 +40,29 @@ import PatientFetalVitalityReportBuilder from './PatientFetalVitalityReportBuild
 import PatientFetalWellbeingReportBuilder from './PatientFetalWellbeingReportBuilder';
 import PatientGeneticReportBuilder from './PatientGeneticReportBuilder';
 import PatientNuchalTranslucencyReportBuilder from './PatientNuchalTranslucencyReportBuilder';
+import PatientPdfTemplateReportBuilder from './PatientPdfTemplateReportBuilder';
 import PatientStructuralReportBuilder from './PatientStructuralReportBuilder';
 
 interface PatientReportsTabProps {
   patientId: number;
+  initialPdfTemplateId?: number | null;
+  initialStudyDeliveryId?: number | null;
+  onInitialPdfTemplateHandled?: () => void;
 }
 
-function PatientReportsTab({ patientId }: PatientReportsTabProps) {
+function PatientReportsTab({
+  patientId,
+  initialPdfTemplateId = null,
+  initialStudyDeliveryId = null,
+  onInitialPdfTemplateHandled,
+}: PatientReportsTabProps) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [builderLoading, setBuilderLoading] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [selectedReportKey, setSelectedReportKey] = useState('');
+  const [selectedPdfTemplateId, setSelectedPdfTemplateId] = useState('');
   const [reportsData, setReportsData] = useState<PatientReportsData | null>(null);
   const [activeColposcopyReportId, setActiveColposcopyReportId] = useState<number | null>(null);
   const [activeBasicObstetricReportId, setActiveBasicObstetricReportId] = useState<number | null>(null);
@@ -60,6 +71,8 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const [activeStructuralReportId, setActiveStructuralReportId] = useState<number | null>(null);
   const [activeWellbeingReportId, setActiveWellbeingReportId] = useState<number | null>(null);
   const [activeVitalityReportId, setActiveVitalityReportId] = useState<number | null>(null);
+  const [activePdfTemplateId, setActivePdfTemplateId] = useState<number | null>(null);
+  const [activePdfTemplateStudyDeliveryId, setActivePdfTemplateStudyDeliveryId] = useState<number | null>(null);
   const [reportBuilderStartInEditMode, setReportBuilderStartInEditMode] = useState(true);
   const [colposcopyBuilder, setColposcopyBuilder] = useState<ColposcopyReportBuilderData | null>(null);
   const [selectedSessionIds, setSelectedSessionIds] = useState<number[]>([]);
@@ -72,6 +85,8 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const hasEnabledReports = (reportsData?.reports_enabled?.length ?? 0) > 0;
+  const hasPdfTemplates = (reportsData?.pdf_templates_enabled?.length ?? 0) > 0;
+  const canCreateReports = hasEnabledReports || hasPdfTemplates;
   const isBuildingColposcopyReport = activeColposcopyReportId !== null;
   const isBuildingBasicObstetricReport = activeBasicObstetricReportId !== null;
   const isBuildingNuchalTranslucencyReport = activeNuchalTranslucencyReportId !== null;
@@ -79,8 +94,9 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
   const isBuildingStructuralReport = activeStructuralReportId !== null;
   const isBuildingWellbeingReport = activeWellbeingReportId !== null;
   const isBuildingVitalityReport = activeVitalityReportId !== null;
+  const isBuildingPdfTemplateReport = activePdfTemplateId !== null;
   const isBuildingReport =
-    isBuildingColposcopyReport || isBuildingBasicObstetricReport || isBuildingNuchalTranslucencyReport || isBuildingGeneticReport || isBuildingStructuralReport || isBuildingWellbeingReport || isBuildingVitalityReport;
+    isBuildingColposcopyReport || isBuildingBasicObstetricReport || isBuildingNuchalTranslucencyReport || isBuildingGeneticReport || isBuildingStructuralReport || isBuildingWellbeingReport || isBuildingVitalityReport || isBuildingPdfTemplateReport;
 
   useEffect(() => {
     imagePreviewUrlsRef.current = imagePreviewUrls;
@@ -102,6 +118,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
       setSelectedReportKey(
         (current) => current || data.last_report_type_key || data.reports_enabled[0]?.key || ''
       );
+      setSelectedPdfTemplateId((current) => current || String(data.pdf_templates_enabled?.[0]?.id ?? ''));
     } catch (loadError) {
       console.error('Error cargando reportes del paciente:', loadError);
       setError('No se pudo cargar el modulo de reportes.');
@@ -240,6 +257,48 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
     setActiveVitalityReportId(reportId);
   }, []);
 
+  const openPdfTemplateBuilder = useCallback((templateId: number, studyDeliveryId: number | null = null) => {
+    setActiveColposcopyReportId(null);
+    setColposcopyBuilder(null);
+    setSelectedSessionIds([]);
+    setSelectedFileIds([]);
+    setShowCreate(false);
+    setActiveBasicObstetricReportId(null);
+    setActiveNuchalTranslucencyReportId(null);
+    setActiveGeneticReportId(null);
+    setActiveStructuralReportId(null);
+    setActiveWellbeingReportId(null);
+    setActiveVitalityReportId(null);
+    setActivePdfTemplateStudyDeliveryId(studyDeliveryId);
+    setActivePdfTemplateId(templateId);
+  }, []);
+
+  useEffect(() => {
+    if (!initialPdfTemplateId || !reportsData?.pdf_templates_enabled?.length || isBuildingReport) {
+      return;
+    }
+
+    const suggestedTemplateExists = reportsData.pdf_templates_enabled.some(
+      (template) => template.id === initialPdfTemplateId
+    );
+
+    if (!suggestedTemplateExists) {
+      onInitialPdfTemplateHandled?.();
+      return;
+    }
+
+    setSelectedPdfTemplateId(String(initialPdfTemplateId));
+    openPdfTemplateBuilder(initialPdfTemplateId, initialStudyDeliveryId ?? null);
+    onInitialPdfTemplateHandled?.();
+  }, [
+    initialPdfTemplateId,
+    initialStudyDeliveryId,
+    isBuildingReport,
+    onInitialPdfTemplateHandled,
+    openPdfTemplateBuilder,
+    reportsData?.pdf_templates_enabled,
+  ]);
+
   const handleCreateReport = useCallback(async () => {
     if (!selectedReportKey) {
       setError('Selecciona primero un tipo de reporte.');
@@ -279,6 +338,16 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
       setCreating(false);
     }
   }, [loadBasicObstetricBuilder, loadColposcopyBuilder, loadGeneticBuilder, loadNuchalTranslucencyBuilder, loadReports, loadStructuralBuilder, loadVitalityBuilder, loadWellbeingBuilder, patientId, selectedReportKey]);
+
+  const handleOpenPdfTemplateReport = useCallback(() => {
+    const parsedTemplateId = Number(selectedPdfTemplateId);
+    if (!Number.isFinite(parsedTemplateId) || parsedTemplateId <= 0) {
+      setError('Selecciona primero una plantilla PDF publicada.');
+      return;
+    }
+
+    openPdfTemplateBuilder(parsedTemplateId, null);
+  }, [openPdfTemplateBuilder, selectedPdfTemplateId]);
 
   const availableBuilderFiles = useMemo(
     () =>
@@ -399,8 +468,10 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
 
   const handleDownloadExistingReport = useCallback(async (report: PatientReportItem) => {
     if (report.type_key !== 'tipoest9') {
-      setMessage('Este tipo de reporte se integrara en la siguiente fase V2.');
-      return;
+      if (report.type_key !== 'pdf_template') {
+        setMessage('Este tipo de reporte se integrara en la siguiente fase V2.');
+        return;
+      }
     }
 
     try {
@@ -408,7 +479,9 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
       const blobUrl = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = blobUrl;
-      anchor.download = 'ReporteColposcopia.docx';
+      anchor.download = report.type_key === 'pdf_template'
+        ? `${report.type_label.replace(/[^A-Za-z0-9_-]+/g, '_') || 'reporte_pdf'}.pdf`
+        : 'ReporteColposcopia.docx';
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -584,7 +657,7 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
         return;
       }
 
-      if (report.type_key === 'tipoest9') {
+      if (report.type_key === 'tipoest9' || report.type_key === 'pdf_template') {
         await handleDownloadExistingReport(report);
         return;
       }
@@ -692,16 +765,16 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
                   Administra aqui los reportes del paciente desde la nueva version.
                 </Typography>
               </Box>
-              {!showCreate && hasEnabledReports && (
+              {!showCreate && canCreateReports && (
                 <Button variant="contained" startIcon={<AddIcon />} onClick={() => setShowCreate(true)}>
                   Nuevo reporte
                 </Button>
               )}
             </Box>
 
-            {!hasEnabledReports ? (
+            {!canCreateReports ? (
               <Alert severity="info" sx={{ mt: 2.5 }}>
-                No hay tipos de reportes habilitados para este consultorio. Puedes activarlos desde{' '}
+                No hay reportes habilitados para este consultorio. Puedes activarlos o publicar plantillas PDF desde{' '}
                 <Link href="/configuracion?tab=reportes" underline="hover">
                   aqui
                 </Link>
@@ -709,33 +782,95 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
               </Alert>
             ) : null}
 
-            {showCreate && hasEnabledReports && (
+            {showCreate && canCreateReports && (
               <Box sx={{ mt: 2.5, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <TextField
-                  select
-                  fullWidth
-                  label="Tipo de reporte"
-                  value={selectedReportKey}
-                  onChange={(event) => setSelectedReportKey(event.target.value)}
-                >
-                  {reportsData?.reports_enabled.map((report) => (
-                    <MenuItem key={report.key} value={report.key}>
-                      {report.label}
-                    </MenuItem>
-                  ))}
-                </TextField>
+                {hasEnabledReports && (
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                      Reportes preconfigurados
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Tipo de reporte"
+                        value={selectedReportKey}
+                        onChange={(event) => setSelectedReportKey(event.target.value)}
+                      >
+                        {reportsData?.reports_enabled.map((report) => (
+                          <MenuItem key={report.key} value={report.key}>
+                            {report.label}
+                          </MenuItem>
+                        ))}
+                      </TextField>
 
-                {reportsData?.last_report_type_label && (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Reporte requerido previo: <strong>{reportsData.last_report_type_label}</strong>
-                    {reportsData.last_report_date_label ? ` | Fecha: ${reportsData.last_report_date_label}` : ''}
-                  </Typography>
+                      {reportsData?.last_report_type_label && (
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          Reporte requerido previo: <strong>{reportsData.last_report_type_label}</strong>
+                          {reportsData.last_report_date_label ? ` | Fecha: ${reportsData.last_report_date_label}` : ''}
+                        </Typography>
+                      )}
+
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button variant="contained" onClick={() => void handleCreateReport()} disabled={creating || !selectedReportKey}>
+                          {creating ? 'Creando...' : 'Siguiente'}
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Paper>
+                )}
+
+                {hasPdfTemplates && (
+                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                      Reportes específicos en PDF
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <TextField
+                        select
+                        fullWidth
+                        label="Plantilla PDF publicada"
+                        value={selectedPdfTemplateId}
+                        onChange={(event) => setSelectedPdfTemplateId(event.target.value)}
+                      >
+                        {reportsData?.pdf_templates_enabled?.map((template: PatientPdfTemplateSummary) => (
+                          <MenuItem key={template.id} value={String(template.id)}>
+                            {template.name}
+                            {template.study_type?.name ? ` | ${template.study_type.name}` : ''}
+                          </MenuItem>
+                        ))}
+                      </TextField>
+
+                      {selectedPdfTemplateId && reportsData?.pdf_templates_enabled ? (
+                        (() => {
+                          const selectedTemplate = reportsData.pdf_templates_enabled.find(
+                            (template) => String(template.id) === selectedPdfTemplateId
+                          );
+
+                          if (!selectedTemplate) {
+                            return null;
+                          }
+
+                          return (
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {selectedTemplate.description || 'Formulario previo para llenar el PDF desde esta plantilla publicada.'}
+                              {selectedTemplate.laboratory?.name ? ` | Lab: ${selectedTemplate.laboratory.name}` : ''}
+                              {selectedTemplate.fields_count ? ` | ${selectedTemplate.fields_count} campos` : ''}
+                            </Typography>
+                          );
+                        })()
+                      ) : null}
+
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        <Button variant="contained" onClick={handleOpenPdfTemplateReport} disabled={!selectedPdfTemplateId}>
+                          Abrir formulario PDF
+                        </Button>
+                      </Box>
+                    </Box>
+                  </Paper>
                 )}
 
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                  <Button variant="contained" onClick={() => void handleCreateReport()} disabled={creating || !selectedReportKey}>
-                    {creating ? 'Creando...' : 'Siguiente'}
-                  </Button>
                   <Button color="inherit" onClick={() => setShowCreate(false)} disabled={creating}>
                     Cancelar
                   </Button>
@@ -1007,6 +1142,26 @@ function PatientReportsTab({ patientId }: PatientReportsTabProps) {
               </Box>
             )}
           </Paper>
+        )}
+
+        {activePdfTemplateId && (
+          <PatientPdfTemplateReportBuilder
+            patientId={patientId}
+            templateId={activePdfTemplateId}
+            initialStudyDeliveryId={activePdfTemplateStudyDeliveryId}
+            onGenerated={async () => {
+              setActivePdfTemplateId(null);
+              setActivePdfTemplateStudyDeliveryId(null);
+              setShowCreate(false);
+              await loadReports();
+              setMessage('PDF final generado y guardado correctamente.');
+            }}
+            onBack={() => {
+              setActivePdfTemplateId(null);
+              setActivePdfTemplateStudyDeliveryId(null);
+              setShowCreate(true);
+            }}
+          />
         )}
 
         {activeBasicObstetricReportId && (

@@ -1,4 +1,4 @@
-import type { ConsultationListItem, PatientFile } from '../types';
+import type { ConsultationListItem, PatientFile, PendingStudyDeliveryLink } from '../types';
 import apiClient from './client';
 import { appointmentService } from './appointmentService';
 
@@ -428,6 +428,23 @@ export interface PatientReportRecord<TPayload = unknown> {
   updated_at?: string | null;
 }
 
+export interface PatientPdfTemplateSummary {
+  id: number;
+  name: string;
+  description?: string | null;
+  output_file_name: string;
+  template_category: string;
+  fields_count: number;
+  study_type?: {
+    id: number;
+    name: string;
+  } | null;
+  laboratory?: {
+    id: number;
+    name: string;
+  } | null;
+}
+
 export interface PatientReportsData {
   patient_id: number;
   office_id: number;
@@ -435,11 +452,84 @@ export interface PatientReportsData {
     key: string;
     label: string;
   }>;
+  pdf_templates_enabled?: PatientPdfTemplateSummary[];
   last_report_type_key?: string | null;
   last_report_type_label?: string | null;
   last_report_date_label?: string | null;
   items: PatientReportItem[];
   legacy_items?: PatientReportItem[];
+}
+
+export interface PatientPdfTemplateBuilderOption {
+  id: number;
+  option_key: string;
+  label: string;
+  value: string;
+  pdf_field_name?: string | null;
+  is_default: boolean;
+}
+
+export interface PatientPdfTemplateBuilderField {
+  id: number;
+  field_key: string;
+  label: string;
+  field_type: 'text' | 'textarea' | 'date' | 'checkbox' | 'select' | 'radio_group' | 'checkbox_group';
+  source_mode: 'system' | 'system_editable' | 'manual';
+  source_path?: string | null;
+  pdf_field_name?: string | null;
+  is_required: boolean;
+  max_length?: number | null;
+  date_format?: string | null;
+  placeholder?: string | null;
+  help_text?: string | null;
+  status: string;
+  selection_mode?: 'single' | 'multiple' | '' | null;
+  editable: boolean;
+  initial_value: string | boolean | string[];
+  ui?: {
+    xs?: number;
+    md?: number;
+  } | null;
+  options: PatientPdfTemplateBuilderOption[];
+}
+
+export interface PatientPdfTemplateBuilderSection {
+  label: string;
+  fields: PatientPdfTemplateBuilderField[];
+}
+
+export interface PatientPdfTemplateBuilderData {
+  template: {
+    id: number;
+    name: string;
+    description?: string | null;
+    output_file_name: string;
+    template_category: string;
+    requires_study_link?: boolean;
+    study_type?: {
+      id: number;
+      name: string;
+    } | null;
+    laboratory?: {
+      id: number;
+      name: string;
+    } | null;
+  };
+  patient: {
+    id: number;
+    full_name: string;
+    age?: string | null;
+  };
+  linked_study_delivery?: {
+    id: number;
+    study_type_id?: number | null;
+    processing_status: string;
+    study_name?: string | null;
+    laboratory_name?: string | null;
+    label: string;
+  } | null;
+  available_study_links?: PendingStudyDeliveryLink[];
+  sections: PatientPdfTemplateBuilderSection[];
 }
 
 export interface ColposcopyReportBuilderData {
@@ -618,6 +708,47 @@ export const consultationService = {
     );
 
     return response.data.data;
+  },
+
+  async getPatientPdfReportTemplateBuilder(
+    patientId: number,
+    templateId: number,
+    officeId?: number,
+    studyDeliveryId?: number | null
+  ): Promise<PatientPdfTemplateBuilderData> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.get<{ status: string; data: PatientPdfTemplateBuilderData }>(
+      `/v2/patients/${patientId}/pdf-report-templates/${templateId}/builder`,
+      {
+        params: {
+          office_id: resolvedOfficeId,
+          study_delivery_id: studyDeliveryId ?? undefined,
+        },
+      }
+    );
+
+    return response.data.data;
+  },
+
+  async downloadPatientPdfTemplateFinalReport(
+    patientId: number,
+    templateId: number,
+    values: Record<string, string | boolean | string[]>,
+    officeId?: number,
+    studyDeliveryId?: number | null
+  ): Promise<Blob> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.post<Blob>(
+      `/v2/patients/${patientId}/pdf-report-templates/${templateId}/download-final-pdf`,
+      {
+        office_id: resolvedOfficeId,
+        study_delivery_id: studyDeliveryId ?? undefined,
+        values,
+      },
+      { responseType: 'blob' }
+    );
+
+    return response.data;
   },
 
   async createPatientReport(

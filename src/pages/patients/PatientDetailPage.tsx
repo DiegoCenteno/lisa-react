@@ -13,6 +13,10 @@ import {
   Snackbar,
   useMediaQuery,
   useTheme,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   Person as PersonIcon,
@@ -73,6 +77,16 @@ export default function PatientDetailPage() {
   const [dailyNoteMessage, setDailyNoteMessage] = useState<string | null>(null);
   const [dailyNoteError, setDailyNoteError] = useState<string | null>(null);
   const [dailyNoteEditRequest, setDailyNoteEditRequest] = useState<SOAPNote | null>(null);
+  const [postSoapReportSuggestion, setPostSoapReportSuggestion] = useState<{
+    templateId: number;
+    studyDeliveryId: number | null;
+    templateName: string;
+    studyName: string;
+  } | null>(null);
+  const [suggestedPdfTemplateToOpen, setSuggestedPdfTemplateToOpen] = useState<{
+    templateId: number;
+    studyDeliveryId: number | null;
+  } | null>(null);
   const [soapTabSessionKey, setSoapTabSessionKey] = useState(0);
   const [showCompactSticky, setShowCompactSticky] = useState(false);
   const [filesRefreshKey, setFilesRefreshKey] = useState(0);
@@ -201,6 +215,20 @@ export default function PatientDetailPage() {
     setSoapTabSessionKey((current) => current + 1);
     setTab(2);
     setSearchParams({ tab: 'soap' }, { replace: true });
+  };
+
+  const handleClosePostSoapReportSuggestion = () => {
+    setPostSoapReportSuggestion(null);
+  };
+
+  const handleOpenSuggestedReport = () => {
+    setSuggestedPdfTemplateToOpen(postSoapReportSuggestion ? {
+      templateId: postSoapReportSuggestion.templateId,
+      studyDeliveryId: postSoapReportSuggestion.studyDeliveryId ?? null,
+    } : null);
+    setPostSoapReportSuggestion(null);
+    setTab(8);
+    setSearchParams({ tab: 'reports' }, { replace: true });
   };
 
   const refreshPatientFiles = () => {
@@ -512,9 +540,10 @@ export default function PatientDetailPage() {
           canEditConsultationHistory={canEditConsultationHistory}
           editRequestNote={dailyNoteEditRequest}
           onEditRequestHandled={() => setDailyNoteEditRequest(null)}
-          onRefreshAfterSave={({ patient: nextPatient, soapNotes: nextSoapNotes, targetTab }) => {
+          onRefreshAfterSave={({ patient: nextPatient, soapNotes: nextSoapNotes, targetTab, reportSuggestion }) => {
             setPatient(nextPatient);
             setSoapNotes(nextSoapNotes);
+            setPostSoapReportSuggestion(reportSuggestion ?? null);
             if (targetTab === 'historical') {
               setTab(7);
               setSearchParams({ tab: 'historical' }, { replace: true });
@@ -536,7 +565,12 @@ export default function PatientDetailPage() {
       {/* Tab 8: Reportes */}
       {canAccessReports ? (
         <TabPanel value={tab} index={8}>
-          <PatientReportsTab patientId={patient.id} />
+          <PatientReportsTab
+            patientId={patient.id}
+            initialPdfTemplateId={suggestedPdfTemplateToOpen?.templateId ?? null}
+            initialStudyDeliveryId={suggestedPdfTemplateToOpen?.studyDeliveryId ?? null}
+            onInitialPdfTemplateHandled={() => setSuggestedPdfTemplateToOpen(null)}
+          />
         </TabPanel>
       ) : null}
 
@@ -633,6 +667,26 @@ export default function PatientDetailPage() {
           {dailyNoteError}
         </Alert>
       </Snackbar>
+
+      <Dialog
+        open={Boolean(postSoapReportSuggestion)}
+        onClose={handleClosePostSoapReportSuggestion}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Reporte PDF sugerido</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Se recomienda completar el reporte "{postSoapReportSuggestion?.templateName}" para el estudio "{postSoapReportSuggestion?.studyName}".
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClosePostSoapReportSuggestion}>Más tarde</Button>
+          <Button variant="contained" onClick={handleOpenSuggestedReport}>
+            Completar ahora
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

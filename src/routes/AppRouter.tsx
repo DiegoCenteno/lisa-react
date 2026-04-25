@@ -25,6 +25,7 @@ import PublicStudyResultPage from '../pages/public/PublicStudyResultPage';
 import SystemAdminHomePage from '../pages/admin/SystemAdminHomePage';
 import SystemAnnouncementsPage from '../pages/admin/SystemAnnouncementsPage';
 import SystemAnnouncementReadersPage from '../pages/admin/SystemAnnouncementReadersPage';
+import SystemTemplateRequestsPage from '../pages/admin/SystemTemplateRequestsPage';
 import SystemWhatsAppConversationsPage from '../pages/admin/SystemWhatsAppConversationsPage';
 import { useAuth } from '../hooks/useAuth';
 
@@ -86,6 +87,14 @@ export default function AppRouter() {
             element={
               <ProtectedRoute roles={['system_admin']} permissions={['system.announcements.manage']}>
                 <SystemAnnouncementsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/solicitudes-plantillas"
+            element={
+              <ProtectedRoute roles={['system_admin']}>
+                <SystemTemplateRequestsPage />
               </ProtectedRoute>
             }
           />

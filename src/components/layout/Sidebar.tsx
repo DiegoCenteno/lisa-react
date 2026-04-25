@@ -137,6 +137,12 @@ const systemAdminMenuItems: MenuItem[] = [
     permission: 'system.announcements.manage',
   },
   {
+    text: 'Solicitudes PDF',
+    icon: <StudiesIcon />,
+    path: '/admin/solicitudes-plantillas',
+    roles: [UserRole.SYSTEM_ADMIN],
+  },
+  {
     text: 'Bitacora',
     icon: <HistoryIcon />,
     path: '/admin/bitacora',

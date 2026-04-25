@@ -781,6 +781,11 @@ export interface StudyDeliveryItem {
   download_count: number;
   notes?: string | null;
   sent_by?: string | null;
+  linked_pdf_report?: {
+    id: number;
+    title: string;
+    created_at?: string | null;
+  } | null;
   evidence_file?: StudyDeliveryFileItem | null;
   files: StudyDeliveryFileItem[];
 }

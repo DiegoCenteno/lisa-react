@@ -114,6 +114,67 @@ export interface SettingsReportsData {
   show_in_new_appointment: boolean;
 }
 
+export interface SettingsPdfReportTemplateCatalogData {
+  office_id: number;
+  template_categories: string[];
+  template_statuses: string[];
+  field_types: string[];
+  field_source_modes: string[];
+  source_path_options: Array<{
+    key: string;
+    label: string;
+  }>;
+  field_statuses: string[];
+  selection_modes: string[];
+  date_formats: string[];
+  laboratories: Array<{
+    id: number;
+    name: string;
+  }>;
+  study_types: Array<{
+    id: number;
+    name: string;
+  }>;
+}
+
+export interface SettingsPdfReportTemplateSummary {
+  id: number;
+  office_id: number;
+  laboratory: {
+    id: number;
+    name: string;
+  } | null;
+  study_type: {
+    id: number;
+    name: string;
+  } | null;
+  name: string;
+  description: string;
+  output_file_name: string;
+  template_category: string;
+  status: string;
+  detected_pdf_fields: Array<{
+    name: string;
+    pdf_type: string;
+  }>;
+  original_pdf_file: {
+    id: number;
+    office_id: number | null;
+    title: string;
+    file: string;
+  } | null;
+  base_pdf_file: {
+    id: number;
+    office_id: number | null;
+    title: string;
+    file: string;
+  } | null;
+  fields_count: number;
+  published_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface SettingsLabelStatusItem {
   id: number;
   code: string;
@@ -354,6 +415,74 @@ const settingsService = {
   async updateReportSettings(payload: SettingsReportsData): Promise<SettingsReportsData> {
     const response = await apiClient.put<{ status: string; data: SettingsReportsData }>(
       '/v2/settings/reports',
+      payload
+    );
+
+    return response.data.data;
+  },
+
+  async getPdfReportTemplateCatalog(officeId: number): Promise<SettingsPdfReportTemplateCatalogData> {
+    const response = await apiClient.get<{ status: string; data: SettingsPdfReportTemplateCatalogData }>(
+      '/v2/settings/pdf-report-templates/catalog',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data;
+  },
+
+  async getPdfReportTemplates(officeId: number): Promise<SettingsPdfReportTemplateSummary[]> {
+    const response = await apiClient.get<{ status: string; data: SettingsPdfReportTemplateSummary[] }>(
+      '/v2/settings/pdf-report-templates',
+      { params: { office_id: officeId } }
+    );
+
+    return response.data.data ?? [];
+  },
+
+  async uploadPdfReportTemplateBasePdf(payload: {
+    office_id: number;
+    file: File;
+  }): Promise<{
+    id: number;
+    office_id: number | null;
+    title: string;
+    file: string;
+  }> {
+    const formData = new FormData();
+    formData.append('office_id', String(payload.office_id));
+    formData.append('file', payload.file);
+
+    const response = await apiClient.post<{
+      status: string;
+      data: {
+        id: number;
+        office_id: number | null;
+        title: string;
+        file: string;
+      };
+    }>('/v2/settings/pdf-report-templates/upload-base-pdf', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data.data;
+  },
+
+  async createPdfReportTemplate(payload: {
+    office_id: number;
+    laboratory_id: number | null;
+    study_type_id: number | null;
+    name: string;
+    description?: string;
+    output_file_name: string;
+    template_category: string;
+    base_pdf_file_id: number;
+    status: string;
+    fields?: Array<unknown>;
+  }): Promise<SettingsPdfReportTemplateSummary> {
+    const response = await apiClient.post<{ status: string; data: SettingsPdfReportTemplateSummary }>(
+      '/v2/settings/pdf-report-templates',
       payload
     );
 
