@@ -85,8 +85,6 @@ export default function SubscriptionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [sdkReady, setSdkReady] = useState(false);
-
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [showIssuers, setShowIssuers] = useState(false);
 
@@ -115,19 +113,41 @@ export default function SubscriptionPage() {
   }, [loadSubscriptionStatus]);
 
   const loadMercadoPagoSdk = (publicKey: string) => {
-    if (window.Mercadopago) {
-      window.Mercadopago.setPublishableKey(publicKey);
-      setSdkReady(true);
+    const initSdk = () => {
+      if (window.Mercadopago) {
+        window.Mercadopago.setPublishableKey(publicKey);
+        return true;
+      }
+      return false;
+    };
+
+    if (initSdk()) return;
+
+    const existingScript = document.querySelector('script[src*="mercadopago.js"]');
+    if (existingScript) {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (initSdk() || attempts >= 30) {
+          clearInterval(interval);
+        }
+      }, 200);
       return;
     }
 
     const script = document.createElement('script');
     script.src = 'https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js';
     script.onload = () => {
-      if (window.Mercadopago) {
-        window.Mercadopago.setPublishableKey(publicKey);
-        setSdkReady(true);
-      }
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (initSdk() || attempts >= 30) {
+          clearInterval(interval);
+        }
+      }, 200);
+    };
+    script.onerror = () => {
+      setError('No se pudo cargar el sistema de pagos. Verifica tu conexión e intenta recargar la página.');
     };
     document.head.appendChild(script);
   };
@@ -197,8 +217,12 @@ export default function SubscriptionPage() {
     setError('');
     setSuccess('');
 
-    if (!sdkReady || !window.Mercadopago || !formRef.current) {
-      setError('El sistema de pagos no está listo. Recarga la página.');
+    if (!window.Mercadopago || !formRef.current) {
+      if (!window.Mercadopago) {
+        setError('MercadoPago no se cargó correctamente. Recarga la página (Ctrl+Shift+R).');
+      } else {
+        setError('Error interno del formulario. Recarga la página.');
+      }
       return;
     }
 
