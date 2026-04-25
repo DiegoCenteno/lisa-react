@@ -95,6 +95,7 @@ export default function SubscriptionPage() {
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [showIssuers, setShowIssuers] = useState(false);
   const [showCvv, setShowCvv] = useState(false);
+  const [showCardNumber, setShowCardNumber] = useState(false);
   const [sdkStatus, setSdkStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const publicKeyRef = useRef<string>('');
 
@@ -455,20 +456,42 @@ export default function SubscriptionPage() {
 
             <div style={{ marginBottom: '16px' }}>
               <label htmlFor="cardNumber" style={labelStyle}>Número de la tarjeta</label>
-              <input
-                id="cardNumber"
-                data-checkout="cardNumber"
-                type="text"
-                inputMode="numeric"
-                maxLength={19}
-                autoComplete="off"
-                onInput={handleCardNumberInput}
-                onBlur={guessPaymentMethod}
-                style={{ ...inputStyle, letterSpacing: '2px' }}
-                placeholder="0000 0000 0000 0000"
-                disabled={submitting}
-                {...sensitiveFieldProps}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  id="cardNumber"
+                  data-checkout="cardNumber"
+                  type={showCardNumber ? 'text' : 'password'}
+                  inputMode="numeric"
+                  maxLength={19}
+                  autoComplete="off"
+                  onInput={handleCardNumberInput}
+                  onBlur={guessPaymentMethod}
+                  style={{ ...inputStyle, letterSpacing: '2px', paddingRight: '40px' }}
+                  placeholder={showCardNumber ? '0000 0000 0000 0000' : '••••••••••••••••'}
+                  disabled={submitting}
+                  {...sensitiveFieldProps}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCardNumber(!showCardNumber)}
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    color: '#999',
+                  }}
+                  tabIndex={-1}
+                >
+                  {showCardNumber ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                </button>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
