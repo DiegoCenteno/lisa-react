@@ -6,13 +6,8 @@ import {
   CardContent,
   Typography,
   Button,
-  TextField,
   Alert,
   CircularProgress,
-  MenuItem,
-  Select,
-  InputLabel,
-  FormControl,
   useTheme,
   useMediaQuery,
 } from '@mui/material';
@@ -59,6 +54,25 @@ interface MercadoPagoInstallment {
   }>;
 }
 
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '14px 12px',
+  fontSize: '16px',
+  border: '1px solid #c4c4c4',
+  borderRadius: '8px',
+  boxSizing: 'border-box',
+  outline: 'none',
+  fontFamily: 'inherit',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: '4px',
+  fontSize: '14px',
+  color: '#666',
+  fontWeight: 500,
+};
+
 export default function SubscriptionPage() {
   const navigate = useNavigate();
   const { logout } = useAuth();
@@ -73,14 +87,8 @@ export default function SubscriptionPage() {
   const [success, setSuccess] = useState('');
   const [sdkReady, setSdkReady] = useState(false);
 
-  const [cardholderName, setCardholderName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expirationMonth, setExpirationMonth] = useState('');
-  const [expirationYear, setExpirationYear] = useState('');
-  const [securityCode, setSecurityCode] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
-  const [issuers, setIssuers] = useState<MercadoPagoIssuer[]>([]);
-  const [selectedIssuer, setSelectedIssuer] = useState('');
+  const [showIssuers, setShowIssuers] = useState(false);
 
   const loadSubscriptionStatus = useCallback(async () => {
     try {
@@ -115,26 +123,67 @@ export default function SubscriptionPage() {
 
     const script = document.createElement('script');
     script.src = 'https://secure.mlstatic.com/sdk/javascript/v1/mercadopago.js';
-    script.async = true;
     script.onload = () => {
-      window.Mercadopago.setPublishableKey(publicKey);
-      setSdkReady(true);
+      if (window.Mercadopago) {
+        window.Mercadopago.setPublishableKey(publicKey);
+        setSdkReady(true);
+      }
     };
     document.head.appendChild(script);
   };
 
-  const handleCardNumberChange = (value: string) => {
-    setCardNumber(value);
-    if (value.length >= 6 && window.Mercadopago) {
-      const bin = value.substring(0, 6);
+  const guessPaymentMethod = () => {
+    const cardNumberInput = document.getElementById('cardNumber') as HTMLInputElement | null;
+    if (!cardNumberInput || !window.Mercadopago) return;
+
+    const cardnumber = cardNumberInput.value;
+    if (cardnumber.length >= 6) {
+      const bin = cardnumber.substring(0, 6);
       window.Mercadopago.getPaymentMethod({ bin }, (status, response) => {
         if (status === 200 && response.length > 0) {
-          setPaymentMethodId(response[0].id);
-          window.Mercadopago.getIssuers(response[0].id, (issuerStatus, issuerResponse) => {
+          const method = response[0];
+          setPaymentMethodId(method.id);
+
+          window.Mercadopago.getIssuers(method.id, (issuerStatus, issuerResponse) => {
             if (issuerStatus === 200) {
-              setIssuers(issuerResponse);
-              if (issuerResponse.length > 0) {
-                setSelectedIssuer(String(issuerResponse[0].id));
+              const issuerSelect = document.getElementById('issuer') as HTMLSelectElement | null;
+              if (issuerSelect) {
+                issuerSelect.options.length = 1;
+                issuerResponse.forEach((issuer: MercadoPagoIssuer) => {
+                  const opt = document.createElement('option');
+                  opt.text = issuer.name;
+                  opt.value = String(issuer.id);
+                  issuerSelect.appendChild(opt);
+                });
+                setShowIssuers(true);
+
+                const price = subscriptionData?.price || '249';
+                const transactionAmountEl = document.getElementById('transactionAmount') as HTMLInputElement | null;
+                if (transactionAmountEl) {
+                  transactionAmountEl.value = price;
+                }
+
+                window.Mercadopago.getInstallments(
+                  {
+                    payment_method_id: method.id,
+                    amount: parseFloat(price),
+                    issuer_id: issuerResponse.length > 0 ? issuerResponse[0].id : 0,
+                  },
+                  (installStatus, installResponse) => {
+                    if (installStatus === 200 && installResponse.length > 0) {
+                      const installSelect = document.getElementById('installments') as HTMLSelectElement | null;
+                      if (installSelect) {
+                        installSelect.options.length = 0;
+                        installResponse[0].payer_costs.forEach((cost) => {
+                          const opt = document.createElement('option');
+                          opt.text = cost.recommended_message;
+                          opt.value = String(cost.installments);
+                          installSelect.appendChild(opt);
+                        });
+                      }
+                    }
+                  }
+                );
               }
             }
           });
@@ -153,7 +202,13 @@ export default function SubscriptionPage() {
       return;
     }
 
-    if (!cardholderName || !cardNumber || !expirationMonth || !expirationYear || !securityCode) {
+    const cardholderName = (document.getElementById('cardholderName') as HTMLInputElement)?.value;
+    const cardNumber = (document.getElementById('cardNumber') as HTMLInputElement)?.value;
+    const month = (document.getElementById('cardExpirationMonth') as HTMLInputElement)?.value;
+    const year = (document.getElementById('cardExpirationYear') as HTMLInputElement)?.value;
+    const cvv = (document.getElementById('securityCode') as HTMLInputElement)?.value;
+
+    if (!cardholderName || !cardNumber || !month || !year || !cvv) {
       setError('Completa todos los campos de la tarjeta.');
       return;
     }
@@ -204,6 +259,8 @@ export default function SubscriptionPage() {
       </Box>
     );
   }
+
+  const price = subscriptionData?.price || '249';
 
   return (
     <Box
@@ -264,7 +321,7 @@ export default function SubscriptionPage() {
                 $559
               </Typography>
               <Typography variant="h5" color="error" fontWeight="bold">
-                ${subscriptionData?.price || '249'}
+                ${price}
               </Typography>
               <Typography variant="body2" color="text.secondary">
                 /mes
@@ -272,7 +329,7 @@ export default function SubscriptionPage() {
             </Box>
           </Box>
 
-          <form ref={formRef} onSubmit={handleSubmit}>
+          <form ref={formRef} id="paymentForm" onSubmit={handleSubmit}>
             <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
               <CreditCardIcon /> Tarjeta de crédito
             </Typography>
@@ -281,95 +338,100 @@ export default function SubscriptionPage() {
               Tu transacción es segura gracias a MercadoPago.
             </Typography>
 
-            <TextField
-              fullWidth
-              label="Nombre del titular"
-              value={cardholderName}
-              onChange={(e) => setCardholderName(e.target.value)}
-              inputProps={{ 'data-checkout': 'cardholderName' }}
-              sx={{ mb: 2 }}
-              disabled={submitting}
-            />
-
-            <TextField
-              fullWidth
-              label="Número de la tarjeta"
-              value={cardNumber}
-              onChange={(e) => handleCardNumberChange(e.target.value)}
-              inputProps={{
-                'data-checkout': 'cardNumber',
-                autoComplete: 'off',
-              }}
-              sx={{ mb: 2 }}
-              disabled={submitting}
-            />
-
-            <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-              <TextField
-                label="MM"
-                value={expirationMonth}
-                onChange={(e) => setExpirationMonth(e.target.value)}
-                inputProps={{
-                  'data-checkout': 'cardExpirationMonth',
-                  autoComplete: 'off',
-                  maxLength: 2,
-                }}
-                sx={{ flex: 1 }}
+            <div style={{ marginBottom: '16px' }}>
+              <label htmlFor="cardholderName" style={labelStyle}>Nombre del titular</label>
+              <input
+                id="cardholderName"
+                data-checkout="cardholderName"
+                type="text"
+                style={inputStyle}
                 disabled={submitting}
               />
-              <TextField
-                label="YY"
-                value={expirationYear}
-                onChange={(e) => setExpirationYear(e.target.value)}
-                inputProps={{
-                  'data-checkout': 'cardExpirationYear',
-                  autoComplete: 'off',
-                  maxLength: 2,
-                }}
-                sx={{ flex: 1 }}
-                disabled={submitting}
-              />
-              <TextField
-                label="CVV"
-                value={securityCode}
-                onChange={(e) => setSecurityCode(e.target.value)}
-                inputProps={{
-                  'data-checkout': 'securityCode',
-                  autoComplete: 'off',
-                  maxLength: 4,
-                }}
-                sx={{ flex: 1 }}
-                disabled={submitting}
-              />
-            </Box>
+            </div>
 
-            {issuers.length > 0 && (
-              <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel>Banco emisor</InputLabel>
-                <Select
-                  value={selectedIssuer}
-                  onChange={(e) => setSelectedIssuer(e.target.value)}
-                  label="Banco emisor"
-                  inputProps={{ 'data-checkout': 'issuer' }}
+            <div style={{ marginBottom: '16px' }}>
+              <label htmlFor="cardNumber" style={labelStyle}>Número de la tarjeta</label>
+              <input
+                id="cardNumber"
+                data-checkout="cardNumber"
+                type="text"
+                autoComplete="off"
+                onBlur={guessPaymentMethod}
+                style={inputStyle}
+                disabled={submitting}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '16px', marginBottom: '16px' }}>
+              <div style={{ flex: 1 }}>
+                <label htmlFor="cardExpirationMonth" style={labelStyle}>MM</label>
+                <input
+                  id="cardExpirationMonth"
+                  data-checkout="cardExpirationMonth"
+                  type="text"
+                  placeholder="MM"
+                  maxLength={2}
+                  autoComplete="off"
+                  style={inputStyle}
                   disabled={submitting}
-                >
-                  {issuers.map((issuer) => (
-                    <MenuItem key={issuer.id} value={String(issuer.id)}>
-                      {issuer.name}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label htmlFor="cardExpirationYear" style={labelStyle}>YY</label>
+                <input
+                  id="cardExpirationYear"
+                  data-checkout="cardExpirationYear"
+                  type="text"
+                  placeholder="YY"
+                  maxLength={2}
+                  autoComplete="off"
+                  style={inputStyle}
+                  disabled={submitting}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label htmlFor="securityCode" style={labelStyle}>CVV</label>
+                <input
+                  id="securityCode"
+                  data-checkout="securityCode"
+                  type="text"
+                  placeholder="CVV"
+                  maxLength={4}
+                  autoComplete="off"
+                  style={inputStyle}
+                  disabled={submitting}
+                />
+              </div>
+            </div>
 
-            <input type="hidden" name="paymentMethodId" value={paymentMethodId} />
+            <div id="bnkemisor" style={{ marginBottom: '16px', display: showIssuers ? 'block' : 'none' }}>
+              <label htmlFor="issuer" style={labelStyle}>Banco emisor</label>
+              <select
+                id="issuer"
+                data-checkout="issuer"
+                style={{ ...inputStyle, backgroundColor: '#fff' }}
+                disabled={submitting}
+              >
+                <option value="">Selecciona...</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'none' }}>
+              <select id="installments" name="installments">
+                <option value="1">1</option>
+              </select>
+            </div>
+
+            <input type="hidden" id="transactionAmount" name="transactionAmount" value={price} />
+            <input type="hidden" id="paymentMethodId" name="paymentMethodId" value={paymentMethodId} />
+            <input type="hidden" id="description" name="description" value="Lisa Medic" />
 
             <Button
               type="submit"
               variant="contained"
               fullWidth
               size="large"
-              disabled={submitting || !sdkReady}
+              disabled={submitting}
               sx={{ mb: 2, py: 1.5 }}
             >
               {submitting ? <CircularProgress size={24} color="inherit" /> : 'Iniciar membresía'}
@@ -377,7 +439,7 @@ export default function SubscriptionPage() {
 
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
               Al iniciar la membresía tu tarjeta de crédito quedará ligada con nuestro sistema para generar
-              un cargo mensual de <strong>${subscriptionData?.price || '249'}</strong> iniciando el cargo
+              un cargo mensual de <strong>${price}</strong> iniciando el cargo
               hasta el segundo mes. Puedes cancelar la membresía en cualquier momento.
             </Typography>
 
