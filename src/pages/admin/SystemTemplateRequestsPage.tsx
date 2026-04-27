@@ -19,7 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { Add, ContentCopy, DeleteOutline, ExpandMore } from '@mui/icons-material';
+import { Add, ContentCopy, DeleteOutline, Edit, ExpandMore } from '@mui/icons-material';
 import systemPdfReportTemplateService, {
   type SystemPdfReportTemplateCatalogData,
   type SystemPdfReportTemplateDetectedPdfField,
@@ -1483,7 +1483,7 @@ export default function SystemTemplateRequestsPage() {
                                   backgroundColor: isActive ? 'rgba(0, 150, 136, 0.05)' : '#fff',
                                 }}
                               >
-                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }}>
+                                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} alignItems={{ xs: 'flex-start', sm: 'center' }} sx={{ width: '100%' }}>
                                   <Typography sx={{ fontWeight: 700 }}>
                                     {section.label || 'Seccion sin nombre'}
                                   </Typography>
@@ -1493,7 +1493,19 @@ export default function SystemTemplateRequestsPage() {
                                   ) : (
                                     <Chip size="small" color="success" label="Completa" />
                                   )}
-                                  {isActive ? <Chip size="small" color="primary" label="En captura" /> : null}
+                                  {isActive ? (
+                                    <Chip size="small" color="primary" label="En captura" />
+                                  ) : (
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      startIcon={<Edit />}
+                                      onClick={() => setActiveSectionId(section.client_id)}
+                                      sx={{ ml: 'auto' }}
+                                    >
+                                      Editar
+                                    </Button>
+                                  )}
                                 </Stack>
                               </Box>
                             );
@@ -1505,9 +1517,18 @@ export default function SystemTemplateRequestsPage() {
                         <Card variant="outlined" sx={{ borderColor: 'primary.main' }}>
                           <CardContent>
                             <Stack spacing={2}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                                Seccion en captura: {activeSectionEntry.section.label || 'Seccion sin nombre'}
-                              </Typography>
+                              <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                  Seccion en captura: {activeSectionEntry.section.label || 'Seccion sin nombre'}
+                                </Typography>
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => setActiveSectionId(null)}
+                                >
+                                  Cerrar edicion
+                                </Button>
+                              </Stack>
 
                               <TextField
                                 label="Nombre de la seccion"
@@ -1914,7 +1935,7 @@ export default function SystemTemplateRequestsPage() {
                         </Card>
                       ) : editor.sections.length > 0 ? (
                         <Alert severity="info">
-                          Las secciones ya guardadas se muestran solo como resumen. Crea una nueva seccion para continuar capturando.
+                          Selecciona una seccion para editar sus campos o crea una nueva seccion.
                         </Alert>
                       ) : null}
                     </Stack>
