@@ -433,8 +433,13 @@ Objetivo:
 - Si es un textarea o grupo amplio, usa "md": 12.
 - Si no estas segura, usa mas ancho, no menos.
 - Siempre define "max_length" en campos text y textarea.
-- Usa 50 por defecto para "text".
-- Usa 300 por defecto para "textarea".
+- Estima "max_length" segun el tamano visible del area de respuesta en la imagen:
+  - Si el rectangulo es muy pequeno (ej. 2-3 cm), usa max_length entre 5 y 15.
+  - Si es un campo corto (ej. fecha, edad, numero), usa max_length entre 10 y 20.
+  - Si es un campo mediano (ej. nombre, direccion corta), usa max_length entre 30 y 80.
+  - Si es un campo largo o de una linea completa, usa max_length entre 80 y 150.
+  - Si es un textarea o area multilinea, usa max_length entre 200 y 500.
+- NO uses siempre 50. Adapta el valor al tamano real que observas en la imagen.
 - Si es "date", usa por defecto "date_format": "dd/mm/yyyy".
 ${pdfFieldsSection}
 
