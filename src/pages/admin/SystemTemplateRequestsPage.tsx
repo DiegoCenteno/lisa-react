@@ -546,8 +546,8 @@ function getFieldTitle(field: EditableField, index: number): string {
   return `Campo ${index + 1}${suffix}`;
 }
 
-function getSectionIncompleteCount(fields: EditableField[]): number {
-  return fields.filter(isFieldConfigIncomplete).length;
+function getSectionIncompleteCount(fields: EditableField[], reviewedFields: Record<string, boolean>): number {
+  return fields.filter((field) => isFieldConfigIncomplete(field) || !(reviewedFields[field.client_id] ?? true)).length;
 }
 
 function mapDetailToEditor(detail: SystemPdfReportTemplateDetail): TemplateEditorState {
@@ -613,6 +613,7 @@ export default function SystemTemplateRequestsPage() {
   const [sectionImportFeedback, setSectionImportFeedback] = useState<Record<string, string | null>>({});
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
+  const [reviewedFields, setReviewedFields] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const processedPdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -673,6 +674,12 @@ export default function SystemTemplateRequestsPage() {
         setExpandedFields(
           nextEditor.fields.reduce<Record<string, boolean>>((accumulator, field) => {
             accumulator[field.client_id] = false;
+            return accumulator;
+          }, {})
+        );
+        setReviewedFields(
+          nextEditor.fields.reduce<Record<string, boolean>>((accumulator, field) => {
+            accumulator[field.client_id] = true;
             return accumulator;
           }, {})
         );
@@ -846,6 +853,12 @@ export default function SystemTemplateRequestsPage() {
       ...current,
       [fieldClientId]: expanded,
     }));
+    if (expanded) {
+      setReviewedFields((current) => ({
+        ...current,
+        [fieldClientId]: true,
+      }));
+    }
   };
 
   const addFieldToSection = (sectionLabel: string) => {
@@ -863,6 +876,10 @@ export default function SystemTemplateRequestsPage() {
 
     if (newFieldClientId) {
       setExpandedFields((current) => ({
+        ...current,
+        [newFieldClientId as string]: true,
+      }));
+      setReviewedFields((current) => ({
         ...current,
         [newFieldClientId as string]: true,
       }));
@@ -1035,14 +1052,27 @@ export default function SystemTemplateRequestsPage() {
 
     try {
       const parsed = JSON.parse(rawText);
-      const importedFields = extractImportedFields(parsed).map((field) => ({
-        ...field,
-        section_label: section.label,
-      }));
+      const detectedNames = selectedItem?.detected_pdf_fields ?? [];
+      const importedFields = extractImportedFields(parsed).map((field) => {
+        const withSection = { ...field, section_label: section.label };
+
+        if (!withSection.pdf_field_name.trim() && withSection.field_key.trim() && detectedNames.length > 0) {
+          const match = detectedNames.find(
+            (detected) => detected.name.toLowerCase() === withSection.field_key.toLowerCase()
+          );
+          if (match) {
+            withSection.pdf_field_name = match.name;
+          }
+        }
+
+        return withSection;
+      });
 
       if (importedFields.length === 0) {
         throw new Error('No se encontraron campos para importar.');
       }
+
+      const autoAssignedCount = importedFields.filter((f) => f.pdf_field_name.trim()).length;
 
       setEditor((current) => {
         if (!current) return current;
@@ -1066,10 +1096,19 @@ export default function SystemTemplateRequestsPage() {
         });
         return next;
       });
+      setReviewedFields((current) => {
+        const next = { ...current };
+        importedFields.forEach((field) => {
+          next[field.client_id] = false;
+        });
+        return next;
+      });
       setActiveSectionId(sectionClientId);
       setSectionImportFeedback((current) => ({
         ...current,
-        [sectionClientId]: `Se agregaron ${importedFields.length} campo(s) a la seccion.`,
+        [sectionClientId]: autoAssignedCount > 0
+          ? `Se agregaron ${importedFields.length} campo(s). ${autoAssignedCount} campo(s) PDF asignado(s) automaticamente.`
+          : `Se agregaron ${importedFields.length} campo(s) a la seccion.`,
       }));
       setSectionImportTexts((current) => ({
         ...current,
@@ -1469,7 +1508,7 @@ export default function SystemTemplateRequestsPage() {
                             Secciones registradas
                           </Typography>
                           {sectionEntries.map(({ section, fields }) => {
-                            const incompleteCount = getSectionIncompleteCount(fields.map(({ field }) => field));
+                            const incompleteCount = getSectionIncompleteCount(fields.map(({ field }) => field), reviewedFields);
                             const isActive = activeSectionId === section.client_id;
 
                             return (
@@ -1604,7 +1643,9 @@ export default function SystemTemplateRequestsPage() {
                               {activeSectionEntry.fields.map(({ field, index: fieldIndex }, sectionFieldIndex) => {
                                 const isSimple = SIMPLE_FIELD_TYPES.includes(field.field_type);
                                 const isGrouped = GROUP_FIELD_TYPES.includes(field.field_type);
-                                const incomplete = isFieldConfigIncomplete(field);
+                                const configIncomplete = isFieldConfigIncomplete(field);
+                                const isReviewed = reviewedFields[field.client_id] ?? true;
+                                const incomplete = configIncomplete || !isReviewed;
 
                                 return (
                                   <Accordion
@@ -1621,7 +1662,7 @@ export default function SystemTemplateRequestsPage() {
                                           {incomplete ? ' *' : ''}
                                         </Typography>
                                         <Chip size="small" label={field.field_type} />
-                                        {incomplete ? <Chip size="small" color="warning" label="Incompleto" /> : <Chip size="small" color="success" label="Listo" />}
+                                        {incomplete ? <Chip size="small" color="warning" label={configIncomplete ? 'Incompleto' : 'Sin revisar'} /> : <Chip size="small" color="success" label="Listo" />}
                                         <Box sx={{ ml: 'auto' }}>
                                           <IconButton
                                             color="error"
