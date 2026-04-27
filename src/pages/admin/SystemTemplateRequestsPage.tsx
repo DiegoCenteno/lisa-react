@@ -1514,7 +1514,7 @@ export default function SystemTemplateRequestsPage() {
                       )}
 
                       {activeSectionEntry ? (
-                        <Card variant="outlined" sx={{ borderColor: 'primary.main' }}>
+                        <Card key={activeSectionEntry.section.client_id} variant="outlined" sx={{ borderColor: 'primary.main' }}>
                           <CardContent>
                             <Stack spacing={2}>
                               <Stack direction="row" justifyContent="space-between" alignItems="center">
