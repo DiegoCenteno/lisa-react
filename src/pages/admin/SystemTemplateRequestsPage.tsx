@@ -405,7 +405,16 @@ function extractImportedFields(raw: any): EditableField[] {
   throw new Error('El JSON debe contener un arreglo de campos, una propiedad "fields" o una propiedad "sections".');
 }
 
-function buildAiImportPromptTemplate(): string {
+function buildAiImportPromptTemplate(detectedPdfFields: SystemPdfReportTemplateDetectedPdfField[] = []): string {
+  const pdfFieldsSection = detectedPdfFields.length > 0
+    ? `
+Campos detectados en el PDF fillable:
+Los siguientes campos ya existen como propiedades internas del PDF. DEBES usar estos nombres exactos como "field_key" y "pdf_field_name" cuando correspondan a lo que ves en la imagen. Si un campo de la imagen corresponde a uno de estos, usa el nombre exacto. Para opciones de checkbox_group o radio_group, usa el nombre del campo PDF como "option_key" y "pdf_field_name" de la opcion.
+
+${detectedPdfFields.map((f) => `- ${f.name} (${f.pdf_type})`).join('\n')}
+`
+    : '';
+
   return `Devuelve solo JSON valido, sin markdown ni explicaciones.
 
 Objetivo:
@@ -413,6 +422,7 @@ Objetivo:
 - Interpreta esa imagen y devuelve los campos necesarios para agregarlos rapidamente al editor.
 - No asignes todavia fuentes automaticas ni valores del sistema.
 - Deja source_path como "".
+- Usa los nombres de las propiedades del PDF como "field_key" y "pdf_field_name" cuando sea posible.
 - Si no conoces la propiedad interna del PDF, deja pdf_field_name como "".
 - No incluyas el nombre de la seccion en el JSON.
 - No inventes agrupaciones externas al recorte mostrado.
@@ -426,6 +436,7 @@ Objetivo:
 - Usa 50 por defecto para "text".
 - Usa 300 por defecto para "textarea".
 - Si es "date", usa por defecto "date_format": "dd/mm/yyyy".
+${pdfFieldsSection}
 
 Formato preferido:
 {
@@ -1153,11 +1164,16 @@ export default function SystemTemplateRequestsPage() {
   };
 
   const handleCopyImportTemplate = async () => {
-    const content = buildAiImportPromptTemplate();
+    const content = buildAiImportPromptTemplate(selectedItem?.detected_pdf_fields ?? []);
 
     try {
       await navigator.clipboard.writeText(content);
-      setSuccess('Se copio la estructura base para IA al portapapeles.');
+      const pdfFieldCount = selectedItem?.detected_pdf_fields?.length ?? 0;
+      setSuccess(
+        pdfFieldCount > 0
+          ? `Se copio el prompt para IA con ${pdfFieldCount} campo(s) PDF incluidos.`
+          : 'Se copio la estructura base para IA al portapapeles.'
+      );
     } catch (_clipboardError) {
       setSuccess('No se pudo copiar automaticamente. Se pego la estructura base en el textarea activo.');
     }
