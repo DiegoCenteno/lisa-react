@@ -1080,6 +1080,21 @@ export default function SystemTemplateRequestsPage() {
           }
         }
 
+        if (GROUP_FIELD_TYPES.includes(withSection.field_type) && withSection.options.length > 0 && detectedNames.length > 0) {
+          withSection.options = withSection.options.map((option) => {
+            if (!option.pdf_field_name.trim() && option.option_key.trim()) {
+              const optionMatch = detectedNames.find(
+                (detected) => detected.name.toLowerCase() === option.option_key.toLowerCase()
+              );
+              if (optionMatch) {
+                autoAssignedCount++;
+                return { ...option, pdf_field_name: optionMatch.name };
+              }
+            }
+            return option;
+          });
+        }
+
         return withSection;
       });
 
