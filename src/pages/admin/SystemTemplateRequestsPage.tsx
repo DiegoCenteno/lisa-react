@@ -745,6 +745,12 @@ export default function SystemTemplateRequestsPage() {
         return accumulator;
       }, {})
     );
+    setReviewedFields(
+      nextEditor.fields.reduce<Record<string, boolean>>((accumulator, field) => {
+        accumulator[field.client_id] = true;
+        return accumulator;
+      }, {})
+    );
     setItems((current) => current.map((item) => (
       item.id === updated.id
         ? {
@@ -896,9 +902,16 @@ export default function SystemTemplateRequestsPage() {
           .map((field, currentIndex) => ({ ...field, sort_order: currentIndex + 1 })),
       };
     });
+    const targetField = editor?.fields[index];
     setExpandedFields((current) => {
       const next = { ...current };
-      const targetField = editor?.fields[index];
+      if (targetField) {
+        delete next[targetField.client_id];
+      }
+      return next;
+    });
+    setReviewedFields((current) => {
+      const next = { ...current };
       if (targetField) {
         delete next[targetField.client_id];
       }
@@ -1053,6 +1066,7 @@ export default function SystemTemplateRequestsPage() {
     try {
       const parsed = JSON.parse(rawText);
       const detectedNames = selectedItem?.detected_pdf_fields ?? [];
+      let autoAssignedCount = 0;
       const importedFields = extractImportedFields(parsed).map((field) => {
         const withSection = { ...field, section_label: section.label };
 
@@ -1062,6 +1076,7 @@ export default function SystemTemplateRequestsPage() {
           );
           if (match) {
             withSection.pdf_field_name = match.name;
+            autoAssignedCount++;
           }
         }
 
@@ -1071,8 +1086,6 @@ export default function SystemTemplateRequestsPage() {
       if (importedFields.length === 0) {
         throw new Error('No se encontraron campos para importar.');
       }
-
-      const autoAssignedCount = importedFields.filter((f) => f.pdf_field_name.trim()).length;
 
       setEditor((current) => {
         if (!current) return current;
