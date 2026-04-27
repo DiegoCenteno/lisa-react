@@ -672,6 +672,7 @@ export default function SystemTemplateRequestsPage() {
         setSectionImportTexts({});
         setSectionImportFeedback({});
         setActiveSectionId(null);
+        setShowDetectedPdfFields(false);
         setExpandedFields(
           nextEditor.fields.reduce<Record<string, boolean>>((accumulator, field) => {
             accumulator[field.client_id] = false;
