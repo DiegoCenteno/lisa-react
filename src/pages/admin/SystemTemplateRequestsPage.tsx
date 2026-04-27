@@ -19,7 +19,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { Add, ContentCopy, DeleteOutline, Edit, ExpandMore } from '@mui/icons-material';
+import { Add, ContentCopy, DeleteOutline, Edit, ExpandMore, ExpandLess } from '@mui/icons-material';
 import systemPdfReportTemplateService, {
   type SystemPdfReportTemplateCatalogData,
   type SystemPdfReportTemplateDetectedPdfField,
@@ -614,6 +614,7 @@ export default function SystemTemplateRequestsPage() {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const [reviewedFields, setReviewedFields] = useState<Record<string, boolean>>({});
+  const [showDetectedPdfFields, setShowDetectedPdfFields] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const processedPdfInputRef = useRef<HTMLInputElement | null>(null);
@@ -671,6 +672,7 @@ export default function SystemTemplateRequestsPage() {
         setSectionImportTexts({});
         setSectionImportFeedback({});
         setActiveSectionId(null);
+        setShowDetectedPdfFields(false);
         setExpandedFields(
           nextEditor.fields.reduce<Record<string, boolean>>((accumulator, field) => {
             accumulator[field.client_id] = false;
@@ -1203,7 +1205,7 @@ export default function SystemTemplateRequestsPage() {
       </Card>
 
       <Grid container spacing={3}>
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid size={{ xs: 12, md: 4, lg: 3 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Stack spacing={2}>
@@ -1269,7 +1271,7 @@ export default function SystemTemplateRequestsPage() {
           </Card>
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 8 }}>
+        <Grid size={{ xs: 12, md: 8, lg: 9 }}>
           <Card sx={{ height: '100%' }}>
             <CardContent>
               <Stack spacing={2.5}>
@@ -1476,22 +1478,30 @@ export default function SystemTemplateRequestsPage() {
                     <Divider />
 
                     <Stack spacing={1}>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                        Propiedades detectadas en el PDF operativo
-                      </Typography>
-                      {selectedItem.detected_pdf_fields.length === 0 ? (
-                        <Alert severity="warning">
-                          Todavia no se detectaron propiedades internas en el PDF operativo. Sube una version procesada con campos AcroForm para poder seleccionarlos en los mapeos.
-                        </Alert>
-                      ) : (
-                        <Stack direction="row" spacing={1} flexWrap="wrap">
-                          {selectedItem.detected_pdf_fields.map((detectedField) => (
-                            <Chip
-                              key={`${detectedField.name}-${detectedField.pdf_type}`}
-                              label={getDetectedPdfFieldLabel(detectedField)}
-                            />
-                          ))}
-                        </Stack>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                          Propiedades detectadas en el PDF operativo
+                        </Typography>
+                        <Chip size="small" label={`${selectedItem.detected_pdf_fields.length} campo(s)`} />
+                        <IconButton size="small" onClick={() => setShowDetectedPdfFields((v) => !v)}>
+                          {showDetectedPdfFields ? <ExpandLess /> : <ExpandMore />}
+                        </IconButton>
+                      </Stack>
+                      {showDetectedPdfFields && (
+                        selectedItem.detected_pdf_fields.length === 0 ? (
+                          <Alert severity="warning">
+                            Todavia no se detectaron propiedades internas en el PDF operativo. Sube una version procesada con campos AcroForm para poder seleccionarlos en los mapeos.
+                          </Alert>
+                        ) : (
+                          <Stack direction="row" spacing={1} flexWrap="wrap">
+                            {selectedItem.detected_pdf_fields.map((detectedField) => (
+                              <Chip
+                                key={`${detectedField.name}-${detectedField.pdf_type}`}
+                                label={getDetectedPdfFieldLabel(detectedField)}
+                              />
+                            ))}
+                          </Stack>
+                        )
                       )}
                     </Stack>
 
