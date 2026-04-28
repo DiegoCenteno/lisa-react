@@ -125,10 +125,24 @@ function PatientColposcopyTabInner({ patientId, patientName, patientAge, moduleT
 
     try {
       setCameraError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' },
-        audio: false,
-      });
+      let stream: MediaStream | null = null;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+      } catch (primaryError: any) {
+        const errorName = String(primaryError?.name ?? '');
+        if (errorName !== 'NotFoundError' && errorName !== 'OverconstrainedError') {
+          throw primaryError;
+        }
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
 
       mediaStreamRef.current = stream;
       if (videoRef.current) {
@@ -139,7 +153,16 @@ function PatientColposcopyTabInner({ patientId, patientName, patientAge, moduleT
     } catch (err) {
       console.error('Error abriendo c\u00e1mara:', err);
       setCameraReady(false);
-      setCameraError(`Necesitas habilitar permisos de camara para usar ${moduleTitle.toLowerCase()}`);
+      const errorName = String((err as { name?: string } | null)?.name ?? '');
+      if (errorName === 'NotAllowedError' || errorName === 'SecurityError') {
+        setCameraError(`Necesitas habilitar permisos de camara para usar ${moduleTitle.toLowerCase()}`);
+        return;
+      }
+      if (errorName === 'NotFoundError' || errorName === 'OverconstrainedError') {
+        setCameraError('No se encontro una camara compatible disponible para este modulo');
+        return;
+      }
+      setCameraError('No fue posible iniciar la camara en este momento');
     }
   };
 
