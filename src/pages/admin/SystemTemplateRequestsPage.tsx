@@ -108,7 +108,7 @@ const STATUS_COLORS: Record<SystemPdfReportTemplateStatus, 'warning' | 'success'
 
 const SIMPLE_FIELD_TYPES = ['text', 'textarea', 'date', 'checkbox'];
 const GROUP_FIELD_TYPES = ['select', 'radio_group', 'checkbox_group'];
-const DESKTOP_SPAN_OPTIONS = ['12', '6', '4', '3'] as const;
+const DESKTOP_SPAN_OPTIONS = ['12', '6', '4', '3', '2'] as const;
 
 function createClientId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -475,7 +475,8 @@ Objetivo:
 - No incluyas el nombre de la seccion en el JSON.
 - No inventes agrupaciones externas al recorte mostrado.
 - Propone un layout conservador para el formulario del medico usando "ui.xs" y "ui.md".
-- Usa solo anchos 12, 6, 4 o 3.
+- Usa solo anchos 12, 6, 4, 3 o 2.
+- Si el area de respuesta se ve extremadamente corta, puedes sugerir "md": 2.
 - Si el area de respuesta se ve muy corta, puedes sugerir "md": 3.
 - Si es un input comun, usa por defecto "md": 4.
 - Si es un textarea o grupo amplio, usa "md": 12.
@@ -551,6 +552,7 @@ Reglas practicas:
 - si el recorte muestra varias opciones donde solo debe elegirse una, usa "radio_group"
 - si el recorte muestra varias opciones seleccionables al mismo tiempo, usa "checkbox_group"
 - si el recorte no permite inferir bien el tipo, usa el tipo mas conservador y deja pdf_field_name vacio
+- si el ancho visible del area de respuesta es extremadamente corto, sugiere "ui.md": 2
 - si el ancho visible del area de respuesta es muy corto, sugiere "ui.md": 3
 - si el campo parece mediano, sugiere "ui.md": 4
 - si el campo es amplio o multilinea, sugiere "ui.md": 6 o 12 segun corresponda
@@ -1789,7 +1791,19 @@ export default function SystemTemplateRequestsPage() {
                                       </Stack>
                                     </AccordionSummary>
                                     <AccordionDetails>
-                                        <Grid container spacing={2}>
+                                        <Grid
+                                          container
+                                          spacing={2}
+                                          sx={{
+                                            '& .MuiOutlinedInput-root': {
+                                              minHeight: 44,
+                                            },
+                                            '& .MuiFormControlLabel-root': {
+                                              marginRight: 1.5,
+                                              marginBottom: 0,
+                                            },
+                                          }}
+                                        >
                                           <Grid size={{ xs: 12, md: 6 }}>
                                             <TextField
                                               label="Clave interna"
@@ -1862,7 +1876,7 @@ export default function SystemTemplateRequestsPage() {
                                                 meta_json: mergeFieldUiMeta(current.meta_json, normalizeDesktopSpan(event.target.value, current.field_type)),
                                               }))}
                                               fullWidth
-                                              helperText="Grid de 12 columnas. En movil se adapta."
+                                              size="small"
                                             >
                                               {DESKTOP_SPAN_OPTIONS.map((span) => (
                                                 <MenuItem key={span} value={span}>
@@ -1883,9 +1897,7 @@ export default function SystemTemplateRequestsPage() {
                                                 is_auto_editable: event.target.value ? current.is_auto_editable : false,
                                               }))}
                                               fullWidth
-                                              helperText={!field.source_path.trim()
-                                                ? 'Selecciona "Ninguno" para llenado manual.'
-                                                : 'Selecciona de donde se prellenara este dato.'}
+                                              size="small"
                                             >
                                               <MenuItem value="">Ninguno</MenuItem>
                                               {(catalog?.source_path_options ?? []).map((sourcePathOption) => (
@@ -1924,11 +1936,11 @@ export default function SystemTemplateRequestsPage() {
                                             )}
                                           </Grid>
                                           <Grid size={{ xs: 12 }}>
-                                            <Box
-                                              sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: field.source_path.trim() ? 'pointer' : 'default' }}
-                                              onClick={() => {
-                                                if (!field.source_path.trim()) return;
-                                                updateField(fieldIndex, (current) => ({
+                                              <Box
+                                                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: field.source_path.trim() ? 'pointer' : 'default' }}
+                                                onClick={() => {
+                                                  if (!field.source_path.trim()) return;
+                                                  updateField(fieldIndex, (current) => ({
                                                   ...current,
                                                   is_auto_editable: !current.is_auto_editable,
                                                   source_mode: !current.is_auto_editable ? 'system_editable' : 'system',
@@ -1944,7 +1956,7 @@ export default function SystemTemplateRequestsPage() {
                                                   source_mode: event.target.checked ? 'system_editable' : 'system',
                                                 }))}
                                               />
-                                              <Typography>Editable</Typography>
+                                              <Typography variant="body2">Editable</Typography>
                                             </Box>
                                           </Grid>
                                           <Grid size={{ xs: 12, md: 6 }}>
@@ -1990,15 +2002,15 @@ export default function SystemTemplateRequestsPage() {
                                             </TextField>
                                           </Grid>
                                           <Grid size={{ xs: 12 }}>
-                                            <Box
-                                              sx={{ display: 'flex', alignItems: 'center', gap: 1, cursor: 'pointer' }}
-                                              onClick={() => updateField(fieldIndex, (current) => ({ ...current, is_required: !current.is_required }))}
-                                            >
+                                              <Box
+                                                sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, cursor: 'pointer' }}
+                                                onClick={() => updateField(fieldIndex, (current) => ({ ...current, is_required: !current.is_required }))}
+                                              >
                                               <Checkbox
                                                 checked={field.is_required}
                                                 onChange={(event) => updateField(fieldIndex, (current) => ({ ...current, is_required: event.target.checked }))}
                                               />
-                                              <Typography>Campo obligatorio</Typography>
+                                              <Typography variant="body2">Campo obligatorio</Typography>
                                             </Box>
                                           </Grid>
                                         </Grid>

@@ -47,8 +47,8 @@ function normalizeInitialValues(data: PatientPdfTemplateBuilderData): Record<str
 }
 
 function resolveFieldWidth(field: PatientPdfTemplateBuilderField): { xs: number; md: number } {
-  const xs = field.ui?.xs && [3, 4, 6, 12].includes(field.ui.xs) ? field.ui.xs : 12;
-  const md = field.ui?.md && [3, 4, 6, 12].includes(field.ui.md) ? field.ui.md : 6;
+  const xs = field.ui?.xs && [2, 3, 4, 6, 12].includes(field.ui.xs) ? field.ui.xs : 12;
+  const md = field.ui?.md && [2, 3, 4, 6, 12].includes(field.ui.md) ? field.ui.md : 6;
   return { xs, md };
 }
 
@@ -172,6 +172,9 @@ export default function PatientPdfTemplateReportBuilder({
   const renderField = (field: PatientPdfTemplateBuilderField) => {
     const currentValue = values[field.field_key];
     const disabled = !field.editable;
+    const visibleHelperLines = [field.help_text]
+      .filter(Boolean)
+      .join(' ');
     const helperLines = [field.help_text, disabled ? 'Se llena automáticamente desde la plantilla.' : null]
       .filter(Boolean)
       .join(' ');
@@ -182,12 +185,13 @@ export default function PatientPdfTemplateReportBuilder({
           fullWidth
           multiline
           minRows={4}
+          size="small"
           label={field.label}
           value={typeof currentValue === 'string' ? currentValue : ''}
           onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
           disabled={disabled}
           required={field.is_required}
-          helperText={helperLines || ' '}
+          helperText={visibleHelperLines || ' '}
           inputProps={field.max_length ? { maxLength: field.max_length } : undefined}
           placeholder={field.placeholder || undefined}
         />
@@ -198,12 +202,13 @@ export default function PatientPdfTemplateReportBuilder({
       return (
         <TextField
           fullWidth
+          size="small"
           label={field.label}
           value={typeof currentValue === 'string' ? currentValue : ''}
           onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
           disabled={disabled}
           required={field.is_required}
-          helperText={helperLines || ' '}
+          helperText={visibleHelperLines || ' '}
           inputProps={field.max_length ? { maxLength: field.max_length } : undefined}
           placeholder={field.placeholder || undefined}
         />
@@ -224,7 +229,7 @@ export default function PatientPdfTemplateReportBuilder({
             label={field.label}
           />
           <Typography variant="caption" color="text.secondary">
-            {helperLines || ' '}
+            {visibleHelperLines || ' '}
           </Typography>
         </FormControl>
       );
@@ -235,12 +240,13 @@ export default function PatientPdfTemplateReportBuilder({
         <TextField
           select
           fullWidth
+          size="small"
           label={field.label}
           value={typeof currentValue === 'string' ? currentValue : ''}
           onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
           disabled={disabled}
           required={field.is_required}
-          helperText={helperLines || ' '}
+          helperText={visibleHelperLines || ' '}
         >
           <MenuItem value="">Selecciona una opción</MenuItem>
           {field.options.map((option) => (
@@ -257,8 +263,10 @@ export default function PatientPdfTemplateReportBuilder({
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
           <RadioGroup
+            row
             value={typeof currentValue === 'string' ? currentValue : ''}
             onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
+            sx={{ columnGap: 1.5, rowGap: 0.25 }}
           >
             {field.options.map((option) => (
               <FormControlLabel
@@ -266,11 +274,12 @@ export default function PatientPdfTemplateReportBuilder({
                 value={option.value}
                 control={<Radio />}
                 label={option.label}
+                sx={{ mr: 1.5 }}
               />
             ))}
           </RadioGroup>
           <Typography variant="caption" color="text.secondary">
-            {helperLines || ' '}
+            {visibleHelperLines || ' '}
           </Typography>
         </FormControl>
       );
@@ -282,7 +291,7 @@ export default function PatientPdfTemplateReportBuilder({
       return (
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
-          <FormGroup>
+          <FormGroup row sx={{ columnGap: 1.5, rowGap: 0.25 }}>
             {field.options.map((option) => {
               const checked = selectedValues.includes(option.value);
 
@@ -301,12 +310,13 @@ export default function PatientPdfTemplateReportBuilder({
                     />
                   )}
                   label={option.label}
+                  sx={{ mr: 1.5 }}
                 />
               );
             })}
           </FormGroup>
           <Typography variant="caption" color="text.secondary">
-            {helperLines || ' '}
+            {visibleHelperLines || ' '}
           </Typography>
         </FormControl>
       );
@@ -348,7 +358,10 @@ export default function PatientPdfTemplateReportBuilder({
 
   return (
     <Paper sx={{ p: 3, borderRadius: 2 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+      <Box sx={{ mb: 2 }}>
+        <Button variant="text" onClick={onBack} sx={{ px: 0, mb: 1, minWidth: 0 }}>
+          Volver
+        </Button>
         <Box>
           <Typography variant="h6" sx={{ color: '#0a8f2f', fontWeight: 700 }}>
             {data.template.name}
@@ -358,7 +371,20 @@ export default function PatientPdfTemplateReportBuilder({
             {data.template.study_type?.name ? ` | ${data.template.study_type.name}` : ''}
             {data.template.laboratory?.name ? ` | ${data.template.laboratory.name}` : ''}
           </Typography>
-          <Box sx={{ mt: 2, display: 'grid', gap: 2, width: '100%', maxWidth: 920 }}>
+          <Box
+            sx={{
+              mt: 2,
+              display: 'grid',
+              gap: 2,
+              width: '100%',
+              maxWidth: 920,
+              gridTemplateColumns: {
+                xs: '1fr',
+                md: (requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? 'minmax(0, 1fr) minmax(320px, 360px)' : 'minmax(320px, 360px)',
+              },
+              alignItems: 'start',
+            }}
+          >
             {(requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? (
               <TextField
                 select
@@ -390,9 +416,6 @@ export default function PatientPdfTemplateReportBuilder({
             />
           </Box>
         </Box>
-        <Button variant="outlined" onClick={onBack}>
-          Volver
-        </Button>
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>
