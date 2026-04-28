@@ -349,7 +349,14 @@ export default function PatientPdfTemplateReportBuilder({
           <RadioGroup
             value={typeof currentValue === 'string' ? currentValue : ''}
             onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
-            sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0,
+              '& .MuiButtonBase-root': {
+                p: 0,
+              },
+            }}
           >
             {field.options.map((option) => (
               <FormControlLabel
@@ -384,7 +391,16 @@ export default function PatientPdfTemplateReportBuilder({
       return (
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
-          <FormGroup sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <FormGroup
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 0,
+              '& .MuiButtonBase-root': {
+                p: 0,
+              },
+            }}
+          >
             {field.options.map((option) => {
               const checked = selectedValues.includes(option.value);
 
