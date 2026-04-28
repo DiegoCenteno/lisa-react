@@ -519,7 +519,30 @@ export interface PatientPdfTemplateBuilderData {
     id: number;
     full_name: string;
     age?: string | null;
+    allergy?: string | null;
+    datahc?: unknown;
   };
+  last_consultation?: {
+    id: number;
+    created_at?: string | null;
+    ailingdate?: string;
+    currentcondition?: string;
+    height?: string;
+    weight?: string;
+    ta?: string;
+    temp?: string;
+    fc?: string;
+    os?: string;
+    studies?: string;
+    examination?: string;
+    indicaciones?: string;
+    notes?: string;
+    diagnostics?: string[];
+    medications?: Array<{
+      medicament: string;
+      prescription?: string;
+    }>;
+  } | null;
   linked_study_delivery?: {
     id: number;
     study_type_id?: number | null;

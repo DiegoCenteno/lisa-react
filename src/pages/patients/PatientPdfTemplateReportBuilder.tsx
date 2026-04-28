@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Box,
   Button,
   Checkbox,
@@ -19,13 +22,16 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   consultationService,
   type PatientPdfTemplateBuilderData,
   type PatientPdfTemplateBuilderField,
 } from '../../api/consultationService';
 import ClickableDateField from '../../components/ClickableDateField';
+import { decodeClinicalHistory } from '../../utils/clinicalHistory';
 import { getPdfReportTemplateCategoryLabel } from '../../utils/pdfReportTemplateLabels';
+import type { Patient } from '../../types';
 
 interface PatientPdfTemplateReportBuilderProps {
   patientId: number;
@@ -36,6 +42,11 @@ interface PatientPdfTemplateReportBuilderProps {
 }
 
 type FieldValue = string | boolean | string[];
+type SummaryItem = { label: string; value: string };
+
+function getDraftStorageKey(patientId: number, templateId: number): string {
+  return `pdf-template-builder-draft:${patientId}:${templateId}`;
+}
 
 function normalizeInitialValues(data: PatientPdfTemplateBuilderData): Record<string, FieldValue> {
   const values: Record<string, FieldValue> = {};
@@ -64,6 +75,130 @@ function buildPdfDownloadName(baseName: string): string {
   return `${normalized || 'reporte_pdf'}.pdf`;
 }
 
+function formatDateTimeValue(value?: string | null): string {
+  if (!value) return '';
+
+  const normalized = value.includes(' ') ? value.replace(' ', 'T') : value;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString('es-MX', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function pushSummaryItem(items: SummaryItem[], label: string, value: unknown) {
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((item) => String(item ?? '').trim())
+      .filter(Boolean)
+      .join(', ');
+    if (normalized) {
+      items.push({ label, value: normalized });
+    }
+    return;
+  }
+
+  const normalized = String(value ?? '').trim();
+  if (normalized) {
+    items.push({ label, value: normalized });
+  }
+}
+
+function buildClinicalHistorySummary(data: PatientPdfTemplateBuilderData): SummaryItem[] {
+  const patient = {
+    id: data.patient.id,
+    name: '',
+    last_name: '',
+    allergy: data.patient.allergy ?? '',
+    datahc: data.patient.datahc,
+  } as Patient;
+
+  const history = decodeClinicalHistory(patient);
+  const items: SummaryItem[] = [];
+
+  pushSummaryItem(items, 'Grupo sanguíneo y RH', history.hereditary_background.blood_type_rh);
+  pushSummaryItem(items, 'Origen', history.personal_non_pathological.origin);
+  pushSummaryItem(items, 'Residencia', history.personal_non_pathological.residence);
+  pushSummaryItem(items, 'Estado civil', history.personal_non_pathological.civil_status);
+  pushSummaryItem(items, 'Religión', history.personal_non_pathological.religion);
+  pushSummaryItem(items, 'Escolaridad', history.personal_non_pathological.education);
+  pushSummaryItem(items, 'Ocupación', history.personal_non_pathological.occupation);
+  pushSummaryItem(items, 'Toxicomanías', history.personal_non_pathological.substance_use);
+  pushSummaryItem(items, 'Fármacos', history.personal_non_pathological.medications);
+  pushSummaryItem(items, 'Exposiciones', history.personal_non_pathological.exposures);
+  pushSummaryItem(items, 'Tabaquismo', history.personal_non_pathological.smoking);
+  pushSummaryItem(items, 'Alcohol', history.personal_non_pathological.alcohol);
+  pushSummaryItem(items, 'Relaciones homosexuales', history.personal_non_pathological.homosexual_relations);
+  pushSummaryItem(items, 'Ejercicio', history.personal_non_pathological.exercise);
+  pushSummaryItem(items, 'Alergias', history.personal_pathological.allergies);
+  pushSummaryItem(items, 'Enfermedades degenerativas', history.personal_pathological.chronic_diseases);
+  pushSummaryItem(items, 'Cirugías', history.personal_pathological.surgeries);
+  pushSummaryItem(items, 'Transfusiones', history.personal_pathological.transfusions);
+  pushSummaryItem(items, 'Fracturas', history.personal_pathological.fractures);
+  pushSummaryItem(items, 'Menarca', history.gynecological?.menarche);
+  pushSummaryItem(items, 'Ciclos menstruales', history.gynecological?.menstrual_cycles);
+  pushSummaryItem(items, 'Embarazada', history.gynecological?.pregnant ? 'Sí' : '');
+  pushSummaryItem(items, 'FUR', history.gynecological?.last_menstruation_date);
+  pushSummaryItem(items, 'IVSA', history.gynecological?.ivsa);
+  pushSummaryItem(items, 'Parejas sexuales', history.gynecological?.sexual_partners);
+  pushSummaryItem(items, 'ETS', history.gynecological?.std);
+  pushSummaryItem(items, 'Citología', history.gynecological?.cytology);
+  pushSummaryItem(items, 'Planificación familiar', history.gynecological?.family_planning);
+  pushSummaryItem(items, 'Gestas', history.gynecological?.gestations);
+  pushSummaryItem(items, 'Partos', history.gynecological?.deliveries);
+  pushSummaryItem(items, 'Cesáreas', history.gynecological?.cesareans);
+  pushSummaryItem(items, 'Abortos', history.gynecological?.abortions);
+  pushSummaryItem(items, 'Ectópicos', history.gynecological?.ectopic);
+  pushSummaryItem(items, 'Molares', history.gynecological?.molar);
+  pushSummaryItem(items, 'Climaterio', history.gynecological?.climacteric_symptoms);
+  pushSummaryItem(items, 'Control prenatal', history.gynecological?.prenatal_care);
+
+  return items;
+}
+
+function buildLastSoapSummary(data: PatientPdfTemplateBuilderData): SummaryItem[] {
+  const consultation = data.last_consultation;
+  if (!consultation) {
+    return [];
+  }
+
+  const items: SummaryItem[] = [];
+  pushSummaryItem(items, 'Fecha de consulta', formatDateTimeValue(consultation.created_at));
+  pushSummaryItem(items, 'Padecimiento actual', consultation.currentcondition);
+  pushSummaryItem(items, 'Fecha de inicio', consultation.ailingdate);
+  pushSummaryItem(items, 'Talla', consultation.height);
+  pushSummaryItem(items, 'Peso', consultation.weight);
+  pushSummaryItem(items, 'TA', consultation.ta);
+  pushSummaryItem(items, 'Temperatura', consultation.temp);
+  pushSummaryItem(items, 'FC', consultation.fc);
+  pushSummaryItem(items, 'OS', consultation.os);
+  pushSummaryItem(items, 'Estudios', consultation.studies);
+  pushSummaryItem(items, 'Exploración', consultation.examination);
+  pushSummaryItem(items, 'Diagnósticos', consultation.diagnostics);
+  pushSummaryItem(
+    items,
+    'Medicamentos',
+    (consultation.medications ?? [])
+      .map((item) => {
+        const name = String(item.medicament ?? '').trim();
+        const prescription = String(item.prescription ?? '').trim();
+        return prescription ? `${name} (${prescription})` : name;
+      })
+      .filter(Boolean)
+  );
+  pushSummaryItem(items, 'Indicaciones', consultation.indicaciones);
+  pushSummaryItem(items, 'Notas', consultation.notes);
+
+  return items;
+}
+
 export default function PatientPdfTemplateReportBuilder({
   patientId,
   templateId,
@@ -79,6 +214,8 @@ export default function PatientPdfTemplateReportBuilder({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [soapExpanded, setSoapExpanded] = useState(false);
   const [selectedStudyDeliveryId, setSelectedStudyDeliveryId] = useState(
     initialStudyDeliveryId ? String(initialStudyDeliveryId) : ''
   );
@@ -119,7 +256,36 @@ export default function PatientPdfTemplateReportBuilder({
         );
         if (cancelled) return;
         setData(response);
-        setValues(normalizeInitialValues(response));
+        const initialValues = normalizeInitialValues(response);
+        const draftKey = getDraftStorageKey(patientId, templateId);
+
+        try {
+          const rawDraft = localStorage.getItem(draftKey);
+          if (rawDraft) {
+            const parsedDraft = JSON.parse(rawDraft) as {
+              values?: Record<string, FieldValue>;
+              selectedStudyDeliveryId?: string;
+            };
+
+            const draftValues = parsedDraft.values ?? {};
+            const mergedValues = Object.keys(initialValues).reduce<Record<string, FieldValue>>((accumulator, key) => {
+              accumulator[key] = Object.prototype.hasOwnProperty.call(draftValues, key)
+                ? draftValues[key]
+                : initialValues[key];
+              return accumulator;
+            }, {});
+
+            setValues(mergedValues);
+            if (typeof parsedDraft.selectedStudyDeliveryId === 'string') {
+              setSelectedStudyDeliveryId(parsedDraft.selectedStudyDeliveryId);
+            }
+            return;
+          }
+        } catch {
+          // Ignore malformed local drafts and continue with fresh values.
+        }
+
+        setValues(initialValues);
       } catch (loadError) {
         console.error('Error cargando builder PDF del paciente:', loadError);
         if (!cancelled) {
@@ -139,6 +305,26 @@ export default function PatientPdfTemplateReportBuilder({
     };
   }, [patientId, selectedStudyDeliveryId, templateId]);
 
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+
+    const draftKey = getDraftStorageKey(patientId, templateId);
+
+    try {
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({
+          values,
+          selectedStudyDeliveryId,
+        })
+      );
+    } catch {
+      // Ignore storage persistence errors.
+    }
+  }, [data, patientId, templateId, values, selectedStudyDeliveryId]);
+
   const fieldIndex = useMemo(() => {
     const index: Record<string, PatientPdfTemplateBuilderField> = {};
     data?.sections.forEach((section) => {
@@ -155,6 +341,14 @@ export default function PatientPdfTemplateReportBuilder({
       [fieldKey]: value,
     }));
   };
+
+  const clinicalHistorySummary = useMemo(() => {
+    return data ? buildClinicalHistorySummary(data) : [];
+  }, [data]);
+
+  const lastSoapSummary = useMemo(() => {
+    return data ? buildLastSoapSummary(data) : [];
+  }, [data]);
 
   const handleDownloadFinalPdf = async () => {
     if (!data) {
@@ -181,6 +375,7 @@ export default function PatientPdfTemplateReportBuilder({
       anchor.click();
       anchor.remove();
       window.URL.revokeObjectURL(blobUrl);
+      localStorage.removeItem(getDraftStorageKey(patientId, templateId));
 
       await onGenerated?.();
     } catch (downloadError) {
@@ -541,6 +736,50 @@ export default function PatientPdfTemplateReportBuilder({
       <Alert severity="info" sx={{ mb: 2 }}>
         Revisa los datos antes de generar el PDF final. Al descargarlo también se guardará en el historial de reportes del paciente.
       </Alert>
+
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
+        <Accordion expanded={historyExpanded} onChange={(_, expanded) => setHistoryExpanded(expanded)} disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ fontWeight: 700 }}>Historia clínica</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {clinicalHistorySummary.length > 0 ? (
+              <Box sx={{ display: 'grid', gap: 1 }}>
+                {clinicalHistorySummary.map((item) => (
+                  <Typography key={`${item.label}-${item.value}`} variant="body2">
+                    <strong>{item.label}:</strong> {item.value}
+                  </Typography>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No hay información clínica disponible con valor.
+              </Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion expanded={soapExpanded} onChange={(_, expanded) => setSoapExpanded(expanded)} disableGutters>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography sx={{ fontWeight: 700 }}>Última consulta SOAP</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            {lastSoapSummary.length > 0 ? (
+              <Box sx={{ display: 'grid', gap: 1 }}>
+                {lastSoapSummary.map((item) => (
+                  <Typography key={`${item.label}-${item.value}`} variant="body2">
+                    <strong>{item.label}:</strong> {item.value}
+                  </Typography>
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No hay información SOAP disponible con valor.
+              </Typography>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      </Box>
 
       {(requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? (
         <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, display: 'none' }}>
