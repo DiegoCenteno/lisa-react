@@ -258,7 +258,7 @@ export default function PatientPdfTemplateReportBuilder({
           onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
           disabled={disabled}
           required={field.is_required}
-          helperText={visibleHelperLines || ' '}
+          helperText={visibleHelperLines || undefined}
           inputProps={field.max_length ? { maxLength: field.max_length } : undefined}
           placeholder={field.placeholder || undefined}
         />
@@ -275,7 +275,7 @@ export default function PatientPdfTemplateReportBuilder({
           onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
           disabled={disabled}
           required={field.is_required}
-          helperText={visibleHelperLines || ' '}
+          helperText={visibleHelperLines || undefined}
           inputProps={field.max_length ? { maxLength: field.max_length } : undefined}
           placeholder={field.placeholder || undefined}
         />
@@ -291,7 +291,7 @@ export default function PatientPdfTemplateReportBuilder({
           value={typeof currentValue === 'string' ? currentValue : ''}
           onChange={(nextValue) => updateFieldValue(field.field_key, nextValue)}
           disabled={disabled}
-          helperText={visibleHelperLines || ' '}
+          helperText={visibleHelperLines || undefined}
         />
       );
     }
@@ -308,10 +308,13 @@ export default function PatientPdfTemplateReportBuilder({
               />
             )}
             label={field.label}
+            sx={{ m: 0 }}
           />
-          <Typography variant="caption" color="text.secondary">
-            {visibleHelperLines || ' '}
-          </Typography>
+          {visibleHelperLines ? (
+            <Typography variant="caption" color="text.secondary">
+              {visibleHelperLines}
+            </Typography>
+          ) : null}
         </FormControl>
       );
     }
@@ -327,7 +330,7 @@ export default function PatientPdfTemplateReportBuilder({
           onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
           disabled={disabled}
           required={field.is_required}
-          helperText={visibleHelperLines || ' '}
+          helperText={visibleHelperLines || undefined}
         >
           <MenuItem value="">Selecciona una opción</MenuItem>
           {field.options.map((option) => (
@@ -346,7 +349,7 @@ export default function PatientPdfTemplateReportBuilder({
           <RadioGroup
             value={typeof currentValue === 'string' ? currentValue : ''}
             onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
-            sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}
+            sx={{ display: 'flex', flexDirection: 'column', gap: 0.125 }}
           >
             {field.options.map((option) => (
               <FormControlLabel
@@ -354,13 +357,15 @@ export default function PatientPdfTemplateReportBuilder({
                 value={option.value}
                 control={<Radio />}
                 label={option.label}
-                sx={{ mr: 0 }}
+                sx={{ m: 0 }}
               />
             ))}
           </RadioGroup>
-          <Typography variant="caption" color="text.secondary">
-            {visibleHelperLines || ' '}
-          </Typography>
+          {visibleHelperLines ? (
+            <Typography variant="caption" color="text.secondary">
+              {visibleHelperLines}
+            </Typography>
+          ) : null}
         </FormControl>
       );
     }
@@ -371,7 +376,7 @@ export default function PatientPdfTemplateReportBuilder({
       return (
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
-          <FormGroup sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          <FormGroup sx={{ display: 'flex', flexDirection: 'column', gap: 0.125 }}>
             {field.options.map((option) => {
               const checked = selectedValues.includes(option.value);
 
@@ -390,14 +395,16 @@ export default function PatientPdfTemplateReportBuilder({
                     />
                   )}
                   label={option.label}
-                  sx={{ mr: 0 }}
+                  sx={{ m: 0 }}
                 />
               );
             })}
           </FormGroup>
-          <Typography variant="caption" color="text.secondary">
-            {visibleHelperLines || ' '}
-          </Typography>
+          {visibleHelperLines ? (
+            <Typography variant="caption" color="text.secondary">
+              {visibleHelperLines}
+            </Typography>
+          ) : null}
         </FormControl>
       );
     }
@@ -557,7 +564,7 @@ export default function PatientPdfTemplateReportBuilder({
             <Box
               sx={{
                 display: 'grid',
-                gap: 2,
+                gap: 1.25,
                 gridTemplateColumns: {
                   xs: 'repeat(12, minmax(0, 1fr))',
                   md: 'repeat(12, minmax(0, 1fr))',
