@@ -355,12 +355,13 @@ export default function PatientPdfTemplateReportBuilder({
               <FormControlLabel
                 key={option.option_key}
                 value={option.value}
-                control={<Radio />}
+                control={<Radio sx={{ p: 0 }} />}
                 label={option.label}
                 sx={{
                   m: 0,
                   minHeight: 0,
                   alignItems: 'center',
+                  gap: 0.5,
                   '& .MuiFormControlLabel-label': {
                     lineHeight: 1.15,
                   },
@@ -393,6 +394,7 @@ export default function PatientPdfTemplateReportBuilder({
                   control={(
                     <Checkbox
                       checked={checked}
+                      sx={{ p: 0 }}
                       onChange={(event) => {
                         const nextValues = event.target.checked
                           ? [...selectedValues, option.value]
@@ -406,6 +408,7 @@ export default function PatientPdfTemplateReportBuilder({
                     m: 0,
                     minHeight: 0,
                     alignItems: 'center',
+                    gap: 0.5,
                     '& .MuiFormControlLabel-label': {
                       lineHeight: 1.15,
                     },
