@@ -349,7 +349,7 @@ export default function PatientPdfTemplateReportBuilder({
           <RadioGroup
             value={typeof currentValue === 'string' ? currentValue : ''}
             onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
-            sx={{ display: 'flex', flexDirection: 'column', gap: 0.125 }}
+            sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}
           >
             {field.options.map((option) => (
               <FormControlLabel
@@ -357,7 +357,14 @@ export default function PatientPdfTemplateReportBuilder({
                 value={option.value}
                 control={<Radio />}
                 label={option.label}
-                sx={{ m: 0 }}
+                sx={{
+                  m: 0,
+                  minHeight: 0,
+                  alignItems: 'center',
+                  '& .MuiFormControlLabel-label': {
+                    lineHeight: 1.15,
+                  },
+                }}
               />
             ))}
           </RadioGroup>
@@ -376,7 +383,7 @@ export default function PatientPdfTemplateReportBuilder({
       return (
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
-          <FormGroup sx={{ display: 'flex', flexDirection: 'column', gap: 0.125 }}>
+          <FormGroup sx={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
             {field.options.map((option) => {
               const checked = selectedValues.includes(option.value);
 
@@ -395,7 +402,14 @@ export default function PatientPdfTemplateReportBuilder({
                     />
                   )}
                   label={option.label}
-                  sx={{ m: 0 }}
+                  sx={{
+                    m: 0,
+                    minHeight: 0,
+                    alignItems: 'center',
+                    '& .MuiFormControlLabel-label': {
+                      lineHeight: 1.15,
+                    },
+                  }}
                 />
               );
             })}
