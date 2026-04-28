@@ -358,6 +358,37 @@ export default function PatientPdfTemplateReportBuilder({
             {data.template.study_type?.name ? ` | ${data.template.study_type.name}` : ''}
             {data.template.laboratory?.name ? ` | ${data.template.laboratory.name}` : ''}
           </Typography>
+          <Box sx={{ mt: 2, display: 'grid', gap: 2, width: '100%', maxWidth: 920 }}>
+            {(requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? (
+              <TextField
+                select
+                fullWidth
+                label={requiresStudyLink ? 'Toma de muestra' : 'Toma de muestra (opcional)'}
+                value={selectedStudyDeliveryId}
+                onChange={(event) => setSelectedStudyDeliveryId(event.target.value)}
+                helperText={
+                  requiresStudyLink
+                    ? (availableStudyLinks.length
+                      ? 'Selecciona la toma de muestra correspondiente antes de generar el PDF.'
+                      : 'No hay tomas de muestra en estatus "Muestra tomada" disponibles para este reporte.')
+                    : 'Si lo relacionas, luego podrÃ¡s descargarlo tambiÃ©n desde el control de estudios.'
+                }
+              >
+                <MenuItem value="">{requiresStudyLink ? 'Selecciona una toma de muestra' : 'Sin relaciÃ³n por ahora'}</MenuItem>
+                {availableStudyLinks.map((studyLink) => (
+                  <MenuItem key={studyLink.id} value={String(studyLink.id)}>
+                    {studyLink.label}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
+            <TextField
+              fullWidth
+              label="Paciente"
+              value={`${data.patient.full_name}${data.patient.age ? ` | ${data.patient.age} aÃ±os` : ''}`}
+              InputProps={{ readOnly: true }}
+            />
+          </Box>
         </Box>
         <Button variant="outlined" onClick={onBack}>
           Volver
@@ -369,7 +400,7 @@ export default function PatientPdfTemplateReportBuilder({
       </Alert>
 
       {(requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? (
-        <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+        <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, display: 'none' }}>
           <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
             Relación con toma de muestra
           </Typography>
@@ -403,7 +434,7 @@ export default function PatientPdfTemplateReportBuilder({
         </Paper>
       ) : null}
 
-      <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2 }}>
+      <Paper variant="outlined" sx={{ p: 2, mb: 3, borderRadius: 2, display: 'none' }}>
         <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
           Paciente
         </Typography>

@@ -59,6 +59,7 @@ type EditableField = {
   placeholder: string;
   help_text: string;
   selection_mode: string;
+  desktop_span: string;
   sort_order: number;
   status: string;
   meta_json: unknown;
@@ -107,6 +108,7 @@ const STATUS_COLORS: Record<SystemPdfReportTemplateStatus, 'warning' | 'success'
 
 const SIMPLE_FIELD_TYPES = ['text', 'textarea', 'date', 'checkbox'];
 const GROUP_FIELD_TYPES = ['select', 'radio_group', 'checkbox_group'];
+const DESKTOP_SPAN_OPTIONS = ['12', '6', '4', '3'] as const;
 
 function createClientId(prefix: string): string {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
@@ -164,6 +166,14 @@ function mapOption(option: SystemPdfReportTemplateOption, index: number): Editab
 }
 
 function mapField(field: SystemPdfReportTemplateField, index: number): EditableField {
+  const metaJson = typeof field.meta_json === 'object' && field.meta_json !== null
+    ? field.meta_json as Record<string, unknown>
+    : {};
+  const ui = typeof metaJson.ui === 'object' && metaJson.ui !== null
+    ? metaJson.ui as Record<string, unknown>
+    : {};
+  const desktopSpan = normalizeDesktopSpan(ui.md, field.field_type);
+
   return {
     client_id: createClientId(`field-${field.id || index + 1}`),
     section_label: field.section_label || '',
@@ -180,6 +190,7 @@ function mapField(field: SystemPdfReportTemplateField, index: number): EditableF
     placeholder: field.placeholder || '',
     help_text: field.help_text || '',
     selection_mode: field.selection_mode || '',
+    desktop_span: desktopSpan,
     sort_order: field.sort_order || index + 1,
     status: field.status || 'active',
     meta_json: field.meta_json ?? null,
@@ -213,6 +224,40 @@ function getDefaultMaxLength(fieldType: string): string {
   return '';
 }
 
+function getDefaultDesktopSpan(fieldType: string): string {
+  if (fieldType === 'textarea' || fieldType === 'checkbox_group' || fieldType === 'radio_group') return '12';
+  if (fieldType === 'date') return '4';
+  if (fieldType === 'select') return '6';
+  return '4';
+}
+
+function normalizeDesktopSpan(value: unknown, fieldType: string): string {
+  const normalized = String(value ?? '').trim();
+  if (DESKTOP_SPAN_OPTIONS.includes(normalized as typeof DESKTOP_SPAN_OPTIONS[number])) {
+    return normalized;
+  }
+
+  return getDefaultDesktopSpan(fieldType);
+}
+
+function mergeFieldUiMeta(metaJson: unknown, desktopSpan: string): unknown {
+  const currentMeta = typeof metaJson === 'object' && metaJson !== null
+    ? metaJson as Record<string, unknown>
+    : {};
+  const currentUi = typeof currentMeta.ui === 'object' && currentMeta.ui !== null
+    ? currentMeta.ui as Record<string, unknown>
+    : {};
+
+  return {
+    ...currentMeta,
+    ui: {
+      ...currentUi,
+      xs: 12,
+      md: Number(desktopSpan),
+    },
+  };
+}
+
 function createEmptyField(index: number): EditableField {
   return {
     client_id: createClientId(`new-field-${index + 1}`),
@@ -230,6 +275,7 @@ function createEmptyField(index: number): EditableField {
     placeholder: '',
     help_text: '',
     selection_mode: '',
+    desktop_span: getDefaultDesktopSpan('text'),
     sort_order: index + 1,
     status: 'active',
     meta_json: null,
@@ -355,6 +401,7 @@ function normalizeImportedField(raw: any, index: number, inheritedSection = ''):
   const isAutoEditable = sourceMode === 'system_editable';
   const importedMeta = raw?.meta_json ?? raw?.metaJson ?? null;
   const importedUi = raw?.ui && typeof raw.ui === 'object' ? raw.ui : null;
+  const desktopSpan = normalizeDesktopSpan(importedUi?.md, fieldType);
   const nextMetaJson = importedUi
     ? {
         ...(typeof importedMeta === 'object' && importedMeta !== null ? importedMeta : {}),
@@ -378,9 +425,10 @@ function normalizeImportedField(raw: any, index: number, inheritedSection = ''):
     placeholder: String(raw?.placeholder ?? '').trim(),
     help_text: String(raw?.help_text ?? raw?.helpText ?? '').trim(),
     selection_mode: selectionMode,
+    desktop_span: desktopSpan,
     sort_order: Number(raw?.sort_order ?? raw?.sortOrder ?? index + 1),
     status: String(raw?.status ?? 'active'),
-    meta_json: nextMetaJson,
+    meta_json: mergeFieldUiMeta(nextMetaJson, desktopSpan),
     options: optionsRaw.map((option: any, optionIndex: number) => normalizeImportedOption(option, optionIndex)),
   };
 }
@@ -628,6 +676,8 @@ export default function SystemTemplateRequestsPage() {
   const [sectionImportTexts, setSectionImportTexts] = useState<Record<string, string>>({});
   const [sectionImportFeedback, setSectionImportFeedback] = useState<Record<string, string | null>>({});
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [requestsPanelExpanded, setRequestsPanelExpanded] = useState(true);
+  const [editorPanelExpanded, setEditorPanelExpanded] = useState(true);
   const [expandedFields, setExpandedFields] = useState<Record<string, boolean>>({});
   const [reviewedFields, setReviewedFields] = useState<Record<string, boolean>>({});
   const [showDetectedPdfFields, setShowDetectedPdfFields] = useState(false);
@@ -999,7 +1049,7 @@ export default function SystemTemplateRequestsPage() {
           selection_mode: getDefaultSelectionMode(field.field_type) || (field.field_type === 'select' ? 'single' : undefined),
           sort_order: index + 1,
           status: field.status,
-          meta_json: field.meta_json ?? null,
+          meta_json: mergeFieldUiMeta(field.meta_json, field.desktop_span),
           options: field.options.map((option, optionIndex) => ({
             option_key: option.option_key.trim(),
             label: option.label.trim(),
@@ -1227,13 +1277,14 @@ export default function SystemTemplateRequestsPage() {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 4, lg: 3 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
+          <Accordion expanded={requestsPanelExpanded} onChange={(_, expanded) => setRequestsPanelExpanded(expanded)} sx={{ borderRadius: '16px !important', overflow: 'hidden' }}>
+            <AccordionSummary expandIcon={<ExpandMore />}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Solicitudes registradas
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
               <Stack spacing={2}>
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                  Solicitudes registradas
-                </Typography>
-
                 {loading ? (
                   <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
                     <CircularProgress />
@@ -1288,17 +1339,19 @@ export default function SystemTemplateRequestsPage() {
                   </Stack>
                 )}
               </Stack>
-            </CardContent>
-          </Card>
+            </AccordionDetails>
+          </Accordion>
         </Grid>
 
         <Grid size={{ xs: 12, md: 8, lg: 9 }}>
-          <Card sx={{ height: '100%' }}>
-            <CardContent>
+          <Accordion expanded={editorPanelExpanded} onChange={(_, expanded) => setEditorPanelExpanded(expanded)} sx={{ borderRadius: '16px !important', overflow: 'hidden' }}>
+            <AccordionSummary expandIcon={<ExpandMore />}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                Editor interno de plantilla
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
               <Stack spacing={2.5}>
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                  Editor interno de plantilla
-                </Typography>
 
                 {detailLoading ? (
                   <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
@@ -1770,6 +1823,8 @@ export default function SystemTemplateRequestsPage() {
                                                     ? (current.max_length || getDefaultMaxLength(nextType))
                                                     : '',
                                                   date_format: nextType === 'date' ? (current.date_format || 'dd/mm/yyyy') : '',
+                                                  desktop_span: normalizeDesktopSpan(current.desktop_span, nextType),
+                                                  meta_json: mergeFieldUiMeta(current.meta_json, normalizeDesktopSpan(current.desktop_span, nextType)),
                                                 }));
                                               }}
                                               fullWidth
@@ -1794,9 +1849,29 @@ export default function SystemTemplateRequestsPage() {
                                                   {fieldStatus}
                                                 </MenuItem>
                                               ))}
+                                              </TextField>
+                                          </Grid>
+                                          <Grid size={{ xs: 12, md: 2 }}>
+                                            <TextField
+                                              select
+                                              label="Ancho desktop"
+                                              value={field.desktop_span}
+                                              onChange={(event) => updateField(fieldIndex, (current) => ({
+                                                ...current,
+                                                desktop_span: normalizeDesktopSpan(event.target.value, current.field_type),
+                                                meta_json: mergeFieldUiMeta(current.meta_json, normalizeDesktopSpan(event.target.value, current.field_type)),
+                                              }))}
+                                              fullWidth
+                                              helperText="Grid de 12 columnas. En movil se adapta."
+                                            >
+                                              {DESKTOP_SPAN_OPTIONS.map((span) => (
+                                                <MenuItem key={span} value={span}>
+                                                  {span}/12
+                                                </MenuItem>
+                                              ))}
                                             </TextField>
                                           </Grid>
-                                          <Grid size={{ xs: 12, md: 6 }}>
+                                          <Grid size={{ xs: 12, md: 4 }}>
                                             <TextField
                                               select
                                               label="Fuente automatica"
@@ -2042,8 +2117,8 @@ export default function SystemTemplateRequestsPage() {
                   </>
                 )}
               </Stack>
-            </CardContent>
-          </Card>
+            </AccordionDetails>
+          </Accordion>
         </Grid>
       </Grid>
     </Stack>
