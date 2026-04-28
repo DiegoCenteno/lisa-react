@@ -751,6 +751,27 @@ export const consultationService = {
     return response.data;
   },
 
+  async previewPatientPdfTemplateReport(
+    patientId: number,
+    templateId: number,
+    values: Record<string, string | boolean | string[]>,
+    officeId?: number,
+    studyDeliveryId?: number | null
+  ): Promise<Blob> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.post<Blob>(
+      `/v2/patients/${patientId}/pdf-report-templates/${templateId}/preview-pdf`,
+      {
+        office_id: resolvedOfficeId,
+        study_delivery_id: studyDeliveryId ?? undefined,
+        values,
+      },
+      { responseType: 'blob' }
+    );
+
+    return response.data;
+  },
+
   async createPatientReport(
     patientId: number,
     reportKey: string,

@@ -5,6 +5,8 @@ import {
   Button,
   Checkbox,
   CircularProgress,
+  Dialog,
+  DialogContent,
   FormControlLabel,
   Link,
   MenuItem,
@@ -1144,25 +1146,46 @@ function PatientReportsTab({
           </Paper>
         )}
 
-        {activePdfTemplateId && (
-          <PatientPdfTemplateReportBuilder
-            patientId={patientId}
-            templateId={activePdfTemplateId}
-            initialStudyDeliveryId={activePdfTemplateStudyDeliveryId}
-            onGenerated={async () => {
-              setActivePdfTemplateId(null);
-              setActivePdfTemplateStudyDeliveryId(null);
-              setShowCreate(false);
-              await loadReports();
-              setMessage('PDF final generado y guardado correctamente.');
-            }}
-            onBack={() => {
-              setActivePdfTemplateId(null);
-              setActivePdfTemplateStudyDeliveryId(null);
-              setShowCreate(true);
-            }}
-          />
-        )}
+        <Dialog
+          open={activePdfTemplateId !== null}
+          onClose={() => {
+            setActivePdfTemplateId(null);
+            setActivePdfTemplateStudyDeliveryId(null);
+            setShowCreate(true);
+          }}
+          fullWidth
+          maxWidth={false}
+          PaperProps={{
+            sx: {
+              width: 'min(96vw, 1480px)',
+              height: 'min(94vh, 1120px)',
+              maxWidth: 'none',
+              m: 1.5,
+            },
+          }}
+        >
+          <DialogContent sx={{ p: 2.5, overflow: 'auto' }}>
+            {activePdfTemplateId ? (
+              <PatientPdfTemplateReportBuilder
+                patientId={patientId}
+                templateId={activePdfTemplateId}
+                initialStudyDeliveryId={activePdfTemplateStudyDeliveryId}
+                onGenerated={async () => {
+                  setActivePdfTemplateId(null);
+                  setActivePdfTemplateStudyDeliveryId(null);
+                  setShowCreate(false);
+                  await loadReports();
+                  setMessage('PDF final generado y guardado correctamente.');
+                }}
+                onBack={() => {
+                  setActivePdfTemplateId(null);
+                  setActivePdfTemplateStudyDeliveryId(null);
+                  setShowCreate(true);
+                }}
+              />
+            ) : null}
+          </DialogContent>
+        </Dialog>
 
         {activeBasicObstetricReportId && (
           <PatientBasicObstetricReportBuilder

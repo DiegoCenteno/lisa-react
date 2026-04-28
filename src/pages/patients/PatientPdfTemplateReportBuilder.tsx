@@ -6,6 +6,8 @@ import {
   Checkbox,
   CircularProgress,
   Divider,
+  Dialog,
+  DialogContent,
   FormControl,
   FormControlLabel,
   FormGroup,
@@ -73,6 +75,9 @@ export default function PatientPdfTemplateReportBuilder({
   const [data, setData] = useState<PatientPdfTemplateBuilderData | null>(null);
   const [values, setValues] = useState<Record<string, FieldValue>>({});
   const [error, setError] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedStudyDeliveryId, setSelectedStudyDeliveryId] = useState(
     initialStudyDeliveryId ? String(initialStudyDeliveryId) : ''
   );
@@ -80,6 +85,22 @@ export default function PatientPdfTemplateReportBuilder({
   useEffect(() => {
     setSelectedStudyDeliveryId(initialStudyDeliveryId ? String(initialStudyDeliveryId) : '');
   }, [initialStudyDeliveryId, patientId, templateId]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const closePreviewDialog = () => {
+    if (previewUrl) {
+      window.URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    setPreviewOpen(false);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -169,13 +190,58 @@ export default function PatientPdfTemplateReportBuilder({
     }
   };
 
+  const handlePreviewPdf = async () => {
+    if (!data) {
+      return;
+    }
+
+    setPreviewLoading(true);
+    setError(null);
+
+    try {
+      const linkedStudyDeliveryId = selectedStudyDeliveryId ? Number(selectedStudyDeliveryId) : null;
+      const blob = await consultationService.previewPatientPdfTemplateReport(
+        patientId,
+        templateId,
+        values,
+        undefined,
+        linkedStudyDeliveryId
+      );
+
+      if (previewUrl) {
+        window.URL.revokeObjectURL(previewUrl);
+      }
+
+      const blobUrl = window.URL.createObjectURL(blob);
+      setPreviewUrl(blobUrl);
+      setPreviewOpen(true);
+    } catch (previewError) {
+      console.error('Error generando previsualizacion del PDF:', previewError);
+      setError('No se pudo generar la previsualizacion del PDF.');
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleDownloadPreviewPdf = () => {
+    if (!previewUrl || !data) {
+      return;
+    }
+
+    const anchor = document.createElement('a');
+    anchor.href = previewUrl;
+    anchor.download = buildPdfDownloadName(
+      `${data.template.output_file_name || data.template.name}_preview`
+    );
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  };
+
   const renderField = (field: PatientPdfTemplateBuilderField) => {
     const currentValue = values[field.field_key];
     const disabled = !field.editable;
     const visibleHelperLines = [field.help_text]
-      .filter(Boolean)
-      .join(' ');
-    const helperLines = [field.help_text, disabled ? 'Se llena automáticamente desde la plantilla.' : null]
       .filter(Boolean)
       .join(' ');
 
@@ -512,10 +578,53 @@ export default function PatientPdfTemplateReportBuilder({
         <Button color="inherit" onClick={onBack}>
           Cancelar
         </Button>
+        <Button variant="outlined" onClick={() => void handlePreviewPdf()} disabled={previewLoading || submitting || isStudyLinkMissing}>
+          {previewLoading ? 'Generando vista previa...' : 'Previsualizar PDF'}
+        </Button>
         <Button variant="contained" onClick={() => void handleDownloadFinalPdf()} disabled={submitting || isStudyLinkMissing}>
           {submitting ? 'Generando PDF final...' : 'Descargar PDF final'}
         </Button>
       </Box>
+
+      <Dialog
+        open={previewOpen}
+        onClose={closePreviewDialog}
+        fullWidth
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            width: 'min(96vw, 1460px)',
+            height: 'min(94vh, 1100px)',
+            maxWidth: 'none',
+            m: 1.5,
+          },
+        }}
+      >
+        <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Typography variant="h6" sx={{ fontWeight: 700 }}>
+            Previsualizacion del documento
+          </Typography>
+          <Alert severity="warning">
+            Esta previsualizacion te permite validar como va quedando el documento antes de guardarlo. Si el resultado es correcto, te recomendamos cerrar esta vista y despues generar el PDF final para almacenarlo en el historial del paciente y dar seguimiento formal al estudio.
+          </Alert>
+          <Box sx={{ flex: 1, minHeight: 0, border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', bgcolor: '#f7f7f7' }}>
+            {previewUrl ? (
+              <Box
+                component="iframe"
+                src={previewUrl}
+                title="Previsualizacion PDF"
+                sx={{ width: '100%', height: '100%', border: 0, minHeight: '72vh' }}
+              />
+            ) : null}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
+            <Button variant="outlined" onClick={handleDownloadPreviewPdf} disabled={!previewUrl}>
+              Descargar previsualizacion
+            </Button>
+            <Button onClick={closePreviewDialog}>Cerrar previsualizacion</Button>
+          </Box>
+        </DialogContent>
+      </Dialog>
     </Paper>
   );
 }
