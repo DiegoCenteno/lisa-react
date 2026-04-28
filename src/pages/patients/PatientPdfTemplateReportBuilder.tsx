@@ -24,6 +24,7 @@ import {
   type PatientPdfTemplateBuilderData,
   type PatientPdfTemplateBuilderField,
 } from '../../api/consultationService';
+import ClickableDateField from '../../components/ClickableDateField';
 import { getPdfReportTemplateCategoryLabel } from '../../utils/pdfReportTemplateLabels';
 
 interface PatientPdfTemplateReportBuilderProps {
@@ -264,7 +265,7 @@ export default function PatientPdfTemplateReportBuilder({
       );
     }
 
-    if (field.field_type === 'text' || field.field_type === 'date') {
+    if (field.field_type === 'text') {
       return (
         <TextField
           fullWidth
@@ -277,6 +278,20 @@ export default function PatientPdfTemplateReportBuilder({
           helperText={visibleHelperLines || ' '}
           inputProps={field.max_length ? { maxLength: field.max_length } : undefined}
           placeholder={field.placeholder || undefined}
+        />
+      );
+    }
+
+    if (field.field_type === 'date') {
+      return (
+        <ClickableDateField
+          fullWidth
+          size="small"
+          label={field.label}
+          value={typeof currentValue === 'string' ? currentValue : ''}
+          onChange={(nextValue) => updateFieldValue(field.field_key, nextValue)}
+          disabled={disabled}
+          helperText={visibleHelperLines || ' '}
         />
       );
     }
@@ -329,10 +344,9 @@ export default function PatientPdfTemplateReportBuilder({
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
           <RadioGroup
-            row
             value={typeof currentValue === 'string' ? currentValue : ''}
             onChange={(event) => updateFieldValue(field.field_key, event.target.value)}
-            sx={{ columnGap: 1.5, rowGap: 0.25 }}
+            sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}
           >
             {field.options.map((option) => (
               <FormControlLabel
@@ -340,7 +354,7 @@ export default function PatientPdfTemplateReportBuilder({
                 value={option.value}
                 control={<Radio />}
                 label={option.label}
-                sx={{ mr: 1.5 }}
+                sx={{ mr: 0 }}
               />
             ))}
           </RadioGroup>
@@ -357,7 +371,7 @@ export default function PatientPdfTemplateReportBuilder({
       return (
         <FormControl component="fieldset" fullWidth disabled={disabled} required={field.is_required}>
           <FormLabel component="legend">{field.label}</FormLabel>
-          <FormGroup row sx={{ columnGap: 1.5, rowGap: 0.25 }}>
+          <FormGroup sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
             {field.options.map((option) => {
               const checked = selectedValues.includes(option.value);
 
@@ -376,7 +390,7 @@ export default function PatientPdfTemplateReportBuilder({
                     />
                   )}
                   label={option.label}
-                  sx={{ mr: 1.5 }}
+                  sx={{ mr: 0 }}
                 />
               );
             })}
@@ -477,7 +491,7 @@ export default function PatientPdfTemplateReportBuilder({
             <TextField
               fullWidth
               label="Paciente"
-              value={`${data.patient.full_name}${data.patient.age ? ` | ${data.patient.age} aÃ±os` : ''}`}
+              value={`${data.patient.full_name}${data.patient.age ? ` | ${data.patient.age} años` : ''}`}
               InputProps={{ readOnly: true }}
             />
           </Box>
