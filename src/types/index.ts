@@ -814,7 +814,9 @@ export interface StudyTypeItem {
 
 export interface PendingStudyDeliveryLink {
   id: number;
-  processing_status: 'sample_collected' | 'sent_to_lab';
+  processing_status: string;
+  study_type_id?: number | null;
+  study_name?: string | null;
   laboratory_id?: number | null;
   laboratory_name?: string | null;
   label: string;
