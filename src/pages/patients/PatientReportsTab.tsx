@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+﻿import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -820,11 +820,11 @@ function PatientReportsTab({
                   </Paper>
                 )}
 
-                {hasPdfTemplates && (
-                  <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
-                      Reportes específicos en PDF
-                    </Typography>
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                    Reportes específicos en PDF
+                  </Typography>
+                  {hasPdfTemplates ? (
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                       <TextField
                         select
@@ -867,8 +867,20 @@ function PatientReportsTab({
                         </Button>
                       </Box>
                     </Box>
-                  </Paper>
-                )}
+                  ) : (
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                      <Alert severity="info">
+                        Si hoy tus reportes viven en PDF o incluso en Word, es posible integrarlos al sistema para convertirlos en formatos listos para trabajar con información prellenada del paciente, su historia clínica y sus consultas. El objetivo es conservar la estructura que ya utilizan en su operación diaria, pero con un proceso de llenado más ágil, ordenado y consistente.
+                      </Alert>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Una vez cargado el formato, se puede preparar como plantilla para que datos frecuentes aparezcan de forma automática y el resto quede listo para revisión y captura final. Esto ayuda a reducir retrabajo, mantener documentos más uniformes y dar mejor seguimiento a cada estudio dentro del expediente del paciente.
+                      </Typography>
+                      <Link href="/settings?tab=reportes" underline="hover" sx={{ fontWeight: 600, width: 'fit-content' }}>
+                        Cargar un nuevo reporte para su implementación
+                      </Link>
+                    </Box>
+                  )}
+                </Paper>
 
                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                   <Button color="inherit" onClick={() => setShowCreate(false)} disabled={creating}>
@@ -978,7 +990,7 @@ function PatientReportsTab({
                           label={
                             <Box sx={{ pt: 0.5, cursor: colposcopyBuilder.is_locked ? 'default' : 'pointer' }}>
                               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {session.title} ({session.files_count} imágenes)
+                                {session.title} ({session.files_count} imÃ¡genes)
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 {session.captured_on_label || 'Sin fecha'}
@@ -993,16 +1005,16 @@ function PatientReportsTab({
 
                 <Box>
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>
-                    2. Selecciona 4 imágenes para el reporte
+                    2. Selecciona 4 imÃ¡genes para el reporte
                   </Typography>
                   {colposcopyBuilder.is_locked && (
                     <Alert severity="info" sx={{ mb: 1.5 }}>
-                      Este reporte ya tiene 4 imágenes definidas y ya no permite cambiarlas. Si necesitas otras
-                      imágenes, crea un reporte nuevo.
+                      Este reporte ya tiene 4 imÃ¡genes definidas y ya no permite cambiarlas. Si necesitas otras
+                      imÃ¡genes, crea un reporte nuevo.
                     </Alert>
                   )}
                   {availableBuilderFiles.length === 0 ? (
-                    <Alert severity="info">Selecciona una o más sesiones para ver sus imágenes.</Alert>
+                    <Alert severity="info">Selecciona una o mÃ¡s sesiones para ver sus imÃ¡genes.</Alert>
                   ) : (
                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 1.5 }}>
                       {availableBuilderFiles.map((file) => {
@@ -1290,3 +1302,4 @@ function PatientReportsTab({
 }
 
 export default memo(PatientReportsTab);
+

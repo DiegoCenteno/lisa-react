@@ -489,6 +489,29 @@ const settingsService = {
     return response.data.data;
   },
 
+  async updatePdfReportTemplate(
+    id: number,
+    payload: {
+      office_id: number;
+      laboratory_id: number | null;
+      study_type_id: number | null;
+      name: string;
+      description?: string;
+      output_file_name: string;
+      template_category: string;
+      base_pdf_file_id: number;
+      status: string;
+      fields?: Array<unknown>;
+    }
+  ): Promise<SettingsPdfReportTemplateSummary> {
+    const response = await apiClient.put<{ status: string; data: SettingsPdfReportTemplateSummary }>(
+      `/v2/settings/pdf-report-templates/${id}`,
+      payload
+    );
+
+    return response.data.data;
+  },
+
   async getUnavailableDays(officeId: number): Promise<SettingsUnavailableDayItem[]> {
     const response = await apiClient.get<{ status: string; data: SettingsUnavailableDayItem[] }>(
       '/v2/settings/unavailable-days',

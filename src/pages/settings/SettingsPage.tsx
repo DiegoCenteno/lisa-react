@@ -2191,6 +2191,7 @@ function ReportsPanel({
   const [templateNotice, setTemplateNotice] = useState<string | null>(null);
   const [preconfiguredCollapsed, setPreconfiguredCollapsed] = useState(true);
   const [pdfReportsCollapsed, setPdfReportsCollapsed] = useState(true);
+  const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
   const [templateName, setTemplateName] = useState('');
   const [templateDescription, setTemplateDescription] = useState('');
   const [templateOutputName, setTemplateOutputName] = useState('');
@@ -2198,6 +2199,7 @@ function ReportsPanel({
   const [templateLaboratoryId, setTemplateLaboratoryId] = useState<number | ''>('');
   const [templateStudyTypeId, setTemplateStudyTypeId] = useState<number | ''>('');
   const [selectedTemplateFile, setSelectedTemplateFile] = useState<File | null>(null);
+  const [selectedTemplateBaseFileId, setSelectedTemplateBaseFileId] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -2302,6 +2304,7 @@ function ReportsPanel({
   };
 
   const resetTemplateForm = () => {
+    setEditingTemplateId(null);
     setTemplateName('');
     setTemplateDescription('');
     setTemplateOutputName('');
@@ -2309,9 +2312,27 @@ function ReportsPanel({
     setTemplateLaboratoryId('');
     setTemplateStudyTypeId('');
     setSelectedTemplateFile(null);
+    setSelectedTemplateBaseFileId(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
+  };
+
+  const beginTemplateEdit = (template: SettingsPdfReportTemplateSummary) => {
+    setEditingTemplateId(template.id);
+    setTemplateName(template.name ?? '');
+    setTemplateDescription(template.description ?? '');
+    setTemplateOutputName(template.output_file_name ?? '');
+    setTemplateCategory(template.template_category ?? 'lab_attachment');
+    setTemplateLaboratoryId(template.laboratory?.id ?? '');
+    setTemplateStudyTypeId(template.study_type?.id ?? '');
+    setSelectedTemplateBaseFileId(template.base_pdf_file?.id ?? null);
+    setSelectedTemplateFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setTemplateNotice(null);
+    setLocalError(null);
   };
 
   const handleTemplateFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -2325,7 +2346,7 @@ function ReportsPanel({
       return;
     }
 
-    if (!selectedTemplateFile) {
+    if (!selectedTemplateFile && !selectedTemplateBaseFileId) {
       setLocalError('Selecciona el PDF base del reporte.');
       return;
     }
@@ -2340,12 +2361,20 @@ function ReportsPanel({
     setTemplateNotice(null);
 
     try {
-      const uploadedFile = await settingsService.uploadPdfReportTemplateBasePdf({
-        office_id: selectedOfficeId,
-        file: selectedTemplateFile,
-      });
+      let basePdfFileId = selectedTemplateBaseFileId;
+      if (selectedTemplateFile) {
+        const uploadedFile = await settingsService.uploadPdfReportTemplateBasePdf({
+          office_id: selectedOfficeId,
+          file: selectedTemplateFile,
+        });
+        basePdfFileId = uploadedFile.id;
+      }
 
-      const created = await settingsService.createPdfReportTemplate({
+      if (!basePdfFileId) {
+        throw new Error('No fue posible resolver el PDF base de la plantilla.');
+      }
+
+      const payload = {
         office_id: selectedOfficeId,
         laboratory_id: templateLaboratoryId === '' ? null : Number(templateLaboratoryId),
         study_type_id: templateStudyTypeId === '' ? null : Number(templateStudyTypeId),
@@ -2353,14 +2382,23 @@ function ReportsPanel({
         description: templateDescription.trim(),
         output_file_name: templateOutputName.trim(),
         template_category: templateCategory,
-        base_pdf_file_id: uploadedFile.id,
-        status: 'pending_review',
+        base_pdf_file_id: basePdfFileId,
+        status: editingTemplateId ? 'published' : 'pending_review',
         fields: [],
-      });
+      };
 
-      setTemplates((current) => [created, ...current]);
-      setTemplateNotice('Tu reporte fue recibido. En un máximo de 24 horas estará listo para utilizarse.');
-      onSuccess('Tu reporte fue recibido. En un máximo de 24 horas estará listo para utilizarse.');
+      if (editingTemplateId) {
+        const updated = await settingsService.updatePdfReportTemplate(editingTemplateId, payload);
+        setTemplates((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+        setTemplateNotice('Reporte específico actualizado correctamente.');
+        onSuccess('Reporte específico actualizado correctamente.');
+      } else {
+        const created = await settingsService.createPdfReportTemplate(payload);
+        setTemplates((current) => [created, ...current]);
+        setTemplateNotice('Tu reporte fue recibido. En un máximo de 24 horas estará listo para utilizarse.');
+        onSuccess('Tu reporte fue recibido. En un máximo de 24 horas estará listo para utilizarse.');
+      }
+
       resetTemplateForm();
     } catch (err) {
       const backendMessage =
@@ -2618,18 +2656,33 @@ function ReportsPanel({
                             {selectedTemplateFile ? 'Reemplazar PDF' : 'Seleccionar PDF'}
                           </Button>
                           <Typography variant="body2" color="text.secondary">
-                            {selectedTemplateFile ? selectedTemplateFile.name : 'Aún no se ha seleccionado un PDF base.'}
+                            {selectedTemplateFile
+                              ? selectedTemplateFile.name
+                              : editingTemplateId && selectedTemplateBaseFileId
+                                ? 'Se conservará el PDF base actual mientras no selecciones otro archivo.'
+                                : 'Aún no se ha seleccionado un PDF base.'}
                           </Typography>
                         </Box>
                       </Grid>
                       <Grid size={{ xs: 12 }}>
+                        {editingTemplateId ? (
+                          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
+                            <Button
+                              variant="text"
+                              onClick={resetTemplateForm}
+                              disabled={submittingTemplate}
+                            >
+                              Cancelar edición
+                            </Button>
+                          </Box>
+                        ) : null}
                         <Button
                           variant="contained"
                           onClick={() => { void handleTemplateSubmit(); }}
-                          disabled={submittingTemplate || !templateName.trim() || !templateOutputName.trim() || !selectedTemplateFile}
+                          disabled={submittingTemplate || !templateName.trim() || !templateOutputName.trim() || (!selectedTemplateFile && !selectedTemplateBaseFileId)}
                           sx={{ minWidth: 220, borderRadius: 1, backgroundColor: '#ea1d63', boxShadow: '0 8px 18px rgba(234, 29, 99, 0.28)', '&:hover': { backgroundColor: '#cf1857' } }}
                         >
-                          {submittingTemplate ? 'Enviando...' : 'Registrar reporte específico'}
+                          {submittingTemplate ? 'Enviando...' : (editingTemplateId ? 'Guardar cambios' : 'Registrar reporte específico')}
                         </Button>
                       </Grid>
                     </Grid>
@@ -2679,6 +2732,16 @@ function ReportsPanel({
                                 PDF base: {template.base_pdf_file.title}
                               </Typography>
                             ) : null}
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
+                              <Button
+                                variant="outlined"
+                                size="small"
+                                onClick={() => beginTemplateEdit(template)}
+                                disabled={submittingTemplate}
+                              >
+                                Editar
+                              </Button>
+                            </Box>
                           </Box>
                         ))}
                       </Box>

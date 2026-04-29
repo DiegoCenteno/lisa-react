@@ -415,6 +415,7 @@ export interface PatientReportRecord<TPayload = unknown> {
   id: number;
   office_id: number;
   patient_id: number;
+  pdf_report_template_id?: number | null;
   report_type_key: string;
   title?: string | null;
   report_date?: string | null;
@@ -522,6 +523,16 @@ export interface PatientPdfTemplateBuilderData {
     allergy?: string | null;
     datahc?: unknown;
   };
+  saved_report?: {
+    id: number;
+    status: number;
+    study_delivery_id?: number | null;
+    updated_at?: string | null;
+    report_payload?: {
+      submitted_values?: Record<string, string | boolean | string[]>;
+      study_delivery_id?: number | null;
+    } | null;
+  } | null;
   last_consultation?: {
     id: number;
     created_at?: string | null;
@@ -758,17 +769,19 @@ export const consultationService = {
     templateId: number,
     values: Record<string, string | boolean | string[]>,
     officeId?: number,
-    studyDeliveryId?: number | null
+    studyDeliveryId?: number | null,
+    reportId?: number | null
   ): Promise<Blob> {
     const resolvedOfficeId = officeId ?? (await resolveOfficeId());
     const response = await apiClient.post<Blob>(
       `/v2/patients/${patientId}/pdf-report-templates/${templateId}/download-final-pdf`,
-      {
-        office_id: resolvedOfficeId,
-        study_delivery_id: studyDeliveryId ?? undefined,
-        values,
-      },
-      { responseType: 'blob' }
+        {
+          office_id: resolvedOfficeId,
+          study_delivery_id: studyDeliveryId ?? undefined,
+          report_id: reportId ?? undefined,
+          values,
+        },
+        { responseType: 'blob' }
     );
 
     return response.data;
@@ -793,6 +806,40 @@ export const consultationService = {
     );
 
     return response.data;
+  },
+
+  async savePatientPdfTemplateDraft(
+    patientId: number,
+    templateId: number,
+    values: Record<string, string | boolean | string[]>,
+    officeId?: number,
+    studyDeliveryId?: number | null
+  ): Promise<PatientReportRecord<{
+    source: string;
+    pdf_report_template_id: number;
+    template_name?: string;
+    template_output_file_name?: string;
+    study_delivery_id?: number | null;
+    submitted_values?: Record<string, string | boolean | string[]>;
+  }>> {
+    const resolvedOfficeId = officeId ?? (await resolveOfficeId());
+    const response = await apiClient.post<{ status: string; data: PatientReportRecord<{
+      source: string;
+      pdf_report_template_id: number;
+      template_name?: string;
+      template_output_file_name?: string;
+      study_delivery_id?: number | null;
+      submitted_values?: Record<string, string | boolean | string[]>;
+    }> }>(
+      `/v2/patients/${patientId}/pdf-report-templates/${templateId}/save-draft`,
+      {
+        office_id: resolvedOfficeId,
+        study_delivery_id: studyDeliveryId ?? undefined,
+        values,
+      }
+    );
+
+    return response.data.data;
   },
 
   async createPatientReport(

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Accordion,
@@ -28,10 +28,11 @@ import {
   type PatientPdfTemplateBuilderData,
   type PatientPdfTemplateBuilderField,
 } from '../../api/consultationService';
+import { studyDeliveryService } from '../../api/studyDeliveryService';
 import ClickableDateField from '../../components/ClickableDateField';
 import { decodeClinicalHistory } from '../../utils/clinicalHistory';
 import { getPdfReportTemplateCategoryLabel } from '../../utils/pdfReportTemplateLabels';
-import type { Patient } from '../../types';
+import type { Patient, PendingStudyDeliveryLink } from '../../types';
 
 interface PatientPdfTemplateReportBuilderProps {
   patientId: number;
@@ -43,6 +44,7 @@ interface PatientPdfTemplateReportBuilderProps {
 
 type FieldValue = string | boolean | string[];
 type SummaryItem = { label: string; value: string };
+const CREATE_STUDY_DELIVERY_OPTION = '__create_study_delivery_today__';
 
 function getDraftStorageKey(patientId: number, templateId: number): string {
   return `pdf-template-builder-draft:${patientId}:${templateId}`;
@@ -75,6 +77,16 @@ function buildPdfDownloadName(baseName: string): string {
   return `${normalized || 'reporte_pdf'}.pdf`;
 }
 
+function buildSavedSnapshot(
+  values: Record<string, FieldValue>,
+  selectedStudyDeliveryId: string
+): string {
+  return JSON.stringify({
+    values,
+    selectedStudyDeliveryId: selectedStudyDeliveryId || '',
+  });
+}
+
 function formatDateTimeValue(value?: string | null): string {
   if (!value) return '';
 
@@ -91,6 +103,19 @@ function formatDateTimeValue(value?: string | null): string {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function buildCreateStudyDeliveryOptionLabel(data: PatientPdfTemplateBuilderData | null): string {
+  const studyName = data?.template.study_type?.name?.trim() || 'Estudio';
+  const timestamp = new Date().toLocaleString('es-MX', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  return `Iniciar toma de muestra hoy | ${studyName} | ${timestamp}`;
 }
 
 function pushSummaryItem(items: SummaryItem[], label: string, value: unknown) {
@@ -123,15 +148,15 @@ function buildClinicalHistorySummary(data: PatientPdfTemplateBuilderData): Summa
   const history = decodeClinicalHistory(patient);
   const items: SummaryItem[] = [];
 
-  pushSummaryItem(items, 'Grupo sanguíneo y RH', history.hereditary_background.blood_type_rh);
+  pushSummaryItem(items, 'Grupo sanguÃ­neo y RH', history.hereditary_background.blood_type_rh);
   pushSummaryItem(items, 'Origen', history.personal_non_pathological.origin);
   pushSummaryItem(items, 'Residencia', history.personal_non_pathological.residence);
   pushSummaryItem(items, 'Estado civil', history.personal_non_pathological.civil_status);
-  pushSummaryItem(items, 'Religión', history.personal_non_pathological.religion);
+  pushSummaryItem(items, 'ReligiÃ³n', history.personal_non_pathological.religion);
   pushSummaryItem(items, 'Escolaridad', history.personal_non_pathological.education);
-  pushSummaryItem(items, 'Ocupación', history.personal_non_pathological.occupation);
-  pushSummaryItem(items, 'Toxicomanías', history.personal_non_pathological.substance_use);
-  pushSummaryItem(items, 'Fármacos', history.personal_non_pathological.medications);
+  pushSummaryItem(items, 'OcupaciÃ³n', history.personal_non_pathological.occupation);
+  pushSummaryItem(items, 'ToxicomanÃ­as', history.personal_non_pathological.substance_use);
+  pushSummaryItem(items, 'FÃ¡rmacos', history.personal_non_pathological.medications);
   pushSummaryItem(items, 'Exposiciones', history.personal_non_pathological.exposures);
   pushSummaryItem(items, 'Tabaquismo', history.personal_non_pathological.smoking);
   pushSummaryItem(items, 'Alcohol', history.personal_non_pathological.alcohol);
@@ -139,23 +164,23 @@ function buildClinicalHistorySummary(data: PatientPdfTemplateBuilderData): Summa
   pushSummaryItem(items, 'Ejercicio', history.personal_non_pathological.exercise);
   pushSummaryItem(items, 'Alergias', history.personal_pathological.allergies);
   pushSummaryItem(items, 'Enfermedades degenerativas', history.personal_pathological.chronic_diseases);
-  pushSummaryItem(items, 'Cirugías', history.personal_pathological.surgeries);
+  pushSummaryItem(items, 'CirugÃ­as', history.personal_pathological.surgeries);
   pushSummaryItem(items, 'Transfusiones', history.personal_pathological.transfusions);
   pushSummaryItem(items, 'Fracturas', history.personal_pathological.fractures);
   pushSummaryItem(items, 'Menarca', history.gynecological?.menarche);
   pushSummaryItem(items, 'Ciclos menstruales', history.gynecological?.menstrual_cycles);
-  pushSummaryItem(items, 'Embarazada', history.gynecological?.pregnant ? 'Sí' : '');
+  pushSummaryItem(items, 'Embarazada', history.gynecological?.pregnant ? 'SÃ­' : '');
   pushSummaryItem(items, 'FUR', history.gynecological?.last_menstruation_date);
   pushSummaryItem(items, 'IVSA', history.gynecological?.ivsa);
   pushSummaryItem(items, 'Parejas sexuales', history.gynecological?.sexual_partners);
   pushSummaryItem(items, 'ETS', history.gynecological?.std);
-  pushSummaryItem(items, 'Citología', history.gynecological?.cytology);
-  pushSummaryItem(items, 'Planificación familiar', history.gynecological?.family_planning);
+  pushSummaryItem(items, 'CitologÃ­a', history.gynecological?.cytology);
+  pushSummaryItem(items, 'PlanificaciÃ³n familiar', history.gynecological?.family_planning);
   pushSummaryItem(items, 'Gestas', history.gynecological?.gestations);
   pushSummaryItem(items, 'Partos', history.gynecological?.deliveries);
-  pushSummaryItem(items, 'Cesáreas', history.gynecological?.cesareans);
+  pushSummaryItem(items, 'CesÃ¡reas', history.gynecological?.cesareans);
   pushSummaryItem(items, 'Abortos', history.gynecological?.abortions);
-  pushSummaryItem(items, 'Ectópicos', history.gynecological?.ectopic);
+  pushSummaryItem(items, 'EctÃ³picos', history.gynecological?.ectopic);
   pushSummaryItem(items, 'Molares', history.gynecological?.molar);
   pushSummaryItem(items, 'Climaterio', history.gynecological?.climacteric_symptoms);
   pushSummaryItem(items, 'Control prenatal', history.gynecological?.prenatal_care);
@@ -180,8 +205,8 @@ function buildLastSoapSummary(data: PatientPdfTemplateBuilderData): SummaryItem[
   pushSummaryItem(items, 'FC', consultation.fc);
   pushSummaryItem(items, 'OS', consultation.os);
   pushSummaryItem(items, 'Estudios', consultation.studies);
-  pushSummaryItem(items, 'Exploración', consultation.examination);
-  pushSummaryItem(items, 'Diagnósticos', consultation.diagnostics);
+  pushSummaryItem(items, 'ExploraciÃ³n', consultation.examination);
+  pushSummaryItem(items, 'DiagnÃ³sticos', consultation.diagnostics);
   pushSummaryItem(
     items,
     'Medicamentos',
@@ -208,17 +233,22 @@ export default function PatientPdfTemplateReportBuilder({
 }: PatientPdfTemplateReportBuilderProps) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingDraft, setSavingDraft] = useState(false);
   const [data, setData] = useState<PatientPdfTemplateBuilderData | null>(null);
   const [values, setValues] = useState<Record<string, FieldValue>>({});
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [soapExpanded, setSoapExpanded] = useState(false);
+  const [creatingStudyDelivery, setCreatingStudyDelivery] = useState(false);
   const [selectedStudyDeliveryId, setSelectedStudyDeliveryId] = useState(
     initialStudyDeliveryId ? String(initialStudyDeliveryId) : ''
   );
+  const [savedReportId, setSavedReportId] = useState<number | null>(null);
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(null);
 
   useEffect(() => {
     setSelectedStudyDeliveryId(initialStudyDeliveryId ? String(initialStudyDeliveryId) : '');
@@ -257,7 +287,21 @@ export default function PatientPdfTemplateReportBuilder({
         if (cancelled) return;
         setData(response);
         const initialValues = normalizeInitialValues(response);
+        const savedValues = response.saved_report?.report_payload?.submitted_values ?? {};
+        const hasSavedReport = Boolean(response.saved_report?.id);
+        const baseValues = Object.keys(initialValues).reduce<Record<string, FieldValue>>((accumulator, key) => {
+          accumulator[key] = Object.prototype.hasOwnProperty.call(savedValues, key)
+            ? savedValues[key]
+            : initialValues[key];
+          return accumulator;
+        }, {});
         const draftKey = getDraftStorageKey(patientId, templateId);
+        const savedStudyDeliveryId = response.saved_report?.study_delivery_id;
+
+        setSavedReportId(response.saved_report?.id ?? null);
+        if (typeof savedStudyDeliveryId === 'number' && savedStudyDeliveryId > 0 && !selectedStudyDeliveryId) {
+          setSelectedStudyDeliveryId(String(savedStudyDeliveryId));
+        }
 
         try {
           const rawDraft = localStorage.getItem(draftKey);
@@ -268,16 +312,27 @@ export default function PatientPdfTemplateReportBuilder({
             };
 
             const draftValues = parsedDraft.values ?? {};
-            const mergedValues = Object.keys(initialValues).reduce<Record<string, FieldValue>>((accumulator, key) => {
+            const mergedValues = Object.keys(baseValues).reduce<Record<string, FieldValue>>((accumulator, key) => {
               accumulator[key] = Object.prototype.hasOwnProperty.call(draftValues, key)
                 ? draftValues[key]
-                : initialValues[key];
+                : baseValues[key];
               return accumulator;
             }, {});
 
             setValues(mergedValues);
-            if (typeof parsedDraft.selectedStudyDeliveryId === 'string') {
-              setSelectedStudyDeliveryId(parsedDraft.selectedStudyDeliveryId);
+            const nextSelectedStudyDeliveryId = typeof parsedDraft.selectedStudyDeliveryId === 'string'
+              ? parsedDraft.selectedStudyDeliveryId
+              : (typeof savedStudyDeliveryId === 'number' && savedStudyDeliveryId > 0 ? String(savedStudyDeliveryId) : '');
+            setSavedSnapshot(
+              hasSavedReport
+                ? buildSavedSnapshot(
+                    baseValues,
+                    typeof savedStudyDeliveryId === 'number' && savedStudyDeliveryId > 0 ? String(savedStudyDeliveryId) : ''
+                  )
+                : null
+            );
+            if (typeof nextSelectedStudyDeliveryId === 'string') {
+              setSelectedStudyDeliveryId(nextSelectedStudyDeliveryId);
             }
             return;
           }
@@ -285,7 +340,15 @@ export default function PatientPdfTemplateReportBuilder({
           // Ignore malformed local drafts and continue with fresh values.
         }
 
-        setValues(initialValues);
+        setValues(baseValues);
+        setSavedSnapshot(
+          hasSavedReport
+            ? buildSavedSnapshot(
+                baseValues,
+                typeof savedStudyDeliveryId === 'number' && savedStudyDeliveryId > 0 ? String(savedStudyDeliveryId) : ''
+              )
+            : null
+        );
       } catch (loadError) {
         console.error('Error cargando builder PDF del paciente:', loadError);
         if (!cancelled) {
@@ -336,6 +399,7 @@ export default function PatientPdfTemplateReportBuilder({
   }, [data]);
 
   const updateFieldValue = (fieldKey: string, value: FieldValue) => {
+    setMessage(null);
     setValues((current) => ({
       ...current,
       [fieldKey]: value,
@@ -349,6 +413,65 @@ export default function PatientPdfTemplateReportBuilder({
   const lastSoapSummary = useMemo(() => {
     return data ? buildLastSoapSummary(data) : [];
   }, [data]);
+
+  const availableStudyLinks = useMemo(() => {
+    const items: PendingStudyDeliveryLink[] = [];
+    const seenIds = new Set<number>();
+
+    const pushItem = (item?: PendingStudyDeliveryLink | null) => {
+      if (!item || typeof item.id !== 'number' || seenIds.has(item.id)) {
+        return;
+      }
+      seenIds.add(item.id);
+      items.push(item);
+    };
+
+    (data?.available_study_links ?? []).forEach((item) => pushItem(item));
+    pushItem(data?.linked_study_delivery ?? null);
+
+    return items;
+  }, [data]);
+
+  const canCreateStudyDelivery = Boolean(data?.template.study_type?.id);
+
+  const currentSnapshot = useMemo(
+    () => buildSavedSnapshot(values, selectedStudyDeliveryId),
+    [values, selectedStudyDeliveryId]
+  );
+
+  const isDirty = savedSnapshot !== null
+    ? currentSnapshot !== savedSnapshot
+    : Object.keys(values).length > 0;
+
+  const handleSaveDraft = async () => {
+    if (!data) {
+      return;
+    }
+
+    setSavingDraft(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const linkedStudyDeliveryId = selectedStudyDeliveryId ? Number(selectedStudyDeliveryId) : null;
+      const savedReport = await consultationService.savePatientPdfTemplateDraft(
+        patientId,
+        templateId,
+        values,
+        undefined,
+        linkedStudyDeliveryId
+      );
+
+      setSavedReportId(savedReport.id);
+      setSavedSnapshot(currentSnapshot);
+      setMessage('Formulario guardado correctamente.');
+    } catch (saveError) {
+      console.error('Error guardando formulario del reporte PDF:', saveError);
+      setError('No se pudo guardar el formulario del reporte.');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const handleDownloadFinalPdf = async () => {
     if (!data) {
@@ -365,7 +488,8 @@ export default function PatientPdfTemplateReportBuilder({
         templateId,
         values,
         undefined,
-        linkedStudyDeliveryId
+        linkedStudyDeliveryId,
+        savedReportId
       );
       const blobUrl = window.URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -376,6 +500,7 @@ export default function PatientPdfTemplateReportBuilder({
       anchor.remove();
       window.URL.revokeObjectURL(blobUrl);
       localStorage.removeItem(getDraftStorageKey(patientId, templateId));
+      setSavedSnapshot(currentSnapshot);
 
       await onGenerated?.();
     } catch (downloadError) {
@@ -419,19 +544,53 @@ export default function PatientPdfTemplateReportBuilder({
     }
   };
 
-  const handleDownloadPreviewPdf = () => {
-    if (!previewUrl || !data) {
+  const handleStudyDeliverySelection = async (nextValue: string) => {
+    setMessage(null);
+
+    if (nextValue !== CREATE_STUDY_DELIVERY_OPTION) {
+      setSelectedStudyDeliveryId(nextValue);
       return;
     }
 
-    const anchor = document.createElement('a');
-    anchor.href = previewUrl;
-    anchor.download = buildPdfDownloadName(
-      `${data.template.output_file_name || data.template.name}_preview`
-    );
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
+    if (!data?.template.study_type?.id) {
+      setError('Esta plantilla no tiene un tipo de estudio ligado para iniciar una toma de muestra.');
+      return;
+    }
+
+    const officeId = Number(sessionStorage.getItem('cached_office_id') ?? 0);
+    if (officeId <= 0) {
+      setError('No fue posible resolver el consultorio actual para iniciar la toma de muestra.');
+      return;
+    }
+
+    setCreatingStudyDelivery(true);
+    setError(null);
+
+    try {
+      const createdStudyDeliveries = await studyDeliveryService.createSampleStudyDelivery({
+        office_id: officeId,
+        patient_id: patientId,
+        processing_status: 'sample_collected',
+        study_type_ids: [Number(data.template.study_type.id)],
+      });
+
+      const createdStudyDelivery = createdStudyDeliveries.find(
+        (item) => Number(item.study_type_id) === Number(data.template.study_type?.id)
+      ) ?? createdStudyDeliveries[0];
+
+      if (!createdStudyDelivery?.id) {
+        setError('No fue posible iniciar una nueva toma de muestra para este reporte.');
+        return;
+      }
+
+      setSelectedStudyDeliveryId(String(createdStudyDelivery.id));
+      setMessage('Se inició una nueva toma de muestra y quedó seleccionada para este reporte.');
+    } catch (creationError) {
+      console.error('Error creando toma de muestra desde reportes PDF:', creationError);
+      setError('No fue posible iniciar la toma de muestra desde este reporte.');
+    } finally {
+      setCreatingStudyDelivery(false);
+    }
   };
 
   const renderField = (field: PatientPdfTemplateBuilderField) => {
@@ -527,7 +686,7 @@ export default function PatientPdfTemplateReportBuilder({
           required={field.is_required}
           helperText={visibleHelperLines || undefined}
         >
-          <MenuItem value="">Selecciona una opción</MenuItem>
+          <MenuItem value="">Selecciona una opciÃ³n</MenuItem>
           {field.options.map((option) => (
             <MenuItem key={option.option_key} value={option.value}>
               {option.label}
@@ -667,9 +826,7 @@ export default function PatientPdfTemplateReportBuilder({
     );
   }
 
-  const requiresStudyLink = Boolean(data.template.requires_study_link);
-  const availableStudyLinks = data.available_study_links ?? [];
-  const isStudyLinkMissing = requiresStudyLink && !selectedStudyDeliveryId;
+  const requiresStudyLink = false;
 
   return (
     <Paper sx={{ p: 3, borderRadius: 2 }}>
@@ -692,30 +849,37 @@ export default function PatientPdfTemplateReportBuilder({
               display: 'grid',
               gap: 2,
               width: '100%',
-              maxWidth: 920,
               gridTemplateColumns: {
                 xs: '1fr',
-                md: (requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? 'minmax(0, 1fr) minmax(320px, 360px)' : 'minmax(320px, 360px)',
+                md: (availableStudyLinks.length > 0 || data.linked_study_delivery || canCreateStudyDelivery)
+                  ? 'minmax(0, 1fr) minmax(0, 1fr)'
+                  : '1fr',
               },
               alignItems: 'start',
             }}
           >
-            {(requiresStudyLink || availableStudyLinks.length > 0 || data.linked_study_delivery) ? (
+            {(availableStudyLinks.length > 0 || data.linked_study_delivery || canCreateStudyDelivery) ? (
               <TextField
                 select
                 fullWidth
-                label={requiresStudyLink ? 'Toma de muestra' : 'Toma de muestra (opcional)'}
+                label="Toma de muestra (opcional)"
                 value={selectedStudyDeliveryId}
-                onChange={(event) => setSelectedStudyDeliveryId(event.target.value)}
+                onChange={(event) => { void handleStudyDeliverySelection(event.target.value); }}
+                disabled={creatingStudyDelivery}
                 helperText={
                   requiresStudyLink
                     ? (availableStudyLinks.length
                       ? 'Selecciona la toma de muestra correspondiente antes de generar el PDF.'
                       : 'No hay tomas de muestra en estatus "Muestra tomada" disponibles para este reporte.')
-                    : 'Si lo relacionas, luego podrÃ¡s descargarlo tambiÃ©n desde el control de estudios.'
+                    : 'Si lo relacionas, luego también podrás descargarlo desde el control de estudios.'
                 }
               >
-                <MenuItem value="">{requiresStudyLink ? 'Selecciona una toma de muestra' : 'Sin relaciÃ³n por ahora'}</MenuItem>
+                <MenuItem value="">{requiresStudyLink ? 'Selecciona una toma de muestra' : 'Sin relación por ahora'}</MenuItem>
+                {canCreateStudyDelivery ? (
+                  <MenuItem value={CREATE_STUDY_DELIVERY_OPTION}>
+                    {buildCreateStudyDeliveryOptionLabel(data)}
+                  </MenuItem>
+                ) : null}
                 {availableStudyLinks.map((studyLink) => (
                   <MenuItem key={studyLink.id} value={String(studyLink.id)}>
                     {studyLink.label}
@@ -736,6 +900,12 @@ export default function PatientPdfTemplateReportBuilder({
       <Alert severity="info" sx={{ mb: 2 }}>
         Revisa los datos antes de generar el PDF final. Al descargarlo también se guardará en el historial de reportes del paciente.
       </Alert>
+
+      {message ? (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          {message}
+        </Alert>
+      ) : null}
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mb: 3 }}>
         <Accordion expanded={historyExpanded} onChange={(_, expanded) => setHistoryExpanded(expanded)} disableGutters>
@@ -774,7 +944,7 @@ export default function PatientPdfTemplateReportBuilder({
               </Box>
             ) : (
               <Typography variant="body2" color="text.secondary">
-                No hay información SOAP disponible con valor.
+                No hay informaciÃ³n SOAP disponible con valor.
               </Typography>
             )}
           </AccordionDetails>
@@ -797,7 +967,10 @@ export default function PatientPdfTemplateReportBuilder({
             fullWidth
             label={requiresStudyLink ? 'Toma de muestra' : 'Toma de muestra (opcional)'}
             value={selectedStudyDeliveryId}
-            onChange={(event) => setSelectedStudyDeliveryId(event.target.value)}
+            onChange={(event) => {
+              setMessage(null);
+              setSelectedStudyDeliveryId(event.target.value);
+            }}
             helperText={
               requiresStudyLink
                 ? (availableStudyLinks.length
@@ -871,10 +1044,25 @@ export default function PatientPdfTemplateReportBuilder({
         <Button color="inherit" onClick={onBack}>
           Cancelar
         </Button>
-        <Button variant="outlined" onClick={() => void handlePreviewPdf()} disabled={previewLoading || submitting || isStudyLinkMissing}>
+        <Button
+          variant="outlined"
+          onClick={() => void handleSaveDraft()}
+          disabled={savingDraft || submitting || previewLoading || creatingStudyDelivery || !isDirty}
+        >
+          {savingDraft ? 'Guardando formulario...' : 'Guardar formulario'}
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => void handlePreviewPdf()}
+          disabled={previewLoading || submitting || savingDraft || creatingStudyDelivery}
+        >
           {previewLoading ? 'Generando vista previa...' : 'Previsualizar PDF'}
         </Button>
-        <Button variant="contained" onClick={() => void handleDownloadFinalPdf()} disabled={submitting || isStudyLinkMissing}>
+        <Button
+          variant="contained"
+          onClick={() => void handleDownloadFinalPdf()}
+          disabled={submitting || savingDraft || creatingStudyDelivery || !savedReportId || isDirty}
+        >
           {submitting ? 'Generando PDF final...' : 'Descargar PDF final'}
         </Button>
       </Box>
@@ -895,29 +1083,27 @@ export default function PatientPdfTemplateReportBuilder({
       >
         <DialogContent sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Previsualizacion del documento
+            Previsualización del documento
           </Typography>
           <Alert severity="warning">
-            Esta previsualizacion te permite validar como va quedando el documento antes de guardarlo. Si el resultado es correcto, te recomendamos cerrar esta vista y despues generar el PDF final para almacenarlo en el historial del paciente y dar seguimiento formal al estudio.
+            Esta previsualización te permite validar cómo va quedando el documento antes de guardarlo. Si el resultado es correcto, te recomendamos cerrar esta vista y después generar el PDF final para almacenarlo en el historial del paciente y dar seguimiento formal al estudio.
           </Alert>
           <Box sx={{ flex: 1, minHeight: 0, border: '1px solid', borderColor: 'divider', borderRadius: 2, overflow: 'hidden', bgcolor: '#f7f7f7' }}>
             {previewUrl ? (
               <Box
                 component="iframe"
                 src={previewUrl}
-                title="Previsualizacion PDF"
+                title="Previsualización PDF"
                 sx={{ width: '100%', height: '100%', border: 0, minHeight: '72vh' }}
               />
             ) : null}
           </Box>
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, flexWrap: 'wrap' }}>
-            <Button variant="outlined" onClick={handleDownloadPreviewPdf} disabled={!previewUrl}>
-              Descargar previsualizacion
-            </Button>
-            <Button onClick={closePreviewDialog}>Cerrar previsualizacion</Button>
+            <Button onClick={closePreviewDialog}>Cerrar previsualización</Button>
           </Box>
         </DialogContent>
       </Dialog>
     </Paper>
   );
 }
+

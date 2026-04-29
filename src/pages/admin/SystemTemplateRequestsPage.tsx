@@ -1277,107 +1277,104 @@ export default function SystemTemplateRequestsPage() {
         </CardContent>
       </Card>
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, md: 4, lg: 3 }}>
-          <Accordion expanded={requestsPanelExpanded} onChange={(_, expanded) => setRequestsPanelExpanded(expanded)} sx={{ borderRadius: '16px !important', overflow: 'hidden' }}>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Solicitudes registradas
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2}>
-                {loading ? (
-                  <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
-                    <CircularProgress />
-                  </Box>
-                ) : items.length === 0 ? (
-                  <Typography color="text.secondary">
-                    No hay solicitudes para el filtro seleccionado.
-                  </Typography>
-                ) : (
-                  <Stack spacing={1.5}>
-                    {items.map((item) => {
-                      const active = item.id === selectedId;
-                      return (
-                        <Box
-                          key={item.id}
-                          onClick={() => setSelectedId(item.id)}
-                          sx={{
-                            p: 2,
-                            borderRadius: 2,
-                            border: '1px solid',
-                            borderColor: active ? 'primary.main' : 'divider',
-                            backgroundColor: active ? 'rgba(0, 150, 136, 0.06)' : '#fff',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Stack spacing={1}>
-                            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                              <Typography sx={{ fontWeight: 700 }}>
-                                {item.name}
-                              </Typography>
-                              <Chip size="small" color={STATUS_COLORS[item.status]} label={STATUS_LABELS[item.status]} />
-                            </Stack>
-                            <Typography variant="body2" color="text.secondary">
-                              Consultorio: {item.office?.title || `#${item.office_id}`}
+      <Stack spacing={3}>
+        <Accordion expanded={requestsPanelExpanded} onChange={(_, expanded) => setRequestsPanelExpanded(expanded)} sx={{ borderRadius: '16px !important', overflow: 'hidden' }}>
+          <AccordionSummary expandIcon={<ExpandMore />}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Solicitudes registradas
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={2}>
+              {loading ? (
+                <Box sx={{ py: 6, display: 'flex', justifyContent: 'center' }}>
+                  <CircularProgress />
+                </Box>
+              ) : items.length === 0 ? (
+                <Typography color="text.secondary">
+                  No hay solicitudes para el filtro seleccionado.
+                </Typography>
+              ) : (
+                <Stack spacing={1.5}>
+                  {items.map((item) => {
+                    const active = item.id === selectedId;
+                    return (
+                      <Box
+                        key={item.id}
+                        onClick={() => setSelectedId(item.id)}
+                        sx={{
+                          p: 2,
+                          borderRadius: 2,
+                          border: '1px solid',
+                          borderColor: active ? 'primary.main' : 'divider',
+                          backgroundColor: active ? 'rgba(0, 150, 136, 0.06)' : '#fff',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                            <Typography sx={{ fontWeight: 700 }}>
+                              {item.name}
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Estudio: {item.study_type?.name || 'General'}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Tipo: {getPdfReportTemplateCategoryLabel(item.template_category)}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Campos configurados: {item.fields_count}
-                            </Typography>
-                            <Typography variant="body2" color="text.secondary">
-                              Actualizado: {formatDateTime(item.updated_at)}
-                            </Typography>
+                            <Chip size="small" color={STATUS_COLORS[item.status]} label={STATUS_LABELS[item.status]} />
                           </Stack>
-                        </Box>
-                      );
-                    })}
+                          <Typography variant="body2" color="text.secondary">
+                            Consultorio: {item.office?.title || `#${item.office_id}`}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Estudio: {item.study_type?.name || 'General'}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Tipo: {getPdfReportTemplateCategoryLabel(item.template_category)}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Campos configurados: {item.fields_count}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            Actualizado: {formatDateTime(item.updated_at)}
+                          </Typography>
+                        </Stack>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              )}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion expanded={editorPanelExpanded} onChange={(_, expanded) => setEditorPanelExpanded(expanded)} sx={{ borderRadius: '16px !important', overflow: 'hidden' }}>
+          <AccordionSummary expandIcon={<ExpandMore />}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Editor interno de plantilla
+            </Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Stack spacing={2.5}>
+
+              {detailLoading ? (
+                <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
+                  <CircularProgress />
+                </Box>
+              ) : !selectedItem || !editor ? (
+                <Typography color="text.secondary">
+                  Selecciona una solicitud para revisar y completar su configuracion.
+                </Typography>
+              ) : (
+                <>
+                  <input
+                    ref={processedPdfInputRef}
+                    type="file"
+                    accept="application/pdf"
+                    style={{ display: 'none' }}
+                    onChange={handleProcessedPdfSelected}
+                  />
+                  <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                    <Typography variant="h6" sx={{ fontWeight: 700 }}>
+                      {selectedItem.name}
+                    </Typography>
+                    <Chip size="small" color={STATUS_COLORS[selectedItem.status]} label={STATUS_LABELS[selectedItem.status]} />
                   </Stack>
-                )}
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 8, lg: 9 }}>
-          <Accordion expanded={editorPanelExpanded} onChange={(_, expanded) => setEditorPanelExpanded(expanded)} sx={{ borderRadius: '16px !important', overflow: 'hidden' }}>
-            <AccordionSummary expandIcon={<ExpandMore />}>
-              <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                Editor interno de plantilla
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Stack spacing={2.5}>
-
-                {detailLoading ? (
-                  <Box sx={{ py: 8, display: 'flex', justifyContent: 'center' }}>
-                    <CircularProgress />
-                  </Box>
-                ) : !selectedItem || !editor ? (
-                  <Typography color="text.secondary">
-                    Selecciona una solicitud para revisar y completar su configuracion.
-                  </Typography>
-                ) : (
-                  <>
-                    <input
-                      ref={processedPdfInputRef}
-                      type="file"
-                      accept="application/pdf"
-                      style={{ display: 'none' }}
-                      onChange={handleProcessedPdfSelected}
-                    />
-                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
-                      <Typography variant="h6" sx={{ fontWeight: 700 }}>
-                        {selectedItem.name}
-                      </Typography>
-                      <Chip size="small" color={STATUS_COLORS[selectedItem.status]} label={STATUS_LABELS[selectedItem.status]} />
-                    </Stack>
 
                     <Grid container spacing={2}>
                       <Grid size={{ xs: 12, md: 6 }}>
@@ -2126,13 +2123,12 @@ export default function SystemTemplateRequestsPage() {
                         </Alert>
                       ) : null}
                     </Stack>
-                  </>
-                )}
-              </Stack>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
-      </Grid>
+                </>
+              )}
+            </Stack>
+          </AccordionDetails>
+        </Accordion>
+      </Stack>
     </Stack>
   );
 }
