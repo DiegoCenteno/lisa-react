@@ -77,7 +77,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
   const [error, setError] = useState<string | null>(null);
   const [previewUrls, setPreviewUrls] = useState<Record<number, string>>({});
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<SystemAnnouncementItem | null>(null);
-  const [selectedAnnouncementExpanded, setSelectedAnnouncementExpanded] = useState(false);
   const [previewFile, setPreviewFile] = useState<SystemAnnouncementFileItem | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -171,7 +170,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
 
   const handleSelectAnnouncement = async (item: SystemAnnouncementItem) => {
     setSelectedAnnouncement(item);
-    setSelectedAnnouncementExpanded(false);
 
     if (item.read_at) {
       return;
@@ -455,7 +453,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
         open={Boolean(selectedAnnouncement)}
         onClose={() => {
           setSelectedAnnouncement(null);
-          setSelectedAnnouncementExpanded(false);
         }}
         maxWidth="md"
         fullWidth
@@ -470,11 +467,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
                 const remainingImages = imageFiles.slice(1);
                 const firstImageUrl = getAnnouncementPreviewUrl(firstImage);
                 const descriptionText = selectedAnnouncement.body ?? '';
-                const shouldTruncateDescription = descriptionText.length > 150;
-                const truncatedDescription = `${descriptionText.slice(0, 150).trim()}...`;
-                const visibleDescription = selectedAnnouncementExpanded || !shouldTruncateDescription
-                  ? descriptionText
-                  : truncatedDescription;
 
                 return (
                   <>
@@ -504,31 +496,9 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
                     ) : null}
 
                     <Box>
-                      {!selectedAnnouncementExpanded && shouldTruncateDescription ? (
-                        <Typography sx={{ whiteSpace: 'pre-wrap', color: '#243944' }}>
-                          {truncatedDescription}
-                          <Button
-                            variant="text"
-                            onClick={() => setSelectedAnnouncementExpanded(true)}
-                            sx={{
-                              px: 0,
-                              ml: 0.5,
-                              minWidth: 'auto',
-                              minHeight: 'auto',
-                              textTransform: 'none',
-                              fontWeight: 700,
-                              verticalAlign: 'baseline',
-                              lineHeight: 1.2,
-                            }}
-                          >
-                            Leer más
-                          </Button>
-                        </Typography>
-                      ) : (
-                        <Typography sx={{ whiteSpace: 'pre-wrap', color: '#243944' }}>
-                          {visibleDescription}
-                        </Typography>
-                      )}
+                      <Typography sx={{ whiteSpace: 'pre-wrap', color: '#243944' }}>
+                        {descriptionText}
+                      </Typography>
                     </Box>
 
                     {remainingImages.length ? (
@@ -588,7 +558,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
             variant="contained"
             onClick={() => {
               setSelectedAnnouncement(null);
-              setSelectedAnnouncementExpanded(false);
             }}
           >
             Cerrar
@@ -638,11 +607,6 @@ export default function AgendaAnnouncementsRail({ collapsed, onToggle }: AgendaA
           )}
         </DialogContent>
         <DialogActions>
-          {previewFile ? (
-            <Button onClick={() => void handleDownloadFile(previewFile)}>
-              Descargar
-            </Button>
-          ) : null}
           <Button variant="contained" onClick={handleClosePreview}>
             Cerrar
           </Button>
