@@ -428,21 +428,22 @@ function renderEventContent(arg: EventContentArg) {
   const smsColor = isListView && bgColor === '#9e9e9e' ? '#ffffff' : '#04d84e';
   const missedColor = '#ffb300';
   const cancelledColor = '#ff3b30';
+  const useGraphicCellForCheckStatus = isListView && (isConfirmed || hasConfirmationNotification);
 
   const statusEl = isConfirmed ? (
-    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+    <span className="agenda-list-status-icon" style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <DoneAllIcon sx={{ color: confirmedColor, fontSize: 22, fontWeight: 700 }} />
     </span>
   ) : isNoShow ? (
-    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+    <span className="agenda-list-status-icon" style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <PersonOffIcon sx={{ color: missedColor, fontSize: 21 }} />
     </span>
   ) : isCancelled ? (
-    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+    <span className="agenda-list-status-icon" style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <EventBusyIcon sx={{ color: cancelledColor, fontSize: 21 }} />
     </span>
   ) : hasConfirmationNotification ? (
-    <span style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
+    <span className="agenda-list-status-icon" style={{ display: 'inline-flex', alignItems: 'center', marginRight: 6 }}>
       <CheckIcon sx={{ color: smsColor, fontSize: 'medium' }} />
     </span>
   ) : null;
@@ -486,7 +487,7 @@ function renderEventContent(arg: EventContentArg) {
     return (
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center' }}>
-          {statusEl}
+          {!useGraphicCellForCheckStatus ? statusEl : null}
           <b>{arg.event.title}</b>
         </span>
         {phone && (
@@ -588,7 +589,6 @@ export default function AgendaPage() {
   const [newsRailCollapsed, setNewsRailCollapsed] = useState(false);
   const [appointmentActivityLogs, setAppointmentActivityLogs] = useState<ActivityLogItem[]>([]);
   const [appointmentActivityLogsScope, setAppointmentActivityLogsScope] = useState<'appointment' | 'patient'>('appointment');
-  const [appointmentActivityLogsExpanded, setAppointmentActivityLogsExpanded] = useState(false);
   const [activityLogsLoading, setActivityLogsLoading] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -716,7 +716,6 @@ export default function AgendaPage() {
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
     setAppointmentActivityLogsScope('appointment');
-    setAppointmentActivityLogsExpanded(false);
     setActivityLogsLoading(false);
     setSummaryOpen(false);
     setSummaryLoading(false);
@@ -878,7 +877,6 @@ export default function AgendaPage() {
     setShowAppointmentMore(false);
     setAppointmentActivityLogs([]);
     setAppointmentActivityLogsScope('appointment');
-    setAppointmentActivityLogsExpanded(false);
   };
 
   const selectedAppointmentView = useMemo(() => {
@@ -971,7 +969,6 @@ export default function AgendaPage() {
       setShowAppointmentMore(false);
       setAppointmentActivityLogs([]);
       setAppointmentActivityLogsScope('appointment');
-      setAppointmentActivityLogsExpanded(false);
     }
     if (dateRange) {
       void loadAppointments(dateRange.start, dateRange.end);
@@ -983,10 +980,11 @@ export default function AgendaPage() {
     try {
       await navigator.clipboard.writeText(String(phone));
       setActionToast('Información copiada');
+      handleCloseSelectedEvent();
     } catch (error) {
       console.error('Error copiando telefono:', error);
     }
-  }, []);
+  }, [handleCloseSelectedEvent]);
 
   const handleSaveBirthDate = useCallback(async () => {
     if (!selectedPatientRecord?.id) return;
@@ -1251,7 +1249,6 @@ export default function AgendaPage() {
     setShowAppointmentMore(true);
     setShowAppointmentDetails(false);
     setActivityLogsLoading(true);
-    setAppointmentActivityLogsExpanded(false);
 
     try {
       const appointmentLogs = await appointmentService.getAppointmentActivityLogs(Number(selectedAppointmentView.id), {
@@ -1291,11 +1288,6 @@ export default function AgendaPage() {
   const displayAppointmentActivityLogs = useMemo(
     () => filterInstantConfirmationLogs(appointmentActivityLogs),
     [appointmentActivityLogs]
-  );
-
-  const visibleAppointmentActivityLogs = useMemo(
-    () => (appointmentActivityLogsExpanded ? displayAppointmentActivityLogs : displayAppointmentActivityLogs.slice(0, 3)),
-    [displayAppointmentActivityLogs, appointmentActivityLogsExpanded]
   );
 
   const handleOpenSummary = useCallback(async () => {
@@ -1354,6 +1346,13 @@ export default function AgendaPage() {
         const textColor = (info.event.extendedProps.rowTextColor as string) || info.event.textColor || '#333';
         const rowType = (info.event.extendedProps.rowType as string) || '';
         const isAvailabilityGap = Boolean(info.event.extendedProps.isAvailabilityGap);
+        const normalizedStatus = Number(info.event.extendedProps.status);
+        const isNoShow = normalizedStatus === 2;
+        const isCancelled = normalizedStatus === 3;
+        const isConfirmed = !isNoShow && !isCancelled && (
+          Boolean(info.event.extendedProps.confirmed) || normalizedStatus === 1
+        );
+        const hasConfirmationNotification = Number(info.event.extendedProps.confirmation_whatsapp_status ?? 0) === 2;
         row.style.backgroundColor = bgColor;
         row.dataset.rowType = rowType;
         row.querySelectorAll('td').forEach((cell) => {
@@ -1361,14 +1360,39 @@ export default function AgendaPage() {
           (cell as HTMLElement).style.color = textColor;
         });
         const dot = row.querySelector('.fc-list-event-dot') as HTMLElement | null;
+        const graphicCell = row.querySelector('.fc-list-event-graphic') as HTMLTableCellElement | null;
         if (dot) {
           dot.style.display = 'none';
+        }
+
+        if (graphicCell) {
+          graphicCell.style.width = '30px';
+          graphicCell.style.minWidth = '30px';
+          graphicCell.style.paddingLeft = '3px';
+          graphicCell.style.paddingRight = '3px';
+          graphicCell.style.paddingTop = '0';
+          graphicCell.style.paddingBottom = '0';
+          graphicCell.style.textAlign = 'center';
+          graphicCell.style.verticalAlign = 'middle';
+
+          if (isConfirmed || hasConfirmationNotification) {
+            const iconColor = isConfirmed ? '#00aeff' : (bgColor === '#9e9e9e' ? '#ffffff' : '#04d84e');
+            const iconPath = isConfirmed
+              ? 'm18 7-1.41-1.41-6.34 6.34 1.41 1.41zm4.24-1.41L11.66 16.17 7.48 12l-1.41 1.41L11.66 19l12-12zM.41 13.41 6 19l1.41-1.41L1.83 12z'
+              : 'M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z';
+            graphicCell.innerHTML = `<span style="display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;">
+              <svg viewBox="0 0 24 24" aria-hidden="true" style="display:block;width:${isConfirmed ? '22px' : '20px'};height:${isConfirmed ? '22px' : '20px'};fill:${iconColor};">
+                <path d="${iconPath}"></path>
+              </svg>
+            </span>`;
+          } else {
+            graphicCell.innerHTML = '';
+          }
         }
 
         if (isAvailabilityGap) {
           row.style.cursor = 'pointer';
           const timeCell = row.querySelector('.fc-list-event-time') as HTMLElement | null;
-          const graphicCell = row.querySelector('.fc-list-event-graphic') as HTMLElement | null;
           const titleCell = row.querySelector('.fc-list-event-title') as HTMLTableCellElement | null;
 
           if (timeCell) {
@@ -1447,8 +1471,9 @@ export default function AgendaPage() {
                   display: 'flex',
                   flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  width: '100%',
+                  justifyContent: 'flex-start',
+                  width: { xs: '100%', sm: 'auto' },
+                  flexWrap: 'wrap',
                   gap: { xs: 1, sm: 2 },
                 }}
               >
@@ -1480,7 +1505,7 @@ export default function AgendaPage() {
                     )}
                     label={isMobile ? 'Espacios disponibles' : 'Mostrar espacios disponibles'}
                     sx={{
-                      ml: { xs: 0, sm: 0.5 },
+                      ml: { xs: 0, sm: 0 },
                       mr: 0,
                       '& .MuiFormControlLabel-label': {
                         fontSize: '0.92rem',
@@ -1845,7 +1870,7 @@ export default function AgendaPage() {
                         </Alert>
                       ) : null}
 
-                      {visibleAppointmentActivityLogs.map((log) => (
+                      {displayAppointmentActivityLogs.map((log) => (
                         <Box
                           key={log.id}
                           sx={{
@@ -1913,22 +1938,6 @@ export default function AgendaPage() {
                     >
                       Regresar
                     </Button>
-                    {displayAppointmentActivityLogs.length > 3 && !appointmentActivityLogsExpanded ? (
-                      <Button
-                        variant="text"
-                        onClick={() => setAppointmentActivityLogsExpanded(true)}
-                        sx={{
-                          minWidth: 'auto',
-                          p: 0,
-                          color: '#2d64c8',
-                          textDecoration: 'underline',
-                          textTransform: 'none',
-                          marginLeft: 'auto',
-                        }}
-                      >
-                        Ver más
-                      </Button>
-                    ) : null}
                   </Box>
                 </Box>
               ) : showAppointmentDetails ? (

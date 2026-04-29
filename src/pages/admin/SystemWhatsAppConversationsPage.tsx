@@ -121,7 +121,7 @@ export default function SystemWhatsAppConversationsPage() {
   const [data, setData] = useState<SystemWhatsAppConversationResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dateFrom, setDateFrom] = useState(toDateInputValue(new Date(Date.now() - (1000 * 60 * 60 * 24 * 30))));
+  const [dateFrom, setDateFrom] = useState(toDateInputValue(new Date()));
   const [dateTo, setDateTo] = useState(toDateInputValue(new Date()));
   const [officeId, setOfficeId] = useState<string>('');
   const [doctorUserId, setDoctorUserId] = useState<string>('');
@@ -296,7 +296,7 @@ export default function SystemWhatsAppConversationsPage() {
               </Button>
             </Stack>
             <Typography variant="caption" color="text.secondary">
-              Para no cargar toda la bitacora, la consulta se limita al rango de fechas seleccionado. Si no cambias el filtro, se muestran los ultimos 30 dias.
+              Por defecto se muestran solo las conversaciones del dia de hoy. Puedes ampliar el rango cambiando las fechas.
             </Typography>
           </Stack>
         </CardContent>

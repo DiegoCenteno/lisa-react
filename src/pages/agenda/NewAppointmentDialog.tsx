@@ -523,6 +523,7 @@ export default function NewAppointmentDialog({
     try {
       await navigator.clipboard.writeText(normalizedAvailableText);
       setCopyMessage('Horarios copiados');
+      onClose();
     } catch {
       // Fallback: create a textarea and copy
       const textarea = document.createElement('textarea');
@@ -532,6 +533,7 @@ export default function NewAppointmentDialog({
       document.execCommand('copy');
       document.body.removeChild(textarea);
       setCopyMessage('Horarios copiados');
+      onClose();
     }
   };
 
