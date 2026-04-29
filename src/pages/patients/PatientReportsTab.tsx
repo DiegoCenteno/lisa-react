@@ -773,13 +773,22 @@ function PatientReportsTab({
             </Box>
 
             {!canCreateReports ? (
-              <Alert severity="info" sx={{ mt: 2.5 }}>
-                No hay reportes habilitados para este consultorio. Puedes activarlos o publicar plantillas PDF desde{' '}
-                <Link href="/configuracion?tab=reportes" underline="hover">
-                  aqui
-                </Link>
-                .
-              </Alert>
+              <Paper variant="outlined" sx={{ mt: 2.5, p: 2, borderRadius: 2 }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1.5 }}>
+                  Reportes específicos en PDF
+                </Typography>
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+                  <Alert severity="info">
+                    Si hoy tus reportes viven en PDF o incluso en Word, es posible integrarlos al sistema para convertirlos en formatos listos para trabajar con información prellenada del paciente, su historia clínica y sus consultas. El objetivo es conservar la estructura que ya utilizan en su operación diaria, pero con un proceso de llenado más ágil, ordenado y consistente.
+                  </Alert>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Una vez cargado el formato, se puede preparar como plantilla para que datos frecuentes aparezcan de forma automática y el resto quede listo para revisión y captura final. Esto ayuda a reducir retrabajo, mantener documentos más uniformes y dar mejor seguimiento a cada estudio dentro del expediente del paciente.
+                  </Typography>
+                  <Link href="/settings?tab=reportes" underline="hover" sx={{ fontWeight: 600, width: 'fit-content' }}>
+                    Cargar un nuevo reporte para su implementación
+                  </Link>
+                </Box>
+              </Paper>
             ) : null}
 
             {showCreate && canCreateReports && (
