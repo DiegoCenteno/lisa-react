@@ -980,11 +980,24 @@ export default function AgendaPage() {
     try {
       await navigator.clipboard.writeText(String(phone));
       setActionToast('Información copiada');
-      handleCloseSelectedEvent();
+      setSelectedEvent(null);
+      setSelectedAppointmentData(null);
+      setSelectedPatientRecord(null);
+      setBirthEditorOpen(false);
+      setBirthEditorValue('');
+      setBirthSaving(false);
+      setReasonEditorOpen(false);
+      setReasonSaving(false);
+      setPendingAction(null);
+      setNotifyPatientAction(false);
+      setActionLoading(false);
+      setShowAppointmentDetails(false);
+      setShowAppointmentMore(false);
+      setAppointmentActivityLogs([]);
     } catch (error) {
       console.error('Error copiando telefono:', error);
     }
-  }, [handleCloseSelectedEvent]);
+  }, []);
 
   const handleSaveBirthDate = useCallback(async () => {
     if (!selectedPatientRecord?.id) return;
